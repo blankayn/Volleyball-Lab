@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  viewport-fit=cover and user-scalable=no: this page is a character view inside
+  a native screen, not a document. Letting the WebView pinch-zoom the page would
+  fight the pinch gesture the scene uses to dolly the camera.
+-->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Volleyball Lab — Athlete</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /* Transparent by default so the Compose page colour shows through and the
+       WebView reads as part of the screen rather than as an embedded browser.
+       window.setBackground("white") switches it. */
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* Shown only if the module never boots. A blank WebView gives whoever is
+     debugging nothing at all to go on; this tells them exactly what is missing. */
+  #boot-error {
+    display: none;
+    position: fixed;
+    inset: 0;
+    padding: 24px;
+    font: 14px/1.5 system-ui, -apple-system, sans-serif;
+    color: #44506a;
+    background: #f0f8ff;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  #boot-error code {
+    font-family: ui-monospace, monospace;
+    background: #dae8f6;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  body.failed #boot-error { display: flex; }
+</style>
+<!--
+  Local library files, not a CDN.
+
+  This app's whole claim is that it works on court with no network, and a mascot
+  that only appears on wifi undercuts that for the sake of saving two files. See
+  README.md in this folder for the two commands that fetch them.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./lib/three.module.js",
+    "three/addons/": "./lib/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="athlete-canvas"></canvas>
+
+<div id="boot-error">
+  <div>
+    <p><strong>The 3D athlete could not start.</strong></p>
+    <p>Three.js is missing from <code>assets/athlete/lib/</code>.<br>
+       See <code>assets/athlete/README.md</code> for the two files to add.</p>
+  </div>
+</div>
+
+<script type="module">
+  import('./scene.js').catch((error) => {
+    console.error('[athlete] boot failed', error);
+    document.body.classList.add('failed');
+    const bridge = window.AndroidAthlete;
+    if (bridge && typeof bridge.onError === 'function') {
+      bridge.onError(String(error));
+    }
+  });
+</script>
+</body>
+</html>

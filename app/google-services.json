@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "78781344803",
+    "project_id": "volleyball-lab",
+    "storage_bucket": "volleyball-lab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:78781344803:android:65370f4632aa4cbc941596",
+        "android_client_info": {
+          "package_name": "com.volleyballlab.player"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "78781344803-1l20jp5q7fted7tdi9q9jnrrqoms1k1m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.volleyballlab.player",
+            "certificate_hash": "f7507dea565c07efdd1434cfda72097178116adc"
+          }
+        },
+        {
+          "client_id": "78781344803-37aj2sranjbshpd02uiq37fp1oc1phns.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC14z-HxIuBtQl6xpnY4cQ-Ai4tHwbfQfM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "78781344803-37aj2sranjbshpd02uiq37fp1oc1phns.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

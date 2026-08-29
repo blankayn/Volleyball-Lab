@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      windowLayoutInDisplayCutoutMode only exists from API 27, and minSdk is 26,
+      so it lives behind a version qualifier rather than being declared
+      unconditionally. API 26 devices have no display cutout, so nothing is lost.
+
+      shortEdges lets content render into the cutout area. That matters most on
+      the capture screen, where the camera preview is meant to fill the display;
+      the default would letterbox the viewfinder below the notch.
+    -->
+    <style name="Theme.VolleyballLab" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

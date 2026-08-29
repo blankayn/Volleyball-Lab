@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground: the Volleyball Lab mark itself.
+
+  This replaced a drawn volleyball-seam vector. The mark is the app's identity
+  everywhere else - splash, login, sign-up - and a launcher icon that shows
+  something different is the one place the branding does not line up.
+
+  ## Why 60 dp inside a 108 dp canvas
+
+  Launchers guarantee only the centre 66 dp of the foreground survives their mask;
+  everything outside can be clipped, and on a circular mask it will be. The mark is
+  a circular badge, so it is placed at 60 dp - inside the safe zone with a little
+  room to spare, rather than filling it edge to edge, which would leave a circular
+  badge kissing the rim of a circular mask.
+
+  ## Why the source is square
+
+  `volleyball_lab_logo.png` is padded to 340x340. A layer-list item with a fixed
+  width and height scales a bitmap to those bounds without preserving aspect ratio,
+  so a 331x340 source would arrive 3% squashed - not obvious in isolation, and
+  quite obvious next to the same mark drawn correctly on the splash.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="60dp"
+        android:height="60dp"
+        android:drawable="@drawable/volleyball_lab_logo"
+        android:gravity="center" />
+</layer-list>

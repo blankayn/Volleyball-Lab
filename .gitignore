@@ -1,0 +1,24 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+build/
+app/build/
+**/build/
+.idea/build/
+captures/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+test_write.txt
+
+# Large ML model, fetched via app/src/main/assets/README.md instructions.
+/app/src/main/assets/*.task

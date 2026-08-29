@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mascot Wave — Three.js</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+  body{background:transparent}
+  canvas{display:block}
+  #hint{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);font:12px system-ui;color:#888;background:rgba(255,255,255,0.8);padding:6px 10px;border-radius:8px}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="hint">double-click to pause • drag to orbit (if you add controls) • transparent bg</div>
+<script type="module">
+import * as THREE from 'three';
+
+const scene = new THREE.Scene();
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setClearColor(0x000000, 0);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0, 6);
+
+const loader = new THREE.TextureLoader();
+loader.load('./mascot.png', onTexture, undefined, onError);
+
+function onError(e){
+  console.error(e);
+  const msg = document.createElement('div');
+  msg.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#111;color:#fff;padding:16px;border-radius:12px;font:14px system-ui;text-align:center;max-width:320px';
+  msg.innerHTML='Could not load <b>mascot.png</b>.<br><br>Keep <b>mascot.png</b> and <b>mascot-wave.html</b> in the same folder,<br>or run a local server:<br><code>python -m http.server</code><br>then open <code>http://localhost:8000/mascot-wave.html</code>';
+  document.body.appendChild(msg);
+}
+
+function onTexture(texture){
+  texture.colorSpace = THREE.SRGBColorSpace;
+  // plane sized to image aspect 1696/2524 = 0.672
+  const aspect = texture.image.width / texture.image.height;
+  const h = 3.6;
+  const w = h * aspect;
+  const geometry = new THREE.PlaneGeometry(w, h, 32, 32);
+  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+
+  const posAttr = geometry.attributes.position;
+  const orig = posAttr.array.slice();
+
+  const clock = new THREE.Clock();
+  let paused = false;
+  window.addEventListener('dblclick', () => paused = !paused);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    if(paused) { renderer.render(scene, camera); return; }
+    const t = clock.getElapsedTime();
+
+    // whole-body motion — waving sway + bob
+    mesh.rotation.z = Math.sin(t * 1.9) * 0.08; // ~4.5deg side sway
+    mesh.position.y = Math.sin(t * 2.6) * 0.09;
+    mesh.position.x = Math.sin(t * 1.1) * 0.04;
+    mesh.scale.setScalar(1 + Math.sin(t * 3.2) * 0.015);
+
+    // vertex wave — whole image ripples like a flag, stronger at the top (hand)
+    const arr = posAttr.array;
+    for(let i=0;i<arr.length;i+=3){
+      const ox = orig[i];
+      const oy = orig[i+1];
+      // primary horizontal wave driven by y + time, amplified near top (oy > 0)
+      const topFactor = 0.6 + (oy + h/2) / h * 0.9; // 0.6 bottom -> 1.5 top
+      const waveX = Math.sin(oy * 2.2 + t * 3.8) * 0.045 * topFactor;
+      // secondary subtle vertical ripple
+      const waveY = Math.sin(ox * 4.0 + t * 2.2) * 0.012;
+      arr[i]   = ox + waveX;
+      arr[i+1] = oy + waveY;
+    }
+    posAttr.needsUpdate = true;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+  document.getElementById('hint').style.display='none';
+  setTimeout(()=>{ const h=document.getElementById('hint'); if(h) h.style.display='none'; }, 3000);
+}
+</script>
+</body>
+</html>

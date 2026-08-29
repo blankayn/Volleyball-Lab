@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      These four values exist ONLY for things the Android platform draws before
+      Compose is alive (the system splash window and the adaptive launcher icon).
+      Every other colour in the app lives in the Compose colour scheme in
+      ui/theme/Color.kt. Do not add app colours here - two sources of truth for
+      colour is how a design system rots.
+
+      splash_background MUST stay byte-identical to VbSplashBackground in
+      Color.kt. That equality is what makes the handoff from the system splash
+      to the Compose splash invisible (see docs/rive/splash-contract.md 7).
+    -->
+    <color name="splash_background">#F0F8FF</color>
+    <color name="splash_icon_tint">#CC5500</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_foreground_tint">#F2F5FF</color>
+</resources>

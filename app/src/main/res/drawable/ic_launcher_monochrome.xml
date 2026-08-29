@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Themed-icon layer (Android 13+). Identical geometry to the foreground but
+  untinted: the launcher recolours it to the user's wallpaper palette, so any
+  tint baked in here would fight that.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M27,54 A27,27 0 1,1 81,54 A27,27 0 1,1 27,54 Z"
+        android:strokeColor="#CC5500"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,27 A34,34 0 0,0 54,81"
+        android:strokeColor="#CC5500"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M27,54 A34,34 0 0,1 81,54"
+        android:strokeColor="#CC5500"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+</vector>

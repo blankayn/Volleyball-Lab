@@ -1,0 +1,664 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Volleyball Lab</string>
+    <string name="app_tagline">Dominate the Court</string>
+    <string name="cd_app_logo">Volleyball Lab logo</string>
+
+    <!-- Bottom navigation (Fig. 11 of the capstone document) -->
+    <string name="nav_home">Home</string>
+    <string name="nav_train">Train</string>
+    <string name="nav_progress">Progress</string>
+    <string name="nav_coach">Coach</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Home -->
+    <string name="home_greeting_morning">Good morning</string>
+    <string name="home_greeting_afternoon">Good afternoon</string>
+    <string name="home_greeting_evening">Good evening</string>
+    <string name="home_start_training">Start training</string>
+    <string name="home_start_training_subtitle">Pick a skill and capture a set</string>
+    <string name="home_no_streak">No streak yet</string>
+    <string name="home_section_skills">Train a skill</string>
+    <string name="home_section_recent">Recent sessions</string>
+    <string name="home_no_sessions">No sessions yet. Your first capture will show up here.</string>
+    <string name="home_avg_score" tools:ignore="PluralsCandidate">%1$d avg form</string>
+
+    <!-- Skill selection -->
+    <string name="skill_select_title">Choose a skill</string>
+    <string name="skill_select_subtitle">Five fundamentals. Pick one to see its drills.</string>
+    <string name="skill_serving">Serving</string>
+    <string name="skill_receiving">Receiving</string>
+    <string name="skill_setting">Setting</string>
+    <string name="skill_spiking">Spiking</string>
+    <string name="skill_blocking">Blocking</string>
+    <string name="skill_serving_desc">Toss, contact and follow through</string>
+    <string name="skill_receiving_desc">Platform angle and body position</string>
+    <string name="skill_setting_desc">Hand shape and release</string>
+    <string name="skill_spiking_desc">Approach, jump and arm swing</string>
+    <string name="skill_blocking_desc">Timing, penetration and hand shape</string>
+
+    <!-- Drill selection -->
+    <string name="drill_select_title">%1$s drills</string>
+    <string name="drill_duration">~%1$d min</string>
+    <string name="drill_level_beginner">Beginner</string>
+    <string name="drill_level_intermediate">Intermediate</string>
+    <string name="drill_level_advanced">Advanced</string>
+
+    <!-- Camera permission -->
+    <string name="camera_permission_title">Camera access needed</string>
+    <string name="camera_permission_body">Volleyball Lab analyses your form from the camera feed. Frames are processed on your device and are never uploaded.</string>
+    <string name="camera_permission_grant">Allow camera</string>
+    <string name="camera_permission_denied_body">Camera access is turned off. Enable it in system settings to capture a session.</string>
+    <string name="camera_permission_settings">Open settings</string>
+
+    <!-- Capture -->
+    <string name="capture_start">Start</string>
+    <string name="capture_stop">Finish</string>
+    <string name="capture_cancel">Cancel</string>
+    <string name="capture_switch_camera">Switch camera</string>
+
+    <!--
+      Hands-free start. The athlete has to stand far enough back for their whole
+      body to fit in shot, which puts the Start button out of reach, so the copy
+      has to say plainly that they do not need to walk back to the phone for it.
+    -->
+    <string name="capture_hold_still">Hold still</string>
+    <string name="capture_auto_start_hint">Stay in frame and recording starts on its own</string>
+    <string name="capture_auto_start_off_hint">Tap Start when you are ready</string>
+
+    <!-- Pose quality issues, surfaced live while framing -->
+    <string name="quality_ok">Framing looks good</string>
+    <string name="quality_no_person">Step into frame</string>
+    <string name="quality_partial_body">Fit your whole body in frame</string>
+    <string name="quality_too_close">Move back a little</string>
+    <string name="quality_too_far">Move closer</string>
+    <string name="quality_low_confidence">Not enough light to track you</string>
+    <string name="quality_unstable">Steady the phone</string>
+    <string name="quality_off_centre">Move to the centre of the frame</string>
+
+    <!-- Progress tab. Every figure is computed from stored sessions. -->
+    <string name="progress_summary_line">%1$d sessions  ·  %2$d reps</string>
+    <string name="progress_summary_none">No sessions recorded yet</string>
+    <string name="progress_stat_sessions">Sessions</string>
+    <string name="progress_stat_reps">Reps</string>
+    <string name="progress_stat_average">Average</string>
+    <string name="progress_stat_best">Best</string>
+    <string name="progress_section_trend">Form score trend</string>
+    <string name="progress_trend_oldest">Oldest</string>
+    <string name="progress_trend_newest">Latest</string>
+    <string name="progress_section_by_skill">By skill</string>
+    <string name="progress_section_history">Session history</string>
+    <string name="progress_unscored">Not scored</string>
+    <string name="progress_empty_title">Nothing to chart yet</string>
+    <string name="progress_empty_body">Record a session and your scores, reps and per-skill breakdown appear here.</string>
+    <string name="progress_empty_cta">Start training</string>
+
+    <!--
+      Coach tab. The copy is careful never to imply a person wrote these notes:
+      they are the app\'s own cue analysis pooled across sessions, and saying so
+      is the difference between a useful feature and a misleading one.
+    -->
+    <string name="coach_subtitle_none">Train a session and your notes appear here</string>
+    <string name="coach_focus_label">Work on this next</string>
+    <string name="coach_practise_cta">Practise this skill</string>
+    <string name="coach_strength_label">Working well</string>
+    <string name="coach_strength_detail">%1$s  ·  %2$d out of 100</string>
+    <string name="coach_section_by_skill">Weakest cue, per skill</string>
+    <string name="coach_camera_title">Check your camera angle</string>
+    <string name="coach_camera_body">%1$d%% of your cues could not be measured. Film from the side, a few metres back, with your whole body in frame.</string>
+    <string name="coach_empty_title">No notes yet</string>
+    <string name="coach_empty_body_no_sessions">Record a session and the cue you are losing most points on shows up here, with what to do about it.</string>
+    <string name="coach_empty_body_too_few_reps">A cue needs at least %1$d measured reps before it is worth acting on. Record a longer session.</string>
+    <string name="coach_empty_cta">Start training</string>
+    <string name="coach_provenance">Worked out on this phone from your own sessions. Nothing was uploaded.</string>
+
+    <!-- Profile tab -->
+    <string name="position_setter">Setter</string>
+    <string name="position_outside">Outside hitter</string>
+    <string name="position_middle">Middle blocker</string>
+    <string name="position_opposite">Opposite</string>
+    <string name="position_libero">Libero</string>
+    <string name="hand_left">Left</string>
+    <string name="hand_right">Right</string>
+    <string name="profile_name_unset">Add your name</string>
+    <string name="profile_position_unset">Position not set</string>
+    <string name="profile_edit_name">Edit name</string>
+    <string name="profile_name_label">Name</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_section_play">How you play</string>
+    <string name="profile_position_label">Position</string>
+    <string name="profile_hand_label">Dominant hand</string>
+    <string name="profile_details_note">Both optional. Tap a selected chip again to clear it.</string>
+    <string name="profile_section_totals">Training totals</string>
+    <string name="profile_total_sessions">Sessions</string>
+    <string name="profile_total_reps">Reps</string>
+    <string name="profile_total_time">Time recorded</string>
+    <string name="profile_total_best">Best form score</string>
+    <string name="profile_total_most_trained">Most trained</string>
+    <string name="profile_privacy_title">Your video stays on this phone</string>
+    <string name="profile_privacy_body">Pose analysis runs on the device. Frames are never uploaded, and your sessions are stored locally.</string>
+
+    <!-- Session results -->
+    <string name="result_form_score">Form score</string>
+    <string name="result_breakdown">Cue breakdown</string>
+    <string name="result_weakest_cue">Focus next on</string>
+    <string name="result_save">Save session</string>
+    <string name="result_analysing">Analysing your reps…</string>
+    <string name="result_no_reps_title">No complete reps detected</string>
+    <string name="result_no_reps_body">The capture ran but no full repetition was recognised. Check the framing guidance and try again.</string>
+
+    <!-- Errors -->
+    <string name="error_model_missing_title">Pose model not installed</string>
+    <string name="error_model_missing_body">pose_landmarker_full.task is missing from the app assets. See app/src/main/assets/README.md for the one-line download.</string>
+    <string name="error_camera_title">Camera unavailable</string>
+    <string name="error_generic_retry">Try again</string>
+
+    <!-- Accessibility -->
+    <string name="cd_back">Back</string>
+    <string name="cd_pose_overlay">Live skeleton overlay of your detected pose</string>
+    <string name="cd_score_arc" tools:ignore="PluralsCandidate">Form score %1$d out of 100</string>
+    <string name="cd_hold_still" tools:ignore="PluralsCandidate">Hold still. Recording starts in %1$d seconds.</string>
+
+    <!-- ====================================================================
+         Coaching cues. Labels are imperative and short enough to read on a
+         result card; tips explain why the cue matters and are shown on expand.
+         Thresholds for these live in domain/model/FormCue.kt.
+         ==================================================================== -->
+
+    <!-- Serving -->
+    <string name="cue_serve_arm_extension">Extend at contact</string>
+    <string name="cue_serve_arm_extension_tip">Meet the ball with a straight hitting arm. A bent elbow at contact costs both power and accuracy.</string>
+    <string name="cue_serve_reach">Reach high</string>
+    <string name="cue_serve_reach_tip">Contact the ball at the top of your reach, not out in front of your chest.</string>
+    <string name="cue_serve_trunk">Stay tall</string>
+    <string name="cue_serve_trunk_tip">Keep the trunk close to upright. Leaning back sends the serve long.</string>
+    <string name="cue_serve_toss_arm">Lift the toss arm</string>
+    <string name="cue_serve_toss_arm_tip">Raise the tossing arm and hold it up. Dropping it early pulls the hitting shoulder down with it.</string>
+
+    <!-- Receiving -->
+    <string name="cue_pass_platform">Lock the platform</string>
+    <string name="cue_pass_platform_tip">Keep both elbows straight and joined. Bending them makes the pass unpredictable.</string>
+    <string name="cue_pass_knees">Bend the knees</string>
+    <string name="cue_pass_knees_tip">Load into an athletic stance. Passing with straight legs takes away your control.</string>
+    <string name="cue_pass_trunk">Lean into the ball</string>
+    <string name="cue_pass_trunk_tip">Angle the chest forward over the platform rather than standing upright.</string>
+    <string name="cue_pass_shoulders">Level the shoulders</string>
+    <string name="cue_pass_shoulders_tip">Square, level shoulders keep the platform flat and the pass on target.</string>
+
+    <!-- Setting -->
+    <string name="cue_set_hand_height">Hands above the forehead</string>
+    <string name="cue_set_hand_height_tip">Meet the ball above and slightly in front of the forehead, not down at chin height.</string>
+    <string name="cue_set_elbows">Load the elbows</string>
+    <string name="cue_set_elbows_tip">Elbows bent and out on contact, so you can push through the ball.</string>
+    <string name="cue_set_knees">Set with the legs</string>
+    <string name="cue_set_knees_tip">Bend the knees before the set. The power comes from the legs, not the wrists.</string>
+    <string name="cue_set_follow">Finish extended</string>
+    <string name="cue_set_follow_tip">Follow through until the arms are straight and the hands finish toward the target.</string>
+
+    <!-- Spiking -->
+    <string name="cue_spike_load">Load the approach</string>
+    <string name="cue_spike_load_tip">Drop into a deep last step. A shallow load caps how high you can get.</string>
+    <string name="cue_spike_arm">Swing through full extension</string>
+    <string name="cue_spike_arm_tip">Contact with the hitting arm straight, above the shoulder.</string>
+    <string name="cue_spike_jump">Get off the floor</string>
+    <string name="cue_spike_jump_tip">Drive the hips upward. Measured against your own standing hip height.</string>
+    <string name="cue_spike_trunk">Drive the trunk</string>
+    <string name="cue_spike_trunk_tip">Snap the chest forward through contact instead of hanging back.</string>
+
+    <!-- Blocking -->
+    <string name="cue_block_arms">Straight arms</string>
+    <string name="cue_block_arms_tip">Lock both elbows at the top of the block. Bent arms collapse under a hard hit.</string>
+    <string name="cue_block_hands">Hand spacing</string>
+    <string name="cue_block_hands_tip">Close enough that the ball cannot pass between the hands, wide enough to cover the seam.</string>
+    <string name="cue_block_penetration">Penetrate the net</string>
+    <string name="cue_block_penetration_tip">Reach the hands over and past the net line rather than straight up.</string>
+    <string name="cue_block_knees">Load before the jump</string>
+    <string name="cue_block_knees_tip">Bend the knees to load. Blocking flat-footed means late hands.</string>
+
+    <!-- Debug-only fallback when the pose model cannot be loaded -->
+    <string name="capture_use_demo">Use demo pose data</string>
+    <string name="capture_demo_note">Debug builds only. Scores from demo data are meaningless.</string>
+    <string name="capture_reps_label">reps</string>
+
+    <string name="result_measured_vs_target">You: %1$s  ·  Target: %2$s</string>
+    <string name="result_cue_unmeasured">Not measurable from this camera angle</string>
+
+    <!--
+      Counts use plurals rather than a formatted string. English only needs two
+      forms, but Filipino and many other languages do not, and a hardcoded "reps"
+      would be wrong the moment this app is localised.
+    -->
+    <plurals name="drill_reps">
+        <item quantity="one">%1$d rep</item>
+        <item quantity="other">%1$d reps</item>
+    </plurals>
+    <plurals name="result_reps_detected">
+        <item quantity="one">%1$d rep detected</item>
+        <item quantity="other">%1$d reps detected</item>
+    </plurals>
+    <plurals name="home_sessions_count">
+        <item quantity="one">%1$d session</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <plurals name="coach_subtitle">
+        <item quantity="one">From your %1$d recorded session</item>
+        <item quantity="other">From your %1$d recorded sessions</item>
+    </plurals>
+    <plurals name="auth_password_hint">
+        <item quantity="one">At least %1$d character.</item>
+        <item quantity="other">At least %1$d characters.</item>
+    </plurals>
+    <plurals name="coach_measured_reps">
+        <item quantity="one">Measured on %1$d rep</item>
+        <item quantity="other">Measured on %1$d reps</item>
+    </plurals>
+
+    <!-- ── Accounts ──────────────────────────────────────────────────────── -->
+    <string name="auth_login_title">Log in</string>
+    <string name="auth_login_subtitle">Welcome back! Please enter your details.</string>
+    <string name="auth_signup_title">Sign up</string>
+    <string name="auth_signup_subtitle">Create an account to keep your training on this phone.</string>
+    <string name="auth_name_label">Name</string>
+    <string name="auth_name_placeholder">Enter your name</string>
+    <string name="auth_email_label">Email</string>
+    <string name="auth_email_placeholder">Enter your email</string>
+    <string name="auth_password_label">Password</string>
+    <string name="auth_password_placeholder">Enter your password</string>
+    <string name="auth_password_new_placeholder">Create a password</string>
+    <string name="auth_remember_me">Remember me</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_login_action">Log in</string>
+    <string name="auth_signup_action">Sign up</string>
+    <string name="auth_or_continue">or continue with</string>
+    <string name="auth_provider_google">Continue with Google</string>
+    <string name="auth_no_account">Don\'t have an account?</string>
+    <string name="auth_have_account">Already have an account?</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
+    <string name="auth_reset_sent">If that address has an account, a reset link is on its way.</string>
+    <string name="auth_privacy_note">Your training video never leaves this phone. Only your account details are stored online.</string>
+    <string name="auth_error_credentials">That email or password is not right.</string>
+    <string name="auth_error_email_taken">That email already has an account. Try logging in instead.</string>
+    <string name="auth_error_weak_password">Passwords need at least 6 characters.</string>
+    <string name="auth_error_invalid_email">That does not look like an email address.</string>
+    <string name="auth_error_network">No connection. Check your internet and try again.</string>
+    <string name="auth_error_provider_disabled">Email sign-in is switched off for this app. Enable Email/Password in the Firebase console.</string>
+    <string name="auth_error_google_unavailable">Google sign-in is not available on this phone right now. Use your email and password instead.</string>
+    <string name="auth_error_no_google_account">No Google account on this phone. Add one in Settings, or use your email and password.</string>
+    <string name="auth_error_not_configured">Accounts are not set up for this app yet. Open Authentication in the Firebase console and get started.</string>
+    <string name="auth_error_unknown">Something went wrong. Please try again.</string>
+    <string name="auth_error_name_required">Please enter your name.</string>
+
+    <!-- ── Onboarding assessment ─────────────────────────────────────────── -->
+    <string name="assessment_step_counter">Step %1$d of %2$d</string>
+    <string name="assessment_skip">Skip</string>
+    <string name="assessment_back">Back</string>
+    <string name="assessment_next">Next</string>
+    <string name="assessment_finish">Finish</string>
+    <string name="assessment_position_title">What position do you play?</string>
+    <string name="assessment_position_body">This decides which skills get suggested. A libero will not be sent to drill blocking.</string>
+    <string name="assessment_hand_note">Dominant hand helps the analyser know which arm to read on your serve and spike.</string>
+    <string name="assessment_experience_title">How long have you been playing?</string>
+    <string name="assessment_experience_body">A rough answer is fine.</string>
+    <string name="assessment_ratings_title">How do you rate yourself?</string>
+    <string name="assessment_ratings_body">Be honest. Your lowest rating is what the app will suggest working on first.</string>
+    <string name="assessment_ratings_note">This is your own view, not a measurement. Once you have recorded a few sets, the app scores these skills from what it actually sees.</string>
+
+    <string name="rating_struggling">Struggling</string>
+    <string name="rating_okay">Okay</string>
+    <string name="rating_confident">Confident</string>
+
+    <string name="experience_new">New to volleyball</string>
+    <string name="experience_developing">1–2 years</string>
+    <string name="experience_experienced">3+ years</string>
+
+    <string name="level_beginner">Beginner</string>
+    <string name="level_intermediate">Intermediate</string>
+    <string name="level_advanced">Advanced</string>
+
+    <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
+    <string name="home_greeting_morning_named">Good morning, %1$s!</string>
+    <string name="home_greeting_afternoon_named">Good afternoon, %1$s!</string>
+    <string name="home_greeting_evening_named">Good evening, %1$s!</string>
+    <string name="home_section_skill_focus">Skill focus</string>
+    <string name="home_section_daily_progress">Daily progress</string>
+    <string name="home_view_all">View all</string>
+    <string name="home_focus_suggestion">Focus suggestion</string>
+    <string name="home_focus_improve">Improve your</string>
+    <string name="home_focus_source_assessment">From your assessment</string>
+    <string name="home_focus_source_measured">From your recorded sets</string>
+    <string name="home_assessment_title">Take the quick assessment</string>
+    <string name="home_assessment_body">Three short questions. It is what tells the app which skill to suggest first.</string>
+    <string name="home_skill_level">Level %1$d · %2$s</string>
+    <string name="home_stat_minutes">Minutes</string>
+    <string name="home_stat_sets">Sets captured</string>
+    <string name="home_stat_accuracy">Accuracy</string>
+    <string name="home_stat_unavailable">—</string>
+    <string name="home_period_week">This week</string>
+    <string name="home_period_month">This month</string>
+    <string name="home_period_all">All time</string>
+    <string name="home_change_period">Change period</string>
+
+    <!-- ── Profile additions ─────────────────────────────────────────────── -->
+    <string name="profile_section_account">Account</string>
+    <string name="profile_retake_assessment">Retake assessment</string>
+    <string name="profile_retake_body">Answer the three onboarding questions again to change what the dashboard suggests.</string>
+    <string name="profile_sign_out">Sign out</string>
+    <string name="profile_signed_in_as">Signed in as %1$s</string>
+
+    <!-- ====================================================================
+         COACH MODE
+
+         One app, two shells. Everything below belongs to the coach half of
+         Volleyball Lab, which the capstone document draws as a separate
+         ReactJS web portal (Figures 23-29) and which this build runs on the
+         phone behind the same login form. Screen names in the comments point
+         back at the figure each one implements, so the paper and the app can
+         be checked against each other during the defence.
+         ==================================================================== -->
+
+    <!--
+        ── Plans (conflict 6) ──────────────────────────────────────────────
+        The document gates features behind Pro in Figures 17 and 19 but models no
+        plan entity anywhere. These strings are the user-facing half of that gate.
+
+        The upgrade copy must never imply a charge. There is no payment processor
+        in this build, and a button that looked like a checkout while quietly
+        doing nothing would be the most dishonest thing in the app. Every screen
+        that offers the upgrade says so in the same breath.
+    -->
+    <string name="plan_free">Free</string>
+    <string name="plan_pro">Pro</string>
+
+    <string name="pro_feature_coach_title">Coach connection</string>
+    <string name="pro_feature_coach_body">Choose a coach and ask to join their team.</string>
+    <string name="pro_feature_comments_title">Session comments</string>
+    <string name="pro_feature_comments_body">Send sessions for review and read what your coach writes back.</string>
+    <string name="pro_feature_corrections_title">Detailed corrections</string>
+    <string name="pro_feature_corrections_body">Full explanations behind every cue score.</string>
+    <string name="pro_feature_drills_title">Full drill library</string>
+    <string name="pro_feature_drills_body">Every drill for all five skills.</string>
+    <string name="pro_feature_biomech_title">Advanced biomechanics</string>
+    <string name="pro_feature_biomech_body">Joint-level breakdowns beyond the five cue scores.</string>
+
+    <string name="pro_upsell_eyebrow">Pro plan</string>
+    <string name="pro_upsell_title">Train with a real coach</string>
+    <string name="pro_upsell_body">Coach connection is part of Pro. Upgrade to browse coaches, ask to join a team, and get your sessions reviewed by a person.</string>
+    <string name="pro_upsell_cta">View Pro access</string>
+
+    <string name="pro_sheet_title">Unlock more with Pro</string>
+    <string name="pro_sheet_included">What Pro includes</string>
+    <string name="pro_sheet_planned">Planned, not built yet</string>
+    <string name="pro_sheet_planned_note">These are in the capstone document\'s Pro tier but are not implemented in this build. They are listed so the plan is honest about what upgrading does and does not change today.</string>
+    <string name="pro_sheet_upgrade">Unlock Pro on this device</string>
+    <string name="pro_sheet_downgrade">Switch back to Free</string>
+    <string name="pro_sheet_dismiss">Not now</string>
+    <string name="pro_sheet_current">You are on the %1$s plan</string>
+    <!-- Load-bearing. Do not soften this: it is the whole reason the button above it is acceptable. -->
+    <string name="pro_sheet_no_payment">No payment is taken and no card is asked for. Billing is not built yet, so this button simply unlocks Pro on this phone for demonstration. You can switch back at any time.</string>
+
+    <!-- ── Roles ─────────────────────────────────────────────────────────── -->
+    <string name="role_player">Player</string>
+    <string name="role_player_blurb">Record your own training and get form feedback.</string>
+    <string name="role_coach">Coach</string>
+    <string name="role_coach_blurb">Review your team\'s sessions and set them drills.</string>
+
+    <!--
+        Debug builds only. Shown on the login form and inside both shells.
+
+        Coaches register on the web portal, so the mobile app has no coach sign-up;
+        the coach fixture is how the coach shell is reached at all until that portal
+        exists. The athlete fixture sits beside it because coach mode is a
+        relationship, and showing a relationship needs both ends of it.
+
+        %1$s in demo_open_account is the account name, e.g. "Demo Coach".
+    -->
+    <string name="demo_accounts_title">Test accounts</string>
+    <string name="demo_open_account">Open %1$s</string>
+    <string name="demo_accounts_note">Real accounts, created the first time you tap. Debug builds only.</string>
+    <string name="demo_switch_body">Switch to the other side of the app to see both halves of a coach connection. Everything is stored per account, so switching back restores this one exactly as it was.</string>
+
+    <!-- Coach tabs -->
+    <string name="nav_coach_dashboard">Team</string>
+    <string name="nav_coach_roster">Players</string>
+    <string name="nav_coach_assign">Assign</string>
+    <string name="nav_coach_account">Account</string>
+
+    <!-- ── Shared vocabulary ─────────────────────────────────────────────── -->
+    <string name="membership_pending">Waiting</string>
+    <string name="membership_active">On the team</string>
+    <string name="membership_ended">Not on the team</string>
+    <string name="assignment_pending">Not started</string>
+    <string name="assignment_in_progress">In progress</string>
+    <string name="assignment_completed">Done</string>
+    <string name="coach_spec_all_around">All-around</string>
+    <string name="coach_unnamed">Unnamed player</string>
+    <string name="coach_team_default">Your team</string>
+    <string name="coach_coach_default">Your coach</string>
+
+    <!-- ── Dashboard (Figure 25) ─────────────────────────────────────────── -->
+    <string name="coach_dash_title">Team</string>
+    <string name="coach_hero_accent">Coach!</string>
+    <string name="coach_hero_body">Build your team. Track their form. Win together.</string>
+
+    <!--
+        The one dark prompt card on the dashboard. It shows whichever of these is
+        the most pressing thing outstanding, and nothing when there is nothing:
+        first setup, then safety, then the queue, then all-clear.
+    -->
+    <string name="coach_focus_setup_eyebrow">Get started</string>
+    <string name="coach_focus_setup_title">Waiting for your first player</string>
+    <string name="coach_focus_setup_body">Players on the Pro plan pick a coach from their own Coach tab and ask to join. Their requests land here for you to approve.</string>
+    <string name="coach_focus_safety_eyebrow">Worth a look</string>
+    <string name="coach_focus_safety_body">A joint angle sat outside its expected band. Open the player and watch the clip — this is a prompt, not an assessment.</string>
+    <string name="coach_focus_review_eyebrow">Review queue</string>
+    <string name="coach_focus_review_title">%1$d session waiting</string>
+    <string name="coach_focus_review_title_plural">%1$d sessions waiting</string>
+    <string name="coach_focus_review_body">Your players sent these for review. Open one to score it and write back.</string>
+    <string name="coach_focus_clear_eyebrow">All clear</string>
+    <string name="coach_focus_clear_title">Nothing waiting</string>
+    <string name="coach_focus_clear_body">Your queue is empty and no safety flags are open.</string>
+
+    <string name="coach_dash_requests">%1$d waiting to join</string>
+    <string name="coach_dash_requests_action">Review</string>
+    <string name="coach_dash_open_queue">Open queue</string>
+    <string name="coach_dash_view_roster">View roster</string>
+    <string name="coach_dash_view_sets">View sets</string>
+    <string name="coach_quick_title">Quick actions</string>
+    <string name="coach_quick_add_sub">Review requests</string>
+    <string name="coach_quick_assign_sub">Set a drill</string>
+    <string name="coach_quick_account_sub">Team settings</string>
+
+    <!--
+        The sample-team fixture. This copy is what earns it its place: the rest of
+        the app ships no mock data precisely because mock UI is indistinguishable
+        from working UI, and these two athletes are only acceptable because every
+        screen they appear on says out loud that they are not real. Do not soften
+        this wording, and do not remove the chip.
+    -->
+    <string name="coach_sample_chip">Sample</string>
+    <string name="coach_sample_title">Sample players</string>
+    <string name="coach_sample_note">Maya and Andrei are made up, so this screen has something to show. Their scores are still computed the normal way. They disappear the moment you add a real player.</string>
+    <string name="coach_dash_stat_players">Players</string>
+    <string name="coach_dash_stat_reviews">To review</string>
+    <string name="coach_dash_stat_form">Team form</string>
+    <string name="coach_dash_stat_week">Sets this week</string>
+    <string name="coach_dash_queue">Review queue</string>
+    <string name="coach_dash_queue_empty_title">Nothing waiting</string>
+    <string name="coach_dash_queue_empty_body">Sessions your players submit for review land here. They choose what to send; nothing is shared automatically.</string>
+    <string name="coach_dash_safety">%1$d player needs a second look</string>
+    <string name="coach_dash_safety_plural">%1$d players need a second look</string>
+    <string name="coach_dash_empty_title">No players yet</string>
+    <string name="coach_dash_empty_body">Once a player asks to join and you approve them in Players, the sessions they submit show up here.</string>
+    <string name="coach_dash_local_note">This build links a coach and a player through this device only — both accounts must have signed in on this phone. Networked teams need the backend the document leaves open.</string>
+    <string name="coach_queue_item">%1$s · %2$s</string>
+    <string name="coach_queue_reviewed">Answered</string>
+
+    <!-- ── Players and join requests (Figures 26 and 27) ─────────────────── -->
+    <string name="coach_roster_title">Players</string>
+    <string name="coach_roster_requests">Wants to join</string>
+    <string name="coach_roster_active">On the team</string>
+    <string name="coach_roster_past">Past players</string>
+    <string name="coach_roster_approve">Approve</string>
+    <string name="coach_roster_decline">Decline</string>
+    <string name="coach_roster_asked">Asked %1$s</string>
+    <string name="coach_roster_remove">Remove from team</string>
+    <string name="coach_roster_empty_title">Nobody on the roster</string>
+    <string name="coach_roster_empty_body">Players choose a coach from their own Coach tab. Their requests to join appear here for you to approve.</string>
+    <string name="coach_roster_no_training">No training recorded yet</string>
+    <string name="coach_roster_summary">%1$d set · form %2$d</string>
+    <string name="coach_roster_summary_plural">%1$d sets · form %2$d</string>
+    <string name="coach_roster_pending_reviews">%1$d waiting for you</string>
+
+    <!-- ── Player detail (storyboard) ────────────────────────────────────── -->
+    <string name="coach_player_trend">30-day trend</string>
+    <string name="coach_player_consistency">Consistency</string>
+    <string name="coach_player_sets">Sets</string>
+    <string name="coach_player_form">Mean form</string>
+    <string name="coach_player_breakdown">By skill</string>
+    <string name="coach_player_history">Recent sessions</string>
+    <string name="coach_player_assignments">Assignments</string>
+    <string name="coach_player_new_assignment">Set a drill</string>
+    <string name="coach_player_focus">Lowest-scoring cue</string>
+    <string name="coach_player_focus_source">Pooled across every rep this player has recorded of it. Not a model — the same arithmetic their own app shows them.</string>
+    <string name="coach_player_no_training_title">Nothing recorded yet</string>
+    <string name="coach_player_no_training_body">This player has not captured a session on this device. Once they do and submit it, their form breakdown appears here.</string>
+    <string name="coach_player_no_assignments">No drills set yet.</string>
+    <string name="coach_player_review">Review</string>
+    <string name="coach_player_skill_unmeasured">Not trained</string>
+    <string name="coach_player_message">Leave a note</string>
+    <string name="coach_player_notes">Your notes</string>
+
+    <!-- ── Session review (Figure 25, detail panel) ──────────────────────── -->
+    <string name="coach_review_title">Session review</string>
+    <string name="coach_review_scorecard">Scorecard</string>
+    <string name="coach_review_strengths">Working well</string>
+    <string name="coach_review_corrections">Next corrections</string>
+    <string name="coach_review_safety">Safety check</string>
+    <string name="coach_review_no_strengths">Nothing scored high enough to call a strength in this session.</string>
+    <string name="coach_review_no_corrections">Every measured cue scored above the correction threshold.</string>
+    <string name="coach_review_comment_label">Your note to this player</string>
+    <string name="coach_review_comment_hint">What should they change before the next set?</string>
+    <string name="coach_review_send">Send note</string>
+    <string name="coach_review_sent">Note sent</string>
+    <string name="coach_review_framing">Most cues could not be measured in this recording — %1$d%% came back blank. That is a camera-angle problem, not a technique problem, so read the score with that in mind.</string>
+    <string name="coach_review_missing">That session is no longer on this device.</string>
+    <string name="coach_review_analysis">Cue breakdown</string>
+    <string name="coach_review_analysis_source">Computed on this phone from the athlete\'s stored pose data. Thresholds are first-pass coaching values, not measured ones — Experiment 2 has not run yet.</string>
+    <string name="review_safety_clear">Clear</string>
+    <string name="review_safety_watch">Worth a look</string>
+    <string name="review_safety_unknown">Not visible</string>
+    <string name="review_safety_disclaimer">Screening prompts only. A flag here means a joint angle sat outside an expected band and the clip is worth watching — it is not an injury assessment.</string>
+
+    <!-- ── Assignments (Figure 28) ───────────────────────────────────────── -->
+    <string name="coach_assign_title">Assignments</string>
+    <string name="coach_assign_new">New drill</string>
+    <string name="coach_assign_edit_title">Set a drill</string>
+    <string name="coach_assign_player">Player</string>
+    <string name="coach_assign_pick_player">Choose who this is for</string>
+    <string name="coach_assign_name">Drill name</string>
+    <string name="coach_assign_name_hint">Cross-court cut shot</string>
+    <string name="coach_assign_skill">Target skill</string>
+    <string name="coach_assign_level">Difficulty</string>
+    <string name="coach_assign_sets">Sets</string>
+    <string name="coach_assign_reps">Reps per set</string>
+    <string name="coach_assign_due">Due in</string>
+    <string name="coach_assign_due_none">No deadline</string>
+    <string name="coach_assign_due_days">%1$d days</string>
+    <string name="coach_assign_summary">Summary</string>
+    <string name="coach_assign_summary_hint">One line on what this drill is for.</string>
+    <string name="coach_assign_instructions">Instructions</string>
+    <string name="coach_assign_instructions_hint">Step by step. What to set up, what to do, what to watch for.</string>
+    <string name="coach_assign_save">Assign it</string>
+    <string name="coach_assign_saved">Drill assigned</string>
+    <string name="coach_assign_delete">Delete</string>
+    <string name="coach_assign_empty_title">No drills set</string>
+    <string name="coach_assign_empty_body">Write a drill and hand it to one of your players. They see it in their Coach tab with your instructions attached.</string>
+    <string name="coach_assign_no_players">Approve a player first — a drill needs someone to do it.</string>
+    <string name="coach_assign_library">From the drill library</string>
+    <string name="coach_assign_target">%1$d × %2$d reps</string>
+    <string name="coach_assign_due_on">Due %1$s</string>
+    <string name="coach_assign_overdue">Overdue</string>
+
+    <!-- ── Coach account (Figure 29) ─────────────────────────────────────── -->
+    <string name="coach_account_title">Account</string>
+    <string name="coach_account_team">Team</string>
+    <string name="coach_account_credentials">Credentials</string>
+    <string name="coach_account_name">Your name</string>
+    <string name="coach_account_team_name">Team name</string>
+    <string name="coach_account_organisation">School or club</string>
+    <string name="coach_account_specialisation">Specialisation</string>
+    <string name="coach_account_experience">Years coaching</string>
+    <string name="coach_account_licence">Certification or licence no.</string>
+    <string name="coach_account_licence_note">Stored on this phone only. Nothing here is verified by the app.</string>
+    <string name="coach_account_notifications">Notifications</string>
+    <string name="coach_account_notify_submissions">When a player submits a session</string>
+    <string name="coach_account_notify_digest">Weekly team summary</string>
+    <string name="coach_account_notify_safety">Safety flags</string>
+    <string name="coach_account_notify_note">These switches record the preference. Delivery needs the Notification entity in Table 18, which this build does not implement — nothing is sent yet.</string>
+    <string name="coach_account_switch_role">Switch to the player app</string>
+    <string name="coach_account_switch_body">Use this account to record your own training instead. You can switch back any time; nothing is deleted either way.</string>
+
+    <!-- ── Role switch, shown in the player\'s Profile tab ────────────────── -->
+    <string name="profile_role_title">You are using Volleyball Lab as a %1$s</string>
+    <string name="profile_switch_to_coach">Switch to coach mode</string>
+    <string name="profile_switch_body">Coach mode replaces training capture with a review queue for your squad. Your own sessions stay where they are.</string>
+
+    <!--
+        Player-side coach link, Figures 20 to 22. The order matters and the copy
+        follows it: enter a code (20), read who you are about to ask and the rules
+        (21), then wait for their answer, then the connected hub (22). The player
+        asks; the coach decides.
+    -->
+    <string name="coach_link_section">Your coach</string>
+    <string name="coach_link_none_title">Choose a coach</string>
+    <string name="coach_link_none_body">Pick a coach and ask to join their team. They review sessions you choose to send and write back — it is not a live chat.</string>
+    <string name="coach_link_directory_empty_title">No coaches yet</string>
+    <string name="coach_link_directory_empty_body">No coach account has signed in on this phone. Coach mode is device-local in this build, so a coach has to use this handset before they can appear here.</string>
+    <string name="coach_link_directory_empty_debug">Debug builds: open the Demo Coach test account once — from Profile, or from the login screen — and it will appear in this list.</string>
+    <string name="coach_link_roster_size">%1$d on the team</string>
+    <string name="coach_link_roster_empty">No players yet</string>
+
+    <!-- Figure 21: the coach's details, before the player commits to asking. -->
+    <string name="coach_link_preview_eyebrow">Connection request</string>
+    <string name="coach_link_preview_rules">They review your request before you join. Once connected, only the sessions you choose to send are shared — nothing is uploaded automatically.</string>
+    <string name="coach_link_preview_specialisation">Specialises in %1$s</string>
+    <string name="coach_link_preview_experience">%1$d years coaching</string>
+    <string name="coach_link_send">Send connection request</string>
+    <string name="coach_link_back">Choose someone else</string>
+
+    <string name="coach_link_pending_title">Waiting for %1$s</string>
+    <string name="coach_link_pending_body">Your request has been sent. Once they accept it you can start submitting sessions for review.</string>
+    <string name="coach_link_cancel">Cancel request</string>
+
+    <string name="coach_link_active_title">Coached by %1$s</string>
+    <string name="coach_link_leave">Leave team</string>
+
+    <string name="coach_link_error_own">That is your own coach account.</string>
+    <string name="coach_link_error_unknown">That coach is no longer available.</string>
+    <string name="coach_link_error_notpro">Coach connection needs the Pro plan.</string>
+    <string name="coach_link_error_linked">You have already asked to join that team.</string>
+    <string name="coach_link_error_session">Sign in again and retry.</string>
+    <string name="coach_link_submit">Send your last session for review</string>
+    <string name="coach_link_submitted">Sent for review</string>
+    <string name="coach_link_awaiting">Waiting on your coach</string>
+    <string name="coach_link_nothing_to_send">Record a session first, then you can send it.</string>
+    <string name="coach_link_notes">Notes from your coach</string>
+    <string name="coach_link_no_notes">No notes yet.</string>
+    <string name="coach_link_assignments">Drills set for you</string>
+    <string name="coach_link_start_drill">Start this</string>
+    <string name="coach_link_mark_done">Mark done</string>
+
+    <!-- Accessibility -->
+    <string name="cd_coach_avatar">Coach</string>
+    <string name="cd_player_avatar">Player</string>
+
+    <plurals name="coach_dash_sets_week">
+        <item quantity="one">%1$d set this week</item>
+        <item quantity="other">%1$d sets this week</item>
+    </plurals>
+    <plurals name="coach_reps_measured">
+        <item quantity="one">%1$d rep</item>
+        <item quantity="other">%1$d reps</item>
+    </plurals>
+</resources>

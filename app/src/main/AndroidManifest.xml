@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      CAMERA is the only runtime permission this app requests.
+
+      Deliberately NOT requested:
+        RECORD_AUDIO      - form analysis is purely visual. Recording a minor
+                            athlete's audio would need consent we do not collect.
+        WRITE_EXTERNAL_*  - session clips stay in app-scoped storage.
+        INTERNET is declared because Firebase sync is planned, but nothing in the
+        training pipeline requires it: capture and analysis run fully on-device.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <application
+        android:name=".VolleyballLabApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VolleyballLab.Splash"
+        tools:targetApi="33">
+
+        <!--
+          screenOrientation is locked to portrait, and the lint warnings for that
+          are suppressed deliberately rather than by accident.
+
+          The framing gate in PoseQualityValidator requires the athlete's whole
+          standing body in frame, spanning 45-95% of frame height. That is a
+          portrait composition: in landscape a standing person either does not
+          fit or is far enough away that landmark confidence collapses. Every cue
+          threshold in the app assumes this framing.
+
+          The known cost is large-screen behaviour, where recent Android versions
+          ignore this attribute. Supporting landscape properly means redesigning
+          the capture framing rules, not deleting a manifest line, so it is left
+          as a documented limitation.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.VolleyballLab.Splash"
+            android:windowSoftInputMode="adjustResize"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

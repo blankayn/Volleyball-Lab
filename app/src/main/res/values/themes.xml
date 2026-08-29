@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Launch theme. Owns only the pre-Compose system splash window.
+
+      postSplashScreenTheme swaps to the plain theme the instant the activity is
+      ready, so the window background underneath Compose is the right colour
+      during configuration changes.
+    -->
+    <style name="Theme.VolleyballLab.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.VolleyballLab</item>
+    </style>
+
+    <!--
+      Post-splash theme. Intentionally almost empty: this is a Compose app, so
+      MaterialTheme owns colour and typography. The only job left for the XML
+      theme is the window background (which must match the splash so there is no
+      flash) and letting the app draw edge to edge.
+    -->
+    <style name="Theme.VolleyballLab" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+</resources>

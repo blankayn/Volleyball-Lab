@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Volleyball Lab mark, drawn as vector paths rather than shipped as a PNG so it
+  stays crisp at every density and adds nothing to the APK.
+
+  Geometry note: the ball is r=15 inside a 48x48 viewport (62% fill). Android 12+
+  masks windowSplashScreenAnimatedIcon to a circle and scales it, cropping
+  anything past roughly two thirds of the canvas, so the mark is inset on purpose.
+
+  The two seams are circular arcs of a LARGER radius (19) than the ball (15).
+  That is what real volleyball seams are: shallow curves across a sphere. Two
+  seams, not three, splits the face into the three panels you actually see head
+  on - three seams reads as a globe.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48"
+    android:tint="@color/splash_icon_tint">
+
+    <path
+        android:pathData="M9,24 A15,15 0 1,1 39,24 A15,15 0 1,1 9,24 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M24,9 A19,19 0 0,0 24,39"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+
+    <path
+        android:pathData="M9,24 A19,19 0 0,1 39,24"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round" />
+</vector>

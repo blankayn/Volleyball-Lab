@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+      Training sessions contain body-landmark data for an identifiable athlete.
+      They are excluded from backup on purpose: this is biometric-adjacent data
+      and it should not be silently copied to a Google account. It belongs in the
+      user's own Firebase document, gated by an explicit sign-in.
+    -->
+    <exclude domain="file" path="sessions/" />
+    <exclude domain="file" path="captures/" />
+    <exclude domain="sharedpref" path="auth.xml" />
+</full-backup-content>
