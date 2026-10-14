@@ -8,6 +8,7 @@ import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.pose.analysis.ReceivingReadyPostureEvaluator
 import com.volleyballlab.player.pose.analysis.SessionScorer
+import com.volleyballlab.player.pose.analysis.ScoredSession
 import com.volleyballlab.player.pose.model.PoseFrame
 import com.volleyballlab.player.pose.review.CapturedReviewInput
 import com.volleyballlab.player.pose.review.CapturedReviewWriter
@@ -79,7 +80,7 @@ internal class CaptureCompletion(
                 reps = parts.flatMap { it.session.reps }.mapIndexed { index, rep -> rep.copy(index = index) },
                 angleStages = if (input.guidedAngles) input.angleStages else emptyList(),
             )
-            Triple(result, issues.toList(), parts.sumOf { it.assessedCueCount })
+            ScoredSession(result, issues.toList(), parts.sumOf { it.assessedCueCount })
         }
         val videoPath = withTimeoutOrNull(VIDEO_FINALIZE_TIMEOUT_MS) { videoFinalization?.await() }
         videoFinalization?.cancel()
@@ -88,7 +89,7 @@ internal class CaptureCompletion(
             if (origin != null) {
                 try {
                     reviewWriter.save(videoPath, input.skill,
-                        CapturedReviewInput(input.replayFrames, scored.second, scored.third, origin))
+                        CapturedReviewInput(input.replayFrames, scored.issues, scored.assessedCueCount, origin))
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -97,7 +98,7 @@ internal class CaptureCompletion(
                 }
             }
         }
-        return scored.first.copy(videoPath = videoPath)
+        return scored.session.copy(videoPath = videoPath)
     }
 
     private companion object {
