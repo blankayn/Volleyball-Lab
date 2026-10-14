@@ -60,6 +60,8 @@ import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.DrillRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -182,6 +184,11 @@ fun CoachAssignListScreen(
     val viewModel: CoachAssignViewModel = viewModel(factory = CoachAssignViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val now = remember { System.currentTimeMillis() }
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.List, contentPadding, modifier)
+        return
+    }
     val names = remember(state.roster) {
         state.roster.associate { it.playerUid to it.playerName }
     }
@@ -357,6 +364,11 @@ fun CoachAssignEditScreen(
     val viewModel: CoachAssignViewModel = viewModel(factory = CoachAssignViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val drills by viewModel.drills.collectAsStateWithLifecycle()
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.Detail, contentPadding, modifier)
+        return
+    }
 
     val existing = state.assignments.firstOrNull { it.id == assignmentId }
 

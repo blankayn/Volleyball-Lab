@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Transparent waveform without the old bitmap tile. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="112dp" android:height="112dp"
+    android:viewportWidth="112" android:viewportHeight="112">
+    <path android:pathData="M26,50 L26,62" android:strokeColor="#A78BFA" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M36,43 L36,69" android:strokeColor="#9C79F8" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M46,35 L46,77" android:strokeColor="#936AF7" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M56,29 L56,83" android:strokeColor="#8B5CF6" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M66,35 L66,77" android:strokeColor="#814BEA" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M76,43 L76,69" android:strokeColor="#773ADF" android:strokeWidth="6" android:strokeLineCap="round" />
+    <path android:pathData="M86,50 L86,62" android:strokeColor="#6D28D9" android:strokeWidth="6" android:strokeLineCap="round" />
+</vector>

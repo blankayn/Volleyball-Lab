@@ -16,10 +16,101 @@ Run with --overlay and look at the output before trusting a batch.
 """
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
+
+# --- Decoding -------------------------------------------------------------
+
+def _find(tool: str) -> str | None:
+    """Locates ffmpeg/ffprobe on PATH, or where winget put it.
+
+    winget installs to a versioned directory and only amends PATH for new shells,
+    so a freshly installed ffmpeg is routinely present and invisible at once.
+    """
+    found = shutil.which(tool)
+    if found:
+        return found
+    packages = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+    if packages.is_dir():
+        for candidate in packages.rglob(f"{tool}.exe"):
+            return str(candidate)
+    return None
+
+
+def probe_codec(path: Path) -> str:
+    """Best-effort codec name, for turning a decode failure into a useful message."""
+    ffprobe = _find("ffprobe")
+    if not ffprobe:
+        return "unknown"
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries",
+             "stream=codec_name,codec_tag_string", "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def open_video(path: Path) -> tuple[cv2.VideoCapture, Path | None]:
+    """Opens a clip, transcoding first if OpenCV cannot decode it.
+
+    Downloads arrive in whatever the platform served, and OpenCV's bundled FFmpeg
+    is narrower than the standalone one - HEVC, AV1 and VP9 clips open fine, read
+    zero frames, and report no error worth acting on. Transcoding those to H.264
+    costs a few seconds and makes the batch workflow survive mixed sources.
+
+    Returns the capture and, when one was made, the temporary file to delete.
+    Raises with the codec named when nothing can decode it: TikTok in particular
+    serves ByteDance's proprietary `bvc2`, which no standard decoder handles, and
+    the only fix is to fetch the clip again in H.264.
+    """
+    capture = cv2.VideoCapture(str(path))
+    if capture.isOpened():
+        ok, _ = capture.read()
+        if ok:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            return capture, None
+    capture.release()
+
+    ffmpeg = _find("ffmpeg")
+    codec = probe_codec(path)
+    if not ffmpeg:
+        raise RuntimeError(
+            f"cannot decode (codec: {codec}) and ffmpeg is not installed to transcode it"
+        )
+
+    temporary = Path(tempfile.gettempdir()) / f"posepipe_{os.getpid()}_{path.stem}.mp4"
+    result = subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-i", str(path),
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(temporary)],
+        capture_output=True, text=True,
+    )
+
+    if result.returncode == 0 and temporary.exists():
+        transcoded = cv2.VideoCapture(str(temporary))
+        if transcoded.isOpened():
+            ok, _ = transcoded.read()
+            if ok:
+                transcoded.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                return transcoded, temporary
+        transcoded.release()
+
+    temporary.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"no decoder for this file (codec: {codec}); ffmpeg could not convert it either. "
+        f"If this came from TikTok it is ByteDance's proprietary codec - re-download "
+        f"forcing H.264, e.g. yt-dlp -f \"bv*[vcodec^=avc1]+ba/b[vcodec^=avc1]\""
+    )
+
 
 # --- Shot detection -------------------------------------------------------
 

@@ -1,0 +1,22 @@
+{
+  "functions": [{ "source": "functions", "codebase": "billing", "runtime": "nodejs22", "ignore": ["node_modules", ".git", ".env*", "test", "emulator-tests"] }],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": { "rules": "storage.rules" },
+  "hosting": {
+    "public": "coach-web/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

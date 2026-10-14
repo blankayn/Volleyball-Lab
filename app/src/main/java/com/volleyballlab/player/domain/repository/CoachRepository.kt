@@ -9,7 +9,9 @@ import com.volleyballlab.player.domain.model.CoachProfile
 import com.volleyballlab.player.domain.model.MembershipStatus
 import com.volleyballlab.player.domain.model.RosterMember
 import com.volleyballlab.player.domain.model.SessionSubmission
+import com.volleyballlab.player.domain.model.SessionResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /** Why a player's attempt to join a coach did not work. */
 enum class JoinFailure {
@@ -27,6 +29,9 @@ enum class JoinFailure {
 
     /** Coach connection is a Pro feature and this account is on Free. */
     NotPro,
+
+    /** The cloud could not confirm the request; no connection was accepted. */
+    Unavailable,
 }
 
 /** The result of actually sending the request. */
@@ -64,6 +69,12 @@ sealed interface JoinOutcome {
  * changes.
  */
 interface CoachRepository {
+
+    /** A readable cloud failure; local implementations have no remote connection. */
+    val syncError: Flow<String?> get() = flowOf(null)
+
+    /** Restart reads after a connection failure. Does not approve or resend a request. */
+    fun retrySync() = Unit
 
     // ---- The coach's own account ------------------------------------------
 
@@ -161,6 +172,11 @@ interface CoachRepository {
     suspend fun leaveCoach()
 
     suspend fun submitSession(sessionId: String)
+
+    /** Returns only after the result is shared and the assignment is completed.
+     * Failures propagate so the result screen can offer a retry.
+     */
+    suspend fun submitAssignmentSession(assignmentId: String, session: SessionResult)
 
     suspend fun updateAssignmentStatus(id: String, status: AssignmentStatus)
 }

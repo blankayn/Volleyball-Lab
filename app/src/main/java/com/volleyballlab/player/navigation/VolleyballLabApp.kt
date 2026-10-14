@@ -1,54 +1,73 @@
 package com.volleyballlab.player.navigation
 
+import android.view.Window
+import androidx.core.view.WindowCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import com.volleyballlab.player.R
 import androidx.navigation.toRoute
 import com.volleyballlab.player.domain.model.UserRole
 import com.volleyballlab.player.feature.assessment.AssessmentScreen
 import com.volleyballlab.player.feature.auth.LoginScreen
 import com.volleyballlab.player.feature.auth.SignUpScreen
+import com.volleyballlab.player.feature.auth.findActivity
 import com.volleyballlab.player.feature.coach.CoachScreen
+import com.volleyballlab.player.feature.coach.PlayerAssignmentScreen
 import com.volleyballlab.player.feature.coachmode.CoachAccountScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignEditScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignListScreen
@@ -57,6 +76,7 @@ import com.volleyballlab.player.feature.coachmode.CoachPlayerScreen
 import com.volleyballlab.player.feature.coachmode.CoachReviewScreen
 import com.volleyballlab.player.feature.coachmode.CoachRosterScreen
 import com.volleyballlab.player.feature.home.HomeScreen
+import com.volleyballlab.player.feature.session.SessionSummaryScreen
 import com.volleyballlab.player.feature.profile.ProfileScreen
 import com.volleyballlab.player.feature.progress.ProgressScreen
 import com.volleyballlab.player.feature.splash.SplashScreen
@@ -66,6 +86,10 @@ import com.volleyballlab.player.feature.train.capture.CaptureScreen
 import com.volleyballlab.player.feature.train.drill.DrillSelectScreen
 import com.volleyballlab.player.feature.train.result.SessionResultScreen
 import com.volleyballlab.player.feature.train.skill.SkillSelectScreen
+import com.volleyballlab.player.feature.train.drill.DrillLibraryScreen
+import com.volleyballlab.player.feature.train.drill.DrillDetailScreen
+import com.volleyballlab.player.feature.train.drill.DrillPracticeScreen
+import com.volleyballlab.player.feature.train.drill.DrillPracticeSummaryScreen
 import com.volleyballlab.player.ui.component.VolleyballBackdrop
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbMotion
@@ -76,6 +100,19 @@ import com.volleyballlab.player.ui.theme.vbTween
  */
 @Composable
 fun VolleyballLabApp() {
+    var firstBrandedFrameDrawn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Firebase and repository construction can block the first composition on
+        // a cold process. Let the lightweight splash reach the screen first.
+        withFrameNanos { }
+        withFrameNanos { }
+        firstBrandedFrameDrawn = true
+    }
+    if (!firstBrandedFrameDrawn) {
+        SplashScreen(isReady = false, onFinished = {})
+        return
+    }
+
     val startupViewModel: StartupViewModel = viewModel(factory = StartupViewModel.Factory)
     val isReady by startupViewModel.isReady.collectAsStateWithLifecycle()
     val startDestination by startupViewModel.startDestination.collectAsStateWithLifecycle()
@@ -132,7 +169,11 @@ fun VolleyballLabApp() {
                 // rebuild the graph and reset the back stack, which is precisely the
                 // bug this is fixing, in the other direction.
                 val resolvedStart = remember {
-                    if (start != StartDestination.Login || !startupViewModel.hasSession) {
+                    if (!startupViewModel.hasSession) {
+                        // A coach sign-out rebuilds this shell, but startup may
+                        // still say CoachHome. Never reuse it without a session.
+                        StartDestination.Login
+                    } else if (start != StartDestination.Login && start != StartDestination.CoachHome) {
                         start
                     } else if (startupViewModel.hasOnboarded.value) {
                         StartDestination.Home
@@ -156,10 +197,16 @@ fun VolleyballLabApp() {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val window = LocalContext.current.findActivity()?.window
+    SideEffect {
+        val isCapture = currentDestination?.hasRoute(CaptureRoute::class) == true
+        setSystemBarIconAppearance(window, useDarkIcons = !isCapture)
+    }
 
     // Three kinds of screen have no business showing tabs. The camera is full-bleed:
     // a bottom bar over a live viewfinder covers the athlete's feet, which the
@@ -175,11 +222,37 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
     Scaffold(
+        topBar = {
+            if (showBottomBar) {
+                androidx.compose.foundation.layout.Column {
+                    TopAppBar(
+                        title = { AppBrandTitle() },
+                        actions = { com.volleyballlab.player.feature.notifications.NotificationBell() },
+                    )
+                    if (currentDestination?.hasRoute<CoachRoute>() == true) {
+                        com.volleyballlab.player.feature.coach.CoachSyncBanner(coach = false)
+                    }
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 VbBottomBar(
                     navController = navController,
                     currentDestination = currentDestination,
+                    selectedTab = when {
+                        currentDestination?.hasRoute<SessionSummaryRoute>() == true ->
+                            if (backStackEntry?.toRoute<SessionSummaryRoute>()?.fromProgress == true)
+                                TopLevelDestination.Progress else TopLevelDestination.Home
+                        currentDestination?.hasRoute<SessionResultRoute>() == true &&
+                            backStackEntry?.toRoute<SessionResultRoute>()?.returnToSummary == true ->
+                            if (backStackEntry?.toRoute<SessionResultRoute>()?.summaryFromProgress == true)
+                                TopLevelDestination.Progress else TopLevelDestination.Home
+                        currentDestination?.hasRoute<PlayerAssignmentRoute>() == true ||
+                            (currentDestination?.hasRoute<SessionResultRoute>() == true &&
+                                backStackEntry?.toRoute<SessionResultRoute>()?.assignmentId != null) -> TopLevelDestination.Coach
+                        else -> null
+                    },
                 )
             }
         },
@@ -205,10 +278,13 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
  * signed-in coach, so there is exactly one place it can open: the dashboard.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun CoachShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val window = LocalContext.current.findActivity()?.window
+    SideEffect { setSystemBarIconAppearance(window, useDarkIcons = true) }
 
     // The same rule as the athlete's shell, minus the camera: auth screens have
     // nothing to switch to. Detail screens keep their tabs, because a coach three
@@ -217,6 +293,17 @@ private fun CoachShell() {
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
     Scaffold(
+        topBar = {
+            if (showBottomBar) {
+                androidx.compose.foundation.layout.Column {
+                    TopAppBar(
+                        title = { AppBrandTitle() },
+                        actions = { com.volleyballlab.player.feature.notifications.NotificationBell() },
+                    )
+                    com.volleyballlab.player.feature.coach.CoachSyncBanner(coach = true)
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 CoachBottomBar(
@@ -240,6 +327,28 @@ private fun CoachShell() {
                 modifier = Modifier.fillMaxSize(),
             )
         }
+    }
+}
+
+private fun setSystemBarIconAppearance(window: Window?, useDarkIcons: Boolean) {
+    window ?: return
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+        isAppearanceLightStatusBars = useDarkIcons
+        isAppearanceLightNavigationBars = useDarkIcons
+    }
+}
+
+@Composable
+private fun AppBrandTitle() {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Image(
+            painter = painterResource(R.drawable.volleyball_lab_logo),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+        )
+        Text("VOLLEYBALL LAB", style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
     }
 }
 
@@ -300,11 +409,12 @@ private fun CoachBottomBar(
 }
 
 /** Identical tab semantics to the athlete's shell; see [navigateToTopLevel]. */
-private fun NavHostController.navigateToCoachTab(destination: CoachTabDestination) {
+internal fun NavHostController.navigateToCoachTab(destination: CoachTabDestination) {
+    if (currentDestination?.hierarchy?.any { it.hasRoute(destination.graphClass) } == true) return
     navigate(destination.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo<CoachDashboardRoute> { saveState = true }
         launchSingleTop = true
-        restoreState = true
+        restoreState = destination != CoachTabDestination.Dashboard
     }
 }
 
@@ -399,13 +509,13 @@ private fun CoachNavHost(
             )
         }
 
+        composable<EditAccountRoute> {
+            com.volleyballlab.player.feature.profile.EditAccountScreen({ navController.popBackStack() }, contentPadding)
+        }
         composable<CoachAccountRoute> {
             CoachAccountScreen(
-                // Both exits do nothing to this graph, because both destroy it:
-                // switching role swaps the shell, and signing out drops the role
-                // back to Player, which does the same. Navigating first would be
-                // navigating a controller that is about to stop existing.
-                onSwitchedToPlayer = {},
+                onEditAccount = { navController.navigate(EditAccountRoute) },
+                // Signing out rebuilds the shell at the login screen.
                 onSignedOut = {},
                 contentPadding = contentPadding,
             )
@@ -417,12 +527,13 @@ private fun CoachNavHost(
 private fun VbBottomBar(
     navController: NavHostController,
     currentDestination: NavDestination?,
+    selectedTab: TopLevelDestination? = null,
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         TopLevelDestination.All.forEach { destination ->
             // Matches against the whole hierarchy, not just the leaf, so the Train
             // tab stays highlighted while the user is three screens deep inside it.
-            val selected = currentDestination?.hierarchy
+            val selected = if (selectedTab != null) destination == selectedTab else currentDestination?.hierarchy
                 ?.any { it.hasRoute(destination.graphClass) } == true
 
             NavigationBarItem(
@@ -448,19 +559,26 @@ private fun VbBottomBar(
 }
 
 /**
- * Standard bottom-navigation behaviour.
- *
- * The three options together are what make tabs behave the way people expect:
- * `popUpTo` the graph's start with `saveState` keeps each tab's own back stack
- * instead of piling every visited tab onto one; `launchSingleTop` stops repeated
- * taps stacking duplicates; `restoreState` returns the user to where they were in
- * that tab rather than to its root.
+ * Home is the permanent tab anchor, including after login or assessment.
+ * Navigation may associate a popped tab's saved stack with that anchor too.
+ * Restoring Home would then reopen Train instead of displaying the dashboard.
+ * Restore only the other tabs; their drill screens and scroll state stay saved.
  */
-private fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
+internal fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
+    val entry = currentBackStackEntry
+    if (destination == TopLevelDestination.Train && entry?.destination?.hasRoute<SessionResultRoute>() == true) {
+        val feedback = entry.toRoute<SessionResultRoute>()
+        if (feedback.returnToSummary) {
+            // History feedback shares the result screen, but selecting Train
+            // should still open the training tab rather than stay in history.
+            popBackStack(SessionSummaryRoute(feedback.sessionId, feedback.summaryFromProgress), inclusive = false)
+        }
+    }
+    if (currentDestination?.hierarchy?.any { it.hasRoute(destination.graphClass) } == true) return
     navigate(destination.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo<HomeRoute> { saveState = true }
         launchSingleTop = true
-        restoreState = true
+        restoreState = destination != TopLevelDestination.Home
     }
 }
 
@@ -550,12 +668,25 @@ private fun VbNavHost(
 
         composable<HomeRoute> {
             HomeScreen(
-                onStartTraining = { navController.navigate(TrainGraph) },
+                onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
                 onSkillSelected = { skill -> navController.navigate(DrillSelectRoute(skill)) },
                 onTakeAssessment = { navController.navigate(AssessmentRoute) },
                 onViewAllSessions = {
                     navController.navigateToTopLevel(TopLevelDestination.Progress)
                 },
+                onViewAssignments = { navController.navigateToTopLevel(TopLevelDestination.Coach) },
+                onOpenSession = { navController.navigate(SessionSummaryRoute(it)) },
+                contentPadding = contentPadding,
+            )
+        }
+
+        composable<SessionSummaryRoute> { entry ->
+            val route = entry.toRoute<SessionSummaryRoute>()
+            SessionSummaryScreen(
+                sessionId = route.sessionId,
+                onBack = { navController.popBackStack() },
+                onOpenFeedback = { navController.navigate(SessionResultRoute(route.sessionId,
+                    returnToSummary = true, summaryFromProgress = route.fromProgress)) },
                 contentPadding = contentPadding,
             )
         }
@@ -563,6 +694,7 @@ private fun VbNavHost(
         navigation<TrainGraph>(startDestination = SkillSelectRoute) {
             composable<SkillSelectRoute> {
                 SkillSelectScreen(
+                    onOpenDrillLibrary = { navController.navigate(DrillLibraryRoute) },
                     onSkillSelected = { skill ->
                         navController.navigate(DrillSelectRoute(skill))
                     },
@@ -582,13 +714,43 @@ private fun VbNavHost(
                 )
             }
 
+            composable<DrillLibraryRoute> {
+                DrillLibraryScreen(
+                    onDrill = { navController.navigate(DrillDetailRoute(it)) },
+                    onResume = { draft -> navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) },
+                    onSummary = { navController.navigate(DrillPracticeSummaryRoute(it)) },
+                    onBack = { navController.popBackStack() },
+                    contentPadding = contentPadding,
+                )
+            }
+            composable<DrillDetailRoute> { entry ->
+                val route = entry.toRoute<DrillDetailRoute>()
+                DrillDetailScreen(route.drillId,
+                    onPractice = { config -> navController.navigate(DrillPracticeRoute(route.drillId, config.sets, config.reps, config.restSeconds)) },
+                    onResume = { draft -> navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) },
+                    onCamera = { drill -> navController.navigate(CaptureRoute(drill.skill, drill.id, route.drillId)) },
+                    onBack = { navController.popBackStack() }, contentPadding = contentPadding,
+                )
+            }
+            composable<DrillPracticeRoute> { entry ->
+                val route = entry.toRoute<DrillPracticeRoute>()
+                DrillPracticeScreen(route.drillId, route.sets, route.reps, route.restSeconds, route.resumeId,
+                    onSummary = { id -> navController.navigate(DrillPracticeSummaryRoute(id)) { popUpTo<DrillPracticeRoute> { inclusive = true } } },
+                    onBack = { navController.popBackStack() }, contentPadding = contentPadding,
+                )
+            }
+            composable<DrillPracticeSummaryRoute> { entry ->
+                val route = entry.toRoute<DrillPracticeSummaryRoute>()
+                DrillPracticeSummaryScreen(route.workoutId, onBack = { navController.popBackStack() }, contentPadding = contentPadding)
+            }
             composable<CaptureRoute> { entry ->
                 val route = entry.toRoute<CaptureRoute>()
                 CaptureScreen(
                     skill = route.skill,
                     drillId = route.drillId,
+                    assignmentId = route.assignmentId,
                     onSessionComplete = { sessionId ->
-                        navController.navigate(SessionResultRoute(sessionId)) {
+                        navController.navigate(SessionResultRoute(sessionId, route.returnToDrillId, route.assignmentId)) {
                             // Drops the camera from the back stack. Backing out of
                             // results should not resume a finished recording.
                             popUpTo<CaptureRoute> { inclusive = true }
@@ -602,11 +764,17 @@ private fun VbNavHost(
                 val route = entry.toRoute<SessionResultRoute>()
                 SessionResultScreen(
                     sessionId = route.sessionId,
+                    assignmentId = route.assignmentId,
                     onDone = {
-                        navController.navigate(SkillSelectRoute) {
-                            popUpTo<SkillSelectRoute> { inclusive = true }
-                        }
+                        if (route.returnToSummary) {
+                            navController.popBackStack(SessionSummaryRoute(route.sessionId, route.summaryFromProgress), inclusive = false)
+                        } else if (route.assignmentId != null) {
+                            navController.popBackStack(PlayerAssignmentRoute(route.assignmentId), inclusive = false)
+                        } else if (route.returnToDrillId != null) navController.navigate(DrillDetailRoute(route.returnToDrillId)) {
+                            popUpTo<DrillDetailRoute> { inclusive = true }; launchSingleTop = true
+                        } else navController.navigate(SkillSelectRoute) { popUpTo<SkillSelectRoute> { inclusive = true } }
                     },
+                    doneLabel = if (route.returnToSummary) stringResource(R.string.session_summary_back_from_feedback) else null,
                     contentPadding = contentPadding,
                 )
             }
@@ -615,6 +783,7 @@ private fun VbNavHost(
         composable<ProgressRoute> {
             ProgressScreen(
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
+                onOpenSession = { navController.navigate(SessionSummaryRoute(it, fromProgress = true)) },
                 contentPadding = contentPadding,
             )
         }
@@ -627,13 +796,32 @@ private fun VbNavHost(
                 // to re-answer a question the screen already answered.
                 onPractiseSkill = { skill -> navController.navigate(DrillSelectRoute(skill)) },
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
+                onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 contentPadding = contentPadding,
             )
         }
 
+        composable<PlayerAssignmentRoute> { entry ->
+            val route = entry.toRoute<PlayerAssignmentRoute>()
+            PlayerAssignmentScreen(
+                assignmentId = route.assignmentId,
+                onBack = { navController.popBackStack() },
+                onStart = { skill, drillId ->
+                    navController.navigate(CaptureRoute(skill, drillId, assignmentId = route.assignmentId))
+                },
+                onOpenResult = { sessionId ->
+                    navController.navigate(SessionResultRoute(sessionId, assignmentId = route.assignmentId))
+                },
+                contentPadding = contentPadding,
+            )
+        }
+
+        composable<EditAccountRoute> {
+            com.volleyballlab.player.feature.profile.EditAccountScreen({ navController.popBackStack() }, contentPadding)
+        }
         composable<ProfileRoute> {
             ProfileScreen(
-                onRetakeAssessment = { navController.navigate(AssessmentRoute) },
+                onEditAccount = { navController.navigate(EditAccountRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.
                 onSignedOut = {

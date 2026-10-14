@@ -2,26 +2,27 @@ package com.volleyballlab.player.domain.repository
 
 import com.volleyballlab.player.domain.model.AthleteProfile
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * The athlete's own details.
  *
- * ## Why this one does persist, when sessions do not
- *
- * Sessions are held in memory pending conflict 4 in the capstone document, which
- * is a real decision about a real schema and is not this file's to pre-empt. A
- * profile is different: three optional fields with no relational shape and no
- * sync story worth arguing about, and a name that vanishes on every cold start is
- * not a placeholder for a better implementation, it is just broken. So this is
- * backed by DataStore today.
- *
- * The interface still exists so that when accounts arrive, the local store
- * becomes a cache behind the same shape rather than a thing to be torn out.
+ * Identity and address sync through a private Firestore document. Training
+ * preferences and device photo paths stay in the account-scoped local store.
  */
 interface ProfileRepository {
+    val syncStatus: Flow<ProfileSyncStatus> get() = flowOf(ProfileSyncStatus.Saved)
+    suspend fun retrySync() {}
+    suspend fun current(): AthleteProfile = profile.first()
 
     /** The current profile. Emits again on every edit. */
     val profile: Flow<AthleteProfile>
+    val syncError: Flow<String?> get() = flowOf(null)
 
     suspend fun save(profile: AthleteProfile)
+    suspend fun update(transform: (AthleteProfile) -> AthleteProfile) = save(transform(profile.first()))
+    suspend fun seedAccountName(name: String) = update { if (it.hasName) it else it.copy(name = name) }
 }
+
+enum class ProfileSyncStatus { Checking, Saved, WaitingForConnection, Saving, Failed }

@@ -3,6 +3,8 @@
     <string name="app_name">Volleyball Lab</string>
     <string name="app_tagline">Dominate the Court</string>
     <string name="cd_app_logo">Volleyball Lab logo</string>
+    <string name="loading_content">Loading content</string>
+    <string name="notifications_title">Notifications</string>
 
     <!-- Bottom navigation (Fig. 11 of the capstone document) -->
     <string name="nav_home">Home</string>
@@ -25,7 +27,7 @@
 
     <!-- Skill selection -->
     <string name="skill_select_title">Choose a skill</string>
-    <string name="skill_select_subtitle">Five fundamentals. Pick one to see its drills.</string>
+    <string name="skill_select_subtitle">Five fundamentals. Practice each skill in one spot.</string>
     <string name="skill_serving">Serving</string>
     <string name="skill_receiving">Receiving</string>
     <string name="skill_setting">Setting</string>
@@ -34,7 +36,7 @@
     <string name="skill_serving_desc">Toss, contact and follow through</string>
     <string name="skill_receiving_desc">Platform angle and body position</string>
     <string name="skill_setting_desc">Hand shape and release</string>
-    <string name="skill_spiking_desc">Approach, jump and arm swing</string>
+    <string name="skill_spiking_desc">In-place reach and arm swing</string>
     <string name="skill_blocking_desc">Timing, penetration and hand shape</string>
 
     <!-- Drill selection -->
@@ -46,7 +48,7 @@
 
     <!-- Camera permission -->
     <string name="camera_permission_title">Camera access needed</string>
-    <string name="camera_permission_body">Volleyball Lab analyses your form from the camera feed. Frames are processed on your device and are never uploaded.</string>
+    <string name="camera_permission_body">Volleyball Lab analyses your form from the camera feed. Live frames are analyzed on your device. Recorded video is uploaded privately only when you send a session to your coach.</string>
     <string name="camera_permission_grant">Allow camera</string>
     <string name="camera_permission_denied_body">Camera access is turned off. Enable it in system settings to capture a session.</string>
     <string name="camera_permission_settings">Open settings</string>
@@ -76,6 +78,21 @@
     <string name="quality_unstable">Steady the phone</string>
     <string name="quality_off_centre">Move to the centre of the frame</string>
 
+    <!-- Live posture correction, surfaced while recording -->
+    <string name="live_coach_eyebrow">Live coach</string>
+    <string name="live_posture_good">Form looks good</string>
+    <string name="live_posture_good_sub">Keep going — corrections appear here</string>
+    <string name="live_posture_tracking_lost">Keep your whole body in frame</string>
+    <string name="live_posture_model_warming">Hold your receiving stance</string>
+    <string name="live_posture_model_warming_sub">Checking 32 pose frames before coaching</string>
+    <string name="live_posture_model_uncertain">Try one more clean stance</string>
+    <string name="live_posture_model_uncertain_sub">The posture model is near its decision boundary</string>
+    <string name="live_coach_device">On-device coach</string>
+    <string name="live_coach_device_sub">Correcting your posture as you move</string>
+    <string name="live_coach_human_title">Coach %1$s is in this session</string>
+    <string name="live_coach_assignment">%1$s · %2$d×%3$d reps</string>
+    <string name="cd_live_posture">Live posture correction</string>
+
     <!-- Progress tab. Every figure is computed from stored sessions. -->
     <string name="progress_summary_line">%1$d sessions  ·  %2$d reps</string>
     <string name="progress_summary_none">No sessions recorded yet</string>
@@ -84,6 +101,14 @@
     <string name="progress_stat_average">Average</string>
     <string name="progress_stat_best">Best</string>
     <string name="progress_section_trend">Form score trend</string>
+    <string name="progress_chart_recent">Last %1$d scored sessions</string>
+    <string name="progress_chart_latest_score">Latest score</string>
+    <string name="progress_chart_out_of">/100</string>
+    <string name="progress_chart_change_up">+%1$d vs previous</string>
+    <string name="progress_chart_change_down">%1$d vs previous</string>
+    <string name="progress_chart_change_flat">Same as previous</string>
+    <string name="progress_chart_average">Average %1$d</string>
+    <string name="progress_chart_description">%1$d scored sessions. Scores oldest to latest: %2$s. Latest %3$d out of 100.</string>
     <string name="progress_trend_oldest">Oldest</string>
     <string name="progress_trend_newest">Latest</string>
     <string name="progress_section_by_skill">By skill</string>
@@ -110,7 +135,10 @@
     <string name="coach_empty_body_no_sessions">Record a session and the cue you are losing most points on shows up here, with what to do about it.</string>
     <string name="coach_empty_body_too_few_reps">A cue needs at least %1$d measured reps before it is worth acting on. Record a longer session.</string>
     <string name="coach_empty_cta">Start training</string>
-    <string name="coach_provenance">Worked out on this phone from your own sessions. Nothing was uploaded.</string>
+    <string name="coach_provenance">Scores and cue selection are computed on this phone. AI Coach sends the selected skill and cue, aggregate score, measurement count, camera-quality summary, and approved coaching tip to Firebase AI for wording. Video and pose landmarks are not uploaded.</string>
+    <string name="coach_ai_label">Grounded AI coach</string>
+    <string name="coach_ai_loading">Writing from your verified session results…</string>
+    <string name="coach_ai_action">Try this: %1$s</string>
 
     <!-- Profile tab -->
     <string name="position_setter">Setter</string>
@@ -135,14 +163,16 @@
     <string name="profile_total_time">Time recorded</string>
     <string name="profile_total_best">Best form score</string>
     <string name="profile_total_most_trained">Most trained</string>
-    <string name="profile_privacy_title">Your video stays on this phone</string>
-    <string name="profile_privacy_body">Pose analysis runs on the device. Frames are never uploaded, and your sessions are stored locally.</string>
+    <string name="profile_privacy_title">Privacy and data</string>
+    <string name="profile_privacy_body">Pose analysis runs on your device. Your name, private address, and session summaries sync to your account. When you send a recorded session to a coach, its video and pose feedback are uploaded privately for you and that coach. Account deletion removes your profile and training data.</string>
 
     <!-- Session results -->
     <string name="result_form_score">Form score</string>
     <string name="result_breakdown">Cue breakdown</string>
     <string name="result_weakest_cue">Focus next on</string>
     <string name="result_save">Save session</string>
+    <string name="result_review_video">Review your recording</string>
+    <string name="result_video_unavailable">No video was saved for this session. Your pose analysis is still available.</string>
     <string name="result_analysing">Analysing your reps…</string>
     <string name="result_no_reps_title">No complete reps detected</string>
     <string name="result_no_reps_body">The capture ran but no full repetition was recognised. Check the framing guidance and try again.</string>
@@ -196,8 +226,8 @@
     <string name="cue_set_follow_tip">Follow through until the arms are straight and the hands finish toward the target.</string>
 
     <!-- Spiking -->
-    <string name="cue_spike_load">Load the approach</string>
-    <string name="cue_spike_load_tip">Drop into a deep last step. A shallow load caps how high you can get.</string>
+    <string name="cue_spike_load">Load the knees</string>
+    <string name="cue_spike_load_tip">Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.</string>
     <string name="cue_spike_arm">Swing through full extension</string>
     <string name="cue_spike_arm_tip">Contact with the hitting arm straight, above the shoulder.</string>
     <string name="cue_spike_jump">Get off the floor</string>
@@ -276,7 +306,7 @@
     <string name="auth_show_password">Show password</string>
     <string name="auth_hide_password">Hide password</string>
     <string name="auth_reset_sent">If that address has an account, a reset link is on its way.</string>
-    <string name="auth_privacy_note">Your training video never leaves this phone. Only your account details are stored online.</string>
+    <string name="auth_privacy_note">Your profile and session summaries sync privately. Recorded video and pose feedback are shared only when you send a session to your coach.</string>
     <string name="auth_error_credentials">That email or password is not right.</string>
     <string name="auth_error_email_taken">That email already has an account. Try logging in instead.</string>
     <string name="auth_error_weak_password">Passwords need at least 6 characters.</string>
@@ -377,7 +407,7 @@
     <string name="pro_feature_corrections_title">Detailed corrections</string>
     <string name="pro_feature_corrections_body">Full explanations behind every cue score.</string>
     <string name="pro_feature_drills_title">Full drill library</string>
-    <string name="pro_feature_drills_body">Every drill for all five skills.</string>
+    <string name="pro_feature_drills_body">All 15 drill guides and practice workouts across the five skills.</string>
     <string name="pro_feature_biomech_title">Advanced biomechanics</string>
     <string name="pro_feature_biomech_body">Joint-level breakdowns beyond the five cue scores.</string>
 
@@ -402,21 +432,6 @@
     <string name="role_player_blurb">Record your own training and get form feedback.</string>
     <string name="role_coach">Coach</string>
     <string name="role_coach_blurb">Review your team\'s sessions and set them drills.</string>
-
-    <!--
-        Debug builds only. Shown on the login form and inside both shells.
-
-        Coaches register on the web portal, so the mobile app has no coach sign-up;
-        the coach fixture is how the coach shell is reached at all until that portal
-        exists. The athlete fixture sits beside it because coach mode is a
-        relationship, and showing a relationship needs both ends of it.
-
-        %1$s in demo_open_account is the account name, e.g. "Demo Coach".
-    -->
-    <string name="demo_accounts_title">Test accounts</string>
-    <string name="demo_open_account">Open %1$s</string>
-    <string name="demo_accounts_note">Real accounts, created the first time you tap. Debug builds only.</string>
-    <string name="demo_switch_body">Switch to the other side of the app to see both halves of a coach connection. Everything is stored per account, so switching back restores this one exactly as it was.</string>
 
     <!-- Coach tabs -->
     <string name="nav_coach_dashboard">Team</string>
@@ -490,7 +505,7 @@
     <string name="coach_dash_safety_plural">%1$d players need a second look</string>
     <string name="coach_dash_empty_title">No players yet</string>
     <string name="coach_dash_empty_body">Once a player asks to join and you approve them in Players, the sessions they submit show up here.</string>
-    <string name="coach_dash_local_note">This build links a coach and a player through this device only — both accounts must have signed in on this phone. Networked teams need the backend the document leaves open.</string>
+    <string name="coach_dash_local_note">Coach connections and shared results sync privately between your accounts.</string>
     <string name="coach_queue_item">%1$s · %2$s</string>
     <string name="coach_queue_reviewed">Answered</string>
 
@@ -522,7 +537,7 @@
     <string name="coach_player_focus">Lowest-scoring cue</string>
     <string name="coach_player_focus_source">Pooled across every rep this player has recorded of it. Not a model — the same arithmetic their own app shows them.</string>
     <string name="coach_player_no_training_title">Nothing recorded yet</string>
-    <string name="coach_player_no_training_body">This player has not captured a session on this device. Once they do and submit it, their form breakdown appears here.</string>
+    <string name="coach_player_no_training_body">This player has not shared a training session yet. Their form breakdown appears after they submit a result.</string>
     <string name="coach_player_no_assignments">No drills set yet.</string>
     <string name="coach_player_review">Review</string>
     <string name="coach_player_skill_unmeasured">Not trained</string>
@@ -542,7 +557,7 @@
     <string name="coach_review_send">Send note</string>
     <string name="coach_review_sent">Note sent</string>
     <string name="coach_review_framing">Most cues could not be measured in this recording — %1$d%% came back blank. That is a camera-angle problem, not a technique problem, so read the score with that in mind.</string>
-    <string name="coach_review_missing">That session is no longer on this device.</string>
+    <string name="coach_review_missing">This shared session is no longer available.</string>
     <string name="coach_review_analysis">Cue breakdown</string>
     <string name="coach_review_analysis_source">Computed on this phone from the athlete\'s stored pose data. Thresholds are first-pass coaching values, not measured ones — Experiment 2 has not run yet.</string>
     <string name="review_safety_clear">Clear</string>
@@ -582,20 +597,20 @@
 
     <!-- ── Coach account (Figure 29) ─────────────────────────────────────── -->
     <string name="coach_account_title">Account</string>
-    <string name="coach_account_team">Team</string>
-    <string name="coach_account_credentials">Credentials</string>
-    <string name="coach_account_name">Your name</string>
+    <string name="coach_account_team">Profile details</string>
+    <string name="coach_account_credentials">Coaching details</string>
+    <string name="coach_account_name">Full name</string>
     <string name="coach_account_team_name">Team name</string>
     <string name="coach_account_organisation">School or club</string>
     <string name="coach_account_specialisation">Specialisation</string>
     <string name="coach_account_experience">Years coaching</string>
     <string name="coach_account_licence">Certification or licence no.</string>
-    <string name="coach_account_licence_note">Stored on this phone only. Nothing here is verified by the app.</string>
+    <string name="coach_account_licence_note">Your licence number is private and is not shown in the coach directory.</string>
     <string name="coach_account_notifications">Notifications</string>
-    <string name="coach_account_notify_submissions">When a player submits a session</string>
+    <string name="coach_account_notify_submissions">Session submissions</string>
     <string name="coach_account_notify_digest">Weekly team summary</string>
     <string name="coach_account_notify_safety">Safety flags</string>
-    <string name="coach_account_notify_note">These switches record the preference. Delivery needs the Notification entity in Table 18, which this build does not implement — nothing is sent yet.</string>
+    <string name="coach_account_notify_note">Manage device notifications in your notification inbox.</string>
     <string name="coach_account_switch_role">Switch to the player app</string>
     <string name="coach_account_switch_body">Use this account to record your own training instead. You can switch back any time; nothing is deleted either way.</string>
 

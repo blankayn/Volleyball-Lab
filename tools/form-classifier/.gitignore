@@ -1,0 +1,6 @@
+models/
+source_videos/
+trimmed_clips/
+manifest.csv
+manifest_processed.csv
+__pycache__/

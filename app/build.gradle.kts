@@ -60,7 +60,7 @@ android {
         // MediaPipe memory-maps the .task model straight out of the APK. If aapt
         // compresses it the mapping fails at runtime with a confusing
         // "Model provided has model identifier ..." error.
-        noCompress += "task"
+        noCompress += listOf("task", "tflite")
     }
 
     compileOptions {
@@ -86,10 +86,19 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.ai)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
+    // Coach cloud: the shared roster/assignment/review backend also served by
+    // the coach web portal. See docs/coach-cloud-contract.md.
+    implementation(libs.firebase.firestore)
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-functions")
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.google.identity.googleid)
@@ -120,6 +129,7 @@ dependencies {
     implementation(libs.androidx.camera.view)
 
     implementation(libs.mediapipe.tasks.vision)
+    implementation(libs.litert)
 
     implementation(libs.rive.android)
 

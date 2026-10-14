@@ -30,6 +30,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -105,6 +107,23 @@ class CaptureHoldGateTest {
     }
 
     @Test
+    fun `stale skeleton clears and a new pose appears when tracking resumes`() = captureTest { vm ->
+        val feed = feedWellFramedPoses()
+        advanceTimeBy(TICK_MS * 2)
+        runCurrent()
+        assertNotNull(vm.poseFrame.value)
+
+        feed.cancel()
+        advanceTimeBy(600)
+        runCurrent()
+        assertNull(vm.poseFrame.value)
+
+        detector.emit(TestPoses.wellFramedStanding(1_000L))
+        runCurrent()
+        assertNotNull(vm.poseFrame.value)
+    }
+
+    @Test
     fun `cancelling the countdown does not let the gate restart it`() = captureTest { vm ->
         feedWellFramedPoses()
         advanceTimeBy(CaptureViewModel.AUTO_START_HOLD_MS + TICK_MS)
@@ -177,6 +196,9 @@ class CaptureHoldGateTest {
                 allowDemoDetector = false,
             )
             val store = ViewModelStore().apply { put("capture", viewModel) }
+            // These tests isolate the existing framing gate; guided orientation
+            // has dedicated fixtures with anatomically correct front/rear signs.
+            viewModel.setGuidedAngles(false)
             // Lets the detector start up and the gate get its first tick queued.
             runCurrent()
             try {

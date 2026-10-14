@@ -42,6 +42,8 @@ import com.volleyballlab.player.domain.model.RosterMember
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import kotlinx.coroutines.flow.SharingStarted
@@ -109,6 +111,11 @@ fun CoachRosterScreen(
     val viewModel: CoachRosterViewModel = viewModel(factory = CoachRosterViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val now = remember { System.currentTimeMillis() }
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.List, contentPadding, modifier)
+        return
+    }
 
     val active = state.snapshots.filter { it.member.isActive }
     val requests = state.pendingRequests

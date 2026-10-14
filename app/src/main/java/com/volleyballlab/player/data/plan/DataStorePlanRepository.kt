@@ -74,3 +74,6 @@ class DataStorePlanRepository(
         const val KEY_PLAN = "plan"
     }
 }
+
+internal suspend fun clearPlanAccount(context: Context, uid: String) =
+    com.volleyballlab.player.data.account.clearAccountPreferences(context.planStore, uid)

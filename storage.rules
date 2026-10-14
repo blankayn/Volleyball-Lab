@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function session(id) {
+      return firestore.get(/databases/(default)/documents/sessions/$(id)).data;
+    }
+    function viewerActive() {
+      return !firestore.exists(/databases/(default)/documents/accountDeletions/$(request.auth.uid));
+    }
+    match /recordings/{owner}/{id}/{file} {
+      allow read: if signedIn() && viewerActive() && session(id).ownerUid == owner
+        && (request.auth.uid == owner || request.auth.uid in session(id).sharedWith)
+        && file in ['video.mp4', 'review.json'];
+      allow create, update: if signedIn() && request.auth.uid == owner && viewerActive()
+        && session(id).ownerUid == owner && request.resource.size > 0
+        && ((file == 'video.mp4' && request.resource.contentType == 'video/mp4' && request.resource.size <= 104857600)
+          || (file == 'review.json' && request.resource.contentType == 'application/json' && request.resource.size <= 10485760));
+      allow delete: if signedIn() && request.auth.uid == owner && viewerActive();
+    }
+  }
+}

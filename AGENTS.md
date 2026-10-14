@@ -1,0 +1,14 @@
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues for `blankayn/Volleyball-Lab`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `GLOSSARY.md` and decisions under `docs/adr/`. See `docs/agents/domain.md`.
+

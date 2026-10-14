@@ -1,5 +1,11 @@
 package com.volleyballlab.player.feature.coachmode
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,15 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Group
-import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -33,6 +33,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -41,19 +43,17 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.volleyballlab.player.BuildConfig
+import com.volleyballlab.player.feature.profile.AccountSecurityCard
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.CoachProfile
 import com.volleyballlab.player.domain.model.CoachSpecialisation
-import com.volleyballlab.player.domain.model.DemoAccounts
-import com.volleyballlab.player.domain.model.UserRole
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.AuthUser
 import com.volleyballlab.player.domain.repository.CoachRepository
-import com.volleyballlab.player.domain.repository.RoleRepository
-import com.volleyballlab.player.feature.auth.DemoAccountButtons
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -64,19 +64,22 @@ import kotlinx.coroutines.launch
 data class CoachAccountUiState(
     val profile: CoachProfile = CoachProfile.Empty,
     val account: AuthUser? = null,
+    val loaded: Boolean = false,
+    val identity: com.volleyballlab.player.domain.model.AthleteProfile = com.volleyballlab.player.domain.model.AthleteProfile.Anonymous,
 )
 
 class CoachAccountViewModel(
     private val coachRepository: CoachRepository,
     private val authRepository: AuthRepository,
-    private val roleRepository: RoleRepository,
+    private val profileRepository: com.volleyballlab.player.domain.repository.ProfileRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<CoachAccountUiState> = combine(
         coachRepository.coachProfile,
         authRepository.currentUser,
-    ) { profile, account ->
-        CoachAccountUiState(profile, account)
+        profileRepository.profile,
+    ) { profile, account, identity ->
+        CoachAccountUiState(profile.copy(name = identity.name.ifBlank { profile.name }), account, loaded = true, identity = identity)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -114,7 +117,11 @@ class CoachAccountViewModel(
      */
     private fun edit(transform: (CoachProfile) -> CoachProfile) {
         viewModelScope.launch {
-            coachRepository.saveCoachProfile(transform(coachRepository.coachProfile.first()))
+            val identity = profileRepository.current()
+            val current = coachRepository.coachProfile.first()
+            coachRepository.saveCoachProfile(transform(current).let {
+                if (identity.hasName) it.copy(name = identity.name.take(CoachProfile.MAX_NAME_LENGTH)) else it
+            })
         }
     }
 
@@ -152,20 +159,6 @@ class CoachAccountViewModel(
     fun onNotifyDigest(value: Boolean) = edit { it.copy(notifyWeeklyDigest = value) }
     fun onNotifySafety(value: Boolean) = edit { it.copy(notifySafetyAlerts = value) }
 
-    /**
-     * Hands this account back to the player shell.
-     *
-     * Nothing is deleted: the roster, the assignments and the notes all stay under
-     * this uid, so switching back restores the team intact. That matters because
-     * the switch is also the recovery path for an account that landed in the wrong
-     * shell on a fresh install - see [UserRole].
-     */
-    fun switchToPlayer(onSwitched: () -> Unit) {
-        viewModelScope.launch {
-            roleRepository.setRole(UserRole.Player)
-            onSwitched()
-        }
-    }
 
     fun signOut(onSignedOut: () -> Unit) {
         viewModelScope.launch {
@@ -180,7 +173,7 @@ class CoachAccountViewModel(
                 CoachAccountViewModel(
                     coachRepository = appContainer.coachRepository,
                     authRepository = appContainer.authRepository,
-                    roleRepository = appContainer.roleRepository,
+                    profileRepository = appContainer.profileRepository,
                 )
             }
         }
@@ -211,33 +204,34 @@ class CoachAccountViewModel(
  * on notifications, which are the queue of things that would otherwise wait for the
  * coach to come looking.
  *
- * ## The notification switches record a preference and send nothing
- *
- * The figure describes alerts for submissions, weekly summaries and biomechanical
- * risk warnings. Delivering any of those needs the Notification entity in Table 18
- * and a scheduler, neither of which this build has. The switches persist, and a
- * line under them says plainly that nothing is sent yet. Silent switches that look
- * like they work are worse than absent ones.
+ * Submission and weekly-overview preferences control the notification inbox.
+ * Optional Android delivery is enabled there. Safety-risk alerts remain
+ * unavailable until a validated risk assessment exists.
  */
 @Composable
 fun CoachAccountScreen(
-    onSwitchedToPlayer: () -> Unit,
     onSignedOut: () -> Unit,
+    onEditAccount: () -> Unit = {},
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: CoachAccountViewModel = viewModel(factory = CoachAccountViewModel.Factory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier)
+        return
+    }
     val profile = state.profile
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(key = "identity") {
             EntranceAnimation(index = 0) {
-                CoachCard(Modifier.padding(horizontal = CoachGutter)) {
+                AccountSectionCard(title = stringResource(R.string.coach_account_title), modifier = Modifier.padding(start = CoachGutter, end = CoachGutter, top = 16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         InitialsAvatar(
                             initials = profile.initials(),
@@ -247,16 +241,19 @@ fun CoachAccountScreen(
                         HorizontalGap(14)
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = profile.name.ifBlank {
+                                text = state.identity.name.ifBlank { profile.name }.ifBlank {
                                     stringResource(R.string.coach_coach_default)
                                 },
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
+                            state.identity.address?.let { address ->
+                                Text(com.volleyballlab.player.feature.profile.countryFlag(address.country.id), modifier = Modifier.semantics { contentDescription = address.country.name })
+                            }
                             state.account?.email?.takeIf { it.isNotBlank() }?.let { email ->
                                 Text(
-                                    text = stringResource(R.string.profile_signed_in_as, email),
+                                    text = email,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -267,20 +264,22 @@ fun CoachAccountScreen(
             }
         }
 
+        item {
+            Column(Modifier.padding(horizontal = CoachGutter)) {
+
+                TextButton(onClick = onEditAccount) { Text("Edit account details") }
+                com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
+            }
+        }
+        item { com.volleyballlab.player.feature.profile.PrivacyCard(Modifier.padding(horizontal = CoachGutter)) }
+        item { com.volleyballlab.player.feature.profile.DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = CoachGutter)) }
         item(key = "team") {
             EntranceAnimation(index = 1) {
-                CoachSectionCard(
+                AccountSectionCard(
                     title = stringResource(R.string.coach_account_team),
-                    icon = Icons.Rounded.Group,
-                    accent = CoachAccent.Rust,
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 ) {
-                    AccountField(
-                        label = stringResource(R.string.coach_account_name),
-                        value = profile.name,
-                        onValueChange = viewModel::onName,
-                    )
-                    Spacer(Modifier.height(12.dp))
+
                     AccountField(
                         label = stringResource(R.string.coach_account_team_name),
                         value = profile.teamName,
@@ -298,10 +297,8 @@ fun CoachAccountScreen(
 
         item(key = "credentials") {
             EntranceAnimation(index = 2) {
-                CoachSectionCard(
+                AccountSectionCard(
                     title = stringResource(R.string.coach_account_credentials),
-                    icon = Icons.Rounded.WorkspacePremium,
-                    accent = CoachAccent.Violet,
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 ) {
                     Text(
@@ -348,17 +345,15 @@ fun CoachAccountScreen(
                     // Inside the card, under the field it qualifies: "nothing here is
                     // verified" is a caveat about this licence box specifically, and
                     // floating it between cards would leave it attached to nothing.
-                    CoachFootnote(stringResource(R.string.coach_account_licence_note))
+                    Text(stringResource(R.string.coach_account_licence_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
         item(key = "notifications") {
             EntranceAnimation(index = 3) {
-                CoachSectionCard(
+                AccountSectionCard(
                     title = stringResource(R.string.coach_account_notifications),
-                    icon = Icons.Rounded.Notifications,
-                    accent = CoachAccent.Indigo,
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 ) {
                     SwitchRow(
@@ -366,23 +361,23 @@ fun CoachAccountScreen(
                         checked = profile.notifySubmissions,
                         onCheckedChange = viewModel::onNotifySubmissions,
                     )
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     SwitchRow(
                         label = stringResource(R.string.coach_account_notify_digest),
                         checked = profile.notifyWeeklyDigest,
                         onCheckedChange = viewModel::onNotifyDigest,
                     )
-                    SwitchRow(
-                        label = stringResource(R.string.coach_account_notify_safety),
-                        checked = profile.notifySafetyAlerts,
-                        onCheckedChange = viewModel::onNotifySafety,
-                    )
                     Spacer(Modifier.height(10.dp))
                     // The load-bearing sentence of this whole section, and it stays in
                     // the same card as the switches it is about. A coach who reads only
                     // the switches must not be able to miss it.
-                    CoachFootnote(stringResource(R.string.coach_account_notify_note))
+                    Text(stringResource(R.string.coach_account_notify_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+
+        item(key = "security") {
+            AccountSecurityCard(Modifier.padding(horizontal = CoachGutter))
         }
 
         item(key = "exit") {
@@ -393,51 +388,10 @@ fun CoachAccountScreen(
                 // is the only text button on the screen and the only thing in the
                 // error colour, which is what keeps it from being tapped by accident
                 // while still being findable.
-                CoachSectionCard(
-                    title = stringResource(R.string.coach_account_switch_role),
-                    icon = Icons.Rounded.SwapHoriz,
-                    accent = CoachAccent.Rust,
+                AccountSectionCard(
+                    title = "Account controls",
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 ) {
-                    Text(
-                        text = stringResource(R.string.coach_account_switch_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.switchToPlayer(onSwitchedToPlayer) },
-                        shape = CoachPillShape,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.coach_account_switch_role))
-                    }
-                    // The other half of the switch on the athlete's Profile tab, and
-                    // the reason both exist: a coach account with nobody on it
-                    // demonstrates nothing, so showing this feature means becoming
-                    // the player who asks and then coming back here to answer.
-                    // Debug builds only - see DemoAccounts.
-                    if (BuildConfig.DEBUG) {
-                        Spacer(Modifier.height(18.dp))
-                        Text(
-                            text = stringResource(R.string.demo_accounts_title),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.demo_switch_body),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        DemoAccountButtons(
-                            accounts = listOf(DemoAccounts.Player),
-                            shape = CoachPillShape,
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
                     TextButton(
                         onClick = { viewModel.signOut(onSignedOut) },
                         shape = CoachPillShape,
@@ -451,6 +405,7 @@ fun CoachAccountScreen(
                 }
             }
         }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -508,5 +463,25 @@ private fun SwitchRow(
             modifier = Modifier.weight(1f),
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun AccountSectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(16.dp))
+            content()
+        }
     }
 }

@@ -1,0 +1,30 @@
+<resources>
+    <string name="session_summary_title">Session summary</string>
+    <string name="session_summary_unavailable">This session is no longer available.</string>
+    <string name="session_summary_back">Back to sessions</string>
+    <string name="session_summary_back_from_feedback">Back to summary</string>
+    <string name="session_summary_estimated_form">Estimated form</string>
+    <string name="session_summary_unassessed">Not assessed</string>
+    <string name="session_summary_basis">Based on %1$d of %2$d detected repetitions.</string>
+    <string name="session_summary_no_reps">No repetitions were detected. Try another recording with your whole body visible.</string>
+    <string name="session_summary_no_estimate">Your technique could not be measured clearly enough to estimate form.</string>
+    <string name="session_summary_limited">This estimate comes from a small sample. Record more clear repetitions for a fuller summary.</string>
+    <string name="session_summary_balanced">Your form estimate shows room for improvement. Review the measured feedback before your next practice.</string>
+    <string name="session_summary_strong">Your overall form estimate is strong. Review the details to see which technique areas contributed.</string>
+    <string name="session_summary_developing">Your form estimate points to technique that needs attention. Review the full feedback before your next practice.</string>
+    <string name="session_summary_reps">Detected reps</string>
+    <string name="session_summary_duration">Duration</string>
+    <string name="session_summary_best">Best rep</string>
+    <string name="session_summary_strengths">What went well</string>
+    <string name="session_summary_improve">Improve next</string>
+    <string name="session_summary_priority">YOUR NEXT FOCUS</string>
+    <string name="session_summary_measured">%1$d%% across %2$d measured reps</string>
+    <string name="session_summary_no_strength">No measured technique area stood out as a strength in this session. Review the technique breakdown for more detail.</string>
+    <string name="session_summary_no_correction">No repeated correction stood out in the measured technique. Review the full breakdown and keep practicing.</string>
+    <string name="session_summary_insufficient">More repeated measurements are needed before identifying strengths or a priority correction.</string>
+    <string name="session_summary_capture_title">Improve the camera view</string>
+    <string name="session_summary_capture_body">Some technique could not be measured. Keep your whole body visible, use good lighting, and follow the requested camera angle.</string>
+    <string name="session_summary_full_feedback">View full feedback</string>
+    <string name="session_summary_video_feedback">View recording &amp; full feedback</string>
+    <string name="session_summary_score_percent">%1$d%%</string>
+</resources>

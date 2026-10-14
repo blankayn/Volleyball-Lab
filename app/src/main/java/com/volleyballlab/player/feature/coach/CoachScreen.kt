@@ -43,21 +43,31 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
+import com.volleyballlab.player.domain.model.AiCoachMessage
+import com.volleyballlab.player.domain.model.AiCoachRequest
 import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.repository.SessionRepository
+import com.volleyballlab.player.domain.repository.AiCoachRepository
+import com.volleyballlab.player.ui.component.StudentCard
+import com.volleyballlab.player.ui.component.StudentPageHeading
+import com.volleyballlab.player.ui.component.studentBackground
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.VbSectionHeader
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.vbColors
 import kotlin.math.roundToInt
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -90,6 +100,7 @@ data class CoachAdvice(
     val strength: CueInsight?,
     val perSkill: List<CueInsight>,
     val unmeasuredFraction: Float,
+    val loaded: Boolean = false,
 ) {
     val hasAdvice: Boolean get() = focus != null
 
@@ -117,7 +128,7 @@ data class CoachAdvice(
          * [SessionResult.MIN_REPS_FOR_RECOMMENDATION] floor mean something.
          */
         fun from(sessions: List<SessionResult>): CoachAdvice {
-            if (sessions.isEmpty()) return Empty
+            if (sessions.isEmpty()) return Empty.copy(loaded = true)
 
             var measured = 0
             var unmeasured = 0
@@ -155,6 +166,7 @@ data class CoachAdvice(
                     .mapNotNull { (_, forSkill) -> forSkill.minByOrNull { it.meanScore } }
                     .sortedBy { it.meanScore },
                 unmeasuredFraction = if (total == 0) 0f else unmeasured.toFloat() / total,
+                loaded = true,
             )
         }
 
@@ -165,19 +177,55 @@ data class CoachAdvice(
 
 private val SessionResult.cueScores get() = reps.flatMap { it.cueScores }
 
-class CoachViewModel(sessionRepository: SessionRepository) : ViewModel() {
+sealed interface CoachAiUiState {
+    data object Idle : CoachAiUiState
+    data object Loading : CoachAiUiState
+    data object Fallback : CoachAiUiState
+    data class Ready(val message: AiCoachMessage) : CoachAiUiState
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class CoachViewModel(
+    sessionRepository: SessionRepository,
+    aiCoachRepository: AiCoachRepository,
+) : ViewModel() {
 
     val advice: StateFlow<CoachAdvice> = sessionRepository.sessions
         .map(CoachAdvice::from)
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.Eagerly,
             initialValue = CoachAdvice.Empty,
+        )
+
+    val aiState: StateFlow<CoachAiUiState> = advice
+        .mapLatest { current ->
+            val focus = current.focus ?: return@mapLatest CoachAiUiState.Idle
+            val request = AiCoachRequest(
+                focusCueId = focus.cue.id,
+                skill = focus.skill,
+                scoreOutOfHundred = focus.scoreOutOfHundred,
+                measuredReps = focus.measuredReps,
+                sessionCount = current.sessionCount,
+                unmeasuredPercent = (current.unmeasuredFraction * 100).roundToInt(),
+            )
+            val message = runCatching { aiCoachRepository.generate(request) }.getOrNull()
+            if (message == null) CoachAiUiState.Fallback else CoachAiUiState.Ready(message)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = CoachAiUiState.Loading,
         )
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer { CoachViewModel(appContainer.sessionRepository) }
+            initializer {
+                CoachViewModel(
+                    sessionRepository = appContainer.sessionRepository,
+                    aiCoachRepository = appContainer.aiCoachRepository,
+                )
+            }
         }
     }
 }
@@ -187,19 +235,12 @@ class CoachViewModel(sessionRepository: SessionRepository) : ViewModel() {
  *
  * ## Which "Coach" this is
  *
- * Conflict 8 in the capstone document is unresolved: Objective 4 describes Coach
- * Mode as AI personalisation, while every other section describes a human coach
- * reviewing sessions remotely. This screen implements neither of those claims
- * beyond what the app can actually stand behind today. What it does is read the
- * athlete's own recorded cue scores and surface the weakest one with the
- * coaching tip already written for it in [FormCueCatalog].
- *
- * That is a real, useful, honest thing: it is the same analysis the results
- * screen performs, pooled across sessions instead of confined to one. It is
- * deliberately not dressed up as a person, and it says on the screen that it was
- * generated on this device from the athlete's own sessions. When conflict 8 is
- * settled - remote review, a real coach account, a model - this screen gains a
- * second source, and nothing here has to be unpicked first.
+ * The pose pipeline still selects the weakest measured cue by pooling the
+ * athlete's recorded reps. Gemini may explain that result in friendlier language,
+ * but it cannot select a different cue, change a score, inspect video, or add a
+ * measurement. [CoachAiUiState.Fallback] leaves the existing coach-written tip in
+ * place whenever generation fails or its response breaks the grounding contract.
+ * Human-coach feedback remains separate and appears before generated guidance.
  */
 @Composable
 fun CoachScreen(
@@ -207,12 +248,19 @@ fun CoachScreen(
     onStartTraining: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    onOpenAssignment: (String) -> Unit = {},
 ) {
     val viewModel: CoachViewModel = viewModel(factory = CoachViewModel.Factory)
     val advice by viewModel.advice.collectAsStateWithLifecycle()
+    val aiState by viewModel.aiState.collectAsStateWithLifecycle()
+
+    if (!advice.loaded) {
+        GhostLoadingScreen(GhostLayout.Detail, contentPadding, modifier)
+        return
+    }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().studentBackground(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -222,7 +270,7 @@ fun CoachScreen(
             }
         }
 
-        // The human coach comes first, the on-device advice second.
+        // Human feedback comes first; measured and AI-written guidance follows.
         //
         // Both are on this tab and they are not the same thing: below is
         // arithmetic over this phone's own recordings, and this card is a person
@@ -236,7 +284,7 @@ fun CoachScreen(
                         modifier = Modifier.padding(horizontal = 20.dp),
                     )
                     Spacer(Modifier.height(10.dp))
-                    CoachLinkSection(Modifier.padding(horizontal = 20.dp))
+                    CoachLinkSection(Modifier.padding(horizontal = 20.dp), onOpenAssignment)
                 }
             }
         }
@@ -261,6 +309,17 @@ fun CoachScreen(
                     onPractise = { onPractiseSkill(advice.focus!!.skill) },
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
+            }
+        }
+
+        if (aiState is CoachAiUiState.Loading || aiState is CoachAiUiState.Ready) {
+            item {
+                EntranceAnimation(index = 3) {
+                    AiCoachCard(
+                        state = aiState,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                }
             }
         }
 
@@ -319,18 +378,10 @@ fun CoachScreen(
 
 @Composable
 private fun CoachHeader(advice: CoachAdvice) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.nav_coach),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = if (advice.sessionCount > 0) {
+    StudentPageHeading(
+        eyebrow = "GUIDANCE & FEEDBACK",
+        title = stringResource(R.string.nav_coach),
+        subtitle = if (advice.sessionCount > 0) {
                 pluralStringResource(
                     R.plurals.coach_subtitle,
                     advice.sessionCount,
@@ -339,10 +390,8 @@ private fun CoachHeader(advice: CoachAdvice) {
             } else {
                 stringResource(R.string.coach_subtitle_none)
             },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+    )
 }
 
 /**
@@ -359,7 +408,7 @@ private fun FocusCard(
     onPractise: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -405,6 +454,57 @@ private fun FocusCard(
 }
 
 @Composable
+private fun AiCoachCard(state: CoachAiUiState, modifier: Modifier = Modifier) {
+    StudentCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(
+                text = stringResource(R.string.coach_ai_label),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(8.dp))
+            when (state) {
+                CoachAiUiState.Loading -> {
+                    Text(
+                        text = stringResource(R.string.coach_ai_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                is CoachAiUiState.Ready -> {
+                    Text(
+                        text = state.message.headline,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = state.message.explanation,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.coach_ai_action, state.message.nextAction),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                CoachAiUiState.Fallback,
+                CoachAiUiState.Idle,
+                -> Unit
+            }
+        }
+    }
+}
+
+@Composable
 private fun CueScoreBar(insight: CueInsight, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -438,7 +538,7 @@ private fun CueScoreBar(insight: CueInsight, modifier: Modifier = Modifier) {
 
 @Composable
 private fun StrengthCard(insight: CueInsight, modifier: Modifier = Modifier) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -488,7 +588,7 @@ private fun StrengthCard(insight: CueInsight, modifier: Modifier = Modifier) {
  */
 @Composable
 private fun CameraNoteCard(unmeasuredFraction: Float, modifier: Modifier = Modifier) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -529,7 +629,7 @@ private fun SkillNoteRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    StudentCard(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -573,7 +673,7 @@ private fun NoAdviceCard(
     onStartTraining: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,

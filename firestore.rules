@@ -1,0 +1,377 @@
+rules_version = '2';
+
+// Volleyball Lab coach cloud — enforcement for docs/coach-cloud-contract.md.
+//
+// Shape of the trust model, in one paragraph: an account owns its own rows; a
+// coach additionally owns their team rows (roster, assignments, submissions,
+// notes for rostered players); a player additionally owns their requests into a
+// roster and their submissions out of it; and a coach reads a session only when
+// the athlete put them in `sharedWith` by submitting. Everything else is
+// denied. There is no admin role in v1 — see the contract on self-promotion.
+// Schema: docs/coach-cloud-contract.md and Android CloudSchema.kt.
+// users: role/displayName/email, createdAt/updatedAt (epoch ms).
+// profiles/{uid}: owner-private name(max81), firstName/lastName(max40), nullable
+// address {country:{id ISO2,name max160}, nullable area/city/barangay:{id max32,name max160}}.
+// Profile fields are optional for independent merge patches; updatedAt is required server timestamp.
+// coaches: bounded public names plus owner-private licence/preferences.
+// coachDirectory: public projection, nullable specialisation/experience, rosterSize.
+// roster: immutable playerUid, bounded name/position, Pending/Active/Ended, dates.
+// assignments/notes/submissions: immutable owner/recipient IDs and bounded content.
+// sessions: immutable owner/id/createdAt, bounded score arrays and optional stages.
+// Client-computed scores remain estimates, never proof of payment or accuracy.
+// Billing documents are server-only writes, with owner-only order/entitlement reads.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && notDeleting(request.auth.uid);
+    }
+    function notDeleting(uid) {
+      return !exists(/databases/$(database)/documents/accountDeletions/$(uid));
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function boundedString(value, maximum) {
+      return value is string && value.size() <= maximum;
+    }
+    function validUid(value) {
+      return boundedString(value, 128) && value.size() > 0;
+    }
+    function validDate(value) {
+      return value is number && value >= 0 && value <= 4102444800000;
+    }
+    function nullableDate(value) {
+      return value == null || validDate(value);
+    }
+    function validSkill(value) {
+      return value in ['Serving', 'Receiving', 'Setting', 'Spiking', 'Blocking'];
+    }
+    function validScore(value) {
+      return value == null || (value is number && value >= 0 && value <= 100);
+    }
+    function unchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+    function isValidUser(data) {
+      return data.keys().hasOnly(['role', 'displayName', 'email', 'createdAt', 'updatedAt'])
+        && data.role in ['PLAYER', 'COACH', 'Player', 'Coach']
+        && boundedString(data.displayName, 60) && boundedString(data.email, 254)
+        && validDate(data.createdAt) && validDate(data.updatedAt);
+    }
+    function validAddressOption(data) {
+      return data is map && data.keys().hasAll(['id', 'name']) && data.keys().hasOnly(['id', 'name'])
+        && boundedString(data.id, 32) && data.id.size() > 0
+        && boundedString(data.name, 160) && data.name.size() > 0;
+    }
+    function nullableAddressOption(data) {
+      return data == null || validAddressOption(data);
+    }
+    function validProfileAddress(data) {
+      return data == null || (data is map
+        && data.keys().hasAll(['country', 'area', 'city', 'barangay'])
+        && data.keys().hasOnly(['country', 'area', 'city', 'barangay'])
+        && validAddressOption(data.country) && data.country.id.matches('[A-Z]{2}')
+        && nullableAddressOption(data.area) && nullableAddressOption(data.city) && nullableAddressOption(data.barangay)
+        && (data.area != null || (data.city == null && data.barangay == null))
+        && (data.city != null || data.barangay == null)
+        && (data.barangay == null || data.country.id == 'PH'));
+    }
+    function isValidPrivateProfile(data) {
+      return data.keys().hasAll(['updatedAt'])
+        && data.keys().hasOnly(['name', 'firstName', 'lastName', 'address', 'updatedAt'])
+        && (!('name' in data) || boundedString(data.name, 81))
+        && (!('firstName' in data) || boundedString(data.firstName, 40))
+        && (!('lastName' in data) || boundedString(data.lastName, 40))
+        && (!('address' in data) || validProfileAddress(data.address))
+        && data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+    function validSpecialisation(value) {
+      return value == null || value == 'AllAround' || validSkill(value);
+    }
+    function validExperience(value) {
+      return value == null || (value is number && value >= 0 && value <= 70);
+    }
+    function isValidCoach(data) {
+      return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
+          'licenceNumber', 'notifySubmissions', 'notifyWeeklyDigest', 'notifySafetyAlerts', 'updatedAt'])
+        && boundedString(data.name, 60) && boundedString(data.teamName, 48)
+        && boundedString(data.organisation, 48) && boundedString(data.licenceNumber, 40)
+        && validSpecialisation(data.specialisation) && validExperience(data.yearsExperience)
+        && data.notifySubmissions is bool && data.notifyWeeklyDigest is bool
+        && data.notifySafetyAlerts is bool && validDate(data.updatedAt);
+    }
+    function isValidDirectory(data) {
+      // Optional legacy fields were published by the original web projection.
+      return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
+          'rosterSize', 'notifySubmissions', 'notifyWeeklyDigest', 'notifySafetyAlerts', 'updatedAt'])
+        && boundedString(data.name, 60) && boundedString(data.teamName, 48)
+        && (!('organisation' in data) || boundedString(data.organisation, 48))
+        && (!('notifySubmissions' in data) || data.notifySubmissions is bool)
+        && (!('notifyWeeklyDigest' in data) || data.notifyWeeklyDigest is bool)
+        && (!('notifySafetyAlerts' in data) || data.notifySafetyAlerts is bool)
+        && validSpecialisation(data.specialisation) && validExperience(data.yearsExperience)
+        && data.rosterSize is int && data.rosterSize >= 0 && data.rosterSize <= 10000
+        && validDate(data.updatedAt);
+    }
+    function isValidMember(data, playerUid) {
+      return data.keys().hasOnly(['playerUid', 'playerName', 'position', 'status', 'requestedAt', 'decidedAt'])
+        && data.playerUid == playerUid && validUid(data.playerUid)
+        && boundedString(data.playerName, 60)
+        && data.position in [null, 'Setter', 'OutsideHitter', 'MiddleBlocker', 'Opposite', 'Libero']
+        && data.status in ['Pending', 'Active', 'Ended']
+        && validDate(data.requestedAt) && nullableDate(data.decidedAt);
+    }
+    function isValidAssignment(data, id) {
+      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'title', 'skill', 'level', 'summary',
+          'instructions', 'targetSets', 'targetReps', 'dueAt', 'status', 'createdAt', 'libraryDrillId'])
+        && data.id == id && boundedString(data.id, 128) && validUid(data.coachUid) && validUid(data.playerUid)
+        && boundedString(data.title, 60) && data.title.size() > 0 && validSkill(data.skill)
+        && data.level in ['Beginner', 'Intermediate', 'Advanced']
+        && boundedString(data.summary, 200) && boundedString(data.instructions, 1200)
+        && data.targetSets is int && data.targetSets >= 1 && data.targetSets <= 10
+        && data.targetReps is int && data.targetReps >= 1 && data.targetReps <= 50
+        && nullableDate(data.dueAt) && validDate(data.createdAt)
+        && (data.libraryDrillId == null || boundedString(data.libraryDrillId, 128))
+        && data.status in ['Pending', 'InProgress', 'Completed'];
+    }
+    function isValidSubmission(data, id) {
+      return data.keys().hasOnly(['sessionId', 'coachUid', 'playerUid', 'submittedAt', 'reviewedAt'])
+        && validUid(data.coachUid) && validUid(data.playerUid) && validUid(data.sessionId)
+        && id == data.coachUid + '_' + data.sessionId
+        && validDate(data.submittedAt) && nullableDate(data.reviewedAt);
+    }
+    function isValidNote(data, id) {
+      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'text', 'createdAt'])
+        && data.id == id && boundedString(data.id, 128) && validUid(data.coachUid) && validUid(data.playerUid)
+        && (data.sessionId == null || validUid(data.sessionId))
+        && boundedString(data.text, 800) && data.text.size() > 0 && validDate(data.createdAt);
+    }
+    function validSharedWith(values) {
+      return values is list && values.size() <= 10
+        && (values.size() < 1 || validUid(values[0])) && (values.size() < 2 || validUid(values[1]))
+        && (values.size() < 3 || validUid(values[2])) && (values.size() < 4 || validUid(values[3]))
+        && (values.size() < 5 || validUid(values[4])) && (values.size() < 6 || validUid(values[5]))
+        && (values.size() < 7 || validUid(values[6])) && (values.size() < 8 || validUid(values[7]))
+        && (values.size() < 9 || validUid(values[8])) && (values.size() < 10 || validUid(values[9]));
+    }
+    function validStage(data) {
+      return data is map && data.keys().hasOnly(['stageIndex', 'angle', 'startMs', 'endMs',
+          'liveRepCount', 'validRepCount', 'bestStreak', 'estimatedFormScore'])
+        && data.stageIndex is int && data.stageIndex >= 0 && data.stageIndex <= 2
+        && data.angle in ['Front', 'Side', 'Rear', 'Unknown']
+        && validDate(data.startMs) && validDate(data.endMs) && data.endMs >= data.startMs
+        && data.liveRepCount is int && data.liveRepCount >= 0 && data.liveRepCount <= 1000
+        && data.validRepCount is int && data.validRepCount >= 0 && data.validRepCount <= data.liveRepCount
+        && data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= data.validRepCount
+        && validScore(data.estimatedFormScore);
+    }
+    function validStages(values) {
+      return values is list && values.size() <= 3
+        && (values.size() < 1 || validStage(values[0]))
+        && (values.size() < 2 || validStage(values[1]))
+        && (values.size() < 3 || validStage(values[2]));
+    }
+    function isValidSession(data, id) {
+      return data.keys().hasOnly(['id', 'ownerUid', 'skill', 'drillId', 'startedAt', 'durationMs',
+          'repCount', 'formScore', 'weakestCue', 'reps', 'angleStages', 'sharedWith', 'createdAt', 'updatedAt'])
+        && data.id == id && boundedString(data.id, 128) && validUid(data.ownerUid)
+        && validSkill(data.skill) && boundedString(data.drillId, 128)
+        && validDate(data.startedAt) && validDate(data.createdAt) && validDate(data.updatedAt)
+        && data.durationMs is number && data.durationMs >= 0 && data.durationMs <= 360000
+        && data.repCount is int && data.repCount >= 0 && data.repCount <= 1000
+        && validScore(data.formScore) && (data.weakestCue == null || boundedString(data.weakestCue, 64))
+        && data.reps is list && data.reps.size() == data.repCount && data.reps.size() <= 1000
+        && (!('angleStages' in data) || validStages(data.angleStages))
+        && validSharedWith(data.sharedWith);
+    }
+
+    // Billing records are written only by verified server payment handlers.
+    function hasPro() {
+      return signedIn() && (request.auth.uid == '4j06UlYqbrbLzujmfi8VW5yEIOq2'
+        || (exists(/databases/$(database)/documents/entitlements/$(request.auth.uid))
+          && get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.status == 'active'
+          && (get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.expiresAtEpochMs == 0
+            || get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.expiresAtEpochMs > request.time.toMillis())));
+    }
+
+    match /entitlements/{uid} {
+      allow read: if isUser(uid);
+      allow create, update, delete: if false;
+    }
+
+    // Public purchase information only: no merchant secrets in this document.
+    match /billingConfig/{product} {
+      allow read: if signedIn() && product == 'pro';
+      allow create, update, delete: if false;
+    }
+
+    match /billingOrders/{orderId} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    // ---- Account home ------------------------------------------------------
+    // Owner read/write. Created by the web portal at registration (role COACH)
+    // and lazily by clients that need a role row to exist.
+    match /users/{uid} {
+      allow read: if isUser(uid);
+      allow create: if isUser(uid) && isValidUser(request.resource.data);
+      allow update: if isUser(uid) && isValidUser(request.resource.data) && unchanged(['createdAt']);
+      allow delete: if false;
+    }
+
+    // Private administrative address never enters the coach directory or roster.
+    match /profiles/{uid} {
+      allow read: if isUser(uid);
+      allow create: if isUser(uid) && isValidPrivateProfile(request.resource.data);
+      allow update: if isUser(uid) && isValidPrivateProfile(request.resource.data);
+      allow delete: if false;
+    }
+
+    // ---- Coach profile (private) and directory (public to signed-in) -------
+    match /coaches/{coachUid} {
+      allow read: if isUser(coachUid);
+      allow create, update: if isUser(coachUid) && isValidCoach(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /coachDirectory/{coachUid} {
+      allow read: if signedIn();
+      allow create, update: if isUser(coachUid) && isValidDirectory(request.resource.data);
+      allow delete: if isUser(coachUid);
+    }
+
+    // ---- Roster ------------------------------------------------------------
+    // Player creates their OWN pending request; the coach answers; the player
+    // may only ever move their own row to Ended (leave).
+    match /roster/{coachUid}/members/{playerUid} {
+      allow read: if isUser(coachUid) || isUser(playerUid);
+      allow create: if isUser(playerUid)
+        && notDeleting(coachUid)
+        && hasPro()
+        && isValidMember(request.resource.data, playerUid)
+        && exists(/databases/$(database)/documents/coachDirectory/$(coachUid))
+        && request.resource.data.status == 'Pending' && request.resource.data.decidedAt == null;
+      allow update: if isValidMember(request.resource.data, playerUid)
+        && notDeleting(coachUid) && notDeleting(playerUid)
+        && ((isUser(coachUid) && unchanged(['playerUid', 'playerName', 'position', 'requestedAt']))
+          || (isUser(playerUid) && resource.data.playerUid == playerUid
+            && ((request.resource.data.status == 'Ended'
+                && unchanged(['playerUid', 'playerName', 'position', 'requestedAt']))
+              || (resource.data.status == 'Ended' && request.resource.data.status == 'Pending'
+                && request.resource.data.decidedAt == null && hasPro()))));
+      allow delete: if false;
+    }
+
+    // Supports Android's collectionGroup("members").whereEqualTo("playerUid", uid).
+    // Writes still require the explicit roster path above; unknown paths deny writes.
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn() && resource.data.playerUid == request.auth.uid;
+    }
+
+    // ---- Assignments -------------------------------------------------------
+    // Coach writes; the assigned player reads and may move status only.
+    match /assignments/{assignmentId} {
+      allow read: if signedIn()
+        && (resource.data.coachUid == request.auth.uid
+          || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.coachUid == request.auth.uid
+        && isValidAssignment(request.resource.data, assignmentId)
+        && notDeleting(request.resource.data.playerUid)
+        && isActiveMember(request.auth.uid, request.resource.data.playerUid);
+      allow update: if signedIn() && isValidAssignment(request.resource.data, assignmentId)
+        && notDeleting(resource.data.playerUid) && notDeleting(resource.data.coachUid)
+        && unchanged(['id', 'coachUid', 'playerUid', 'createdAt'])
+        && (resource.data.coachUid == request.auth.uid
+          || (resource.data.playerUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])));
+      allow delete: if signedIn() && resource.data.coachUid == request.auth.uid;
+    }
+
+    // ---- Submissions -------------------------------------------------------
+    // The player must hold an Active roster row to queue (rules check it, so a
+    // pending request cannot push training at a coach who has not said yes).
+    function isActiveMember(coachUid, playerUid) {
+      return notDeleting(coachUid) && notDeleting(playerUid)
+        && get(/databases/$(database)/documents/roster/$(coachUid)/members/$(playerUid)).data.status == 'Active';
+    }
+
+    match /submissions/{submissionId} {
+      // Transactions must be able to check for a receipt before creating it.
+      // This grants no access to existing submissions or collection lists.
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/submissions/$(submissionId));
+      allow read: if signedIn()
+        && (resource.data.coachUid == request.auth.uid
+          || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn()
+        && isValidSubmission(request.resource.data, submissionId)
+        && request.resource.data.playerUid == request.auth.uid
+        && request.resource.data.reviewedAt == null
+        && isActiveMember(request.resource.data.coachUid, request.auth.uid)
+        && get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.ownerUid == request.auth.uid;
+      // Player re-queues (clears reviewedAt); coach stamps reviewedAt.
+      allow update: if signedIn() && isValidSubmission(request.resource.data, submissionId)
+        && notDeleting(resource.data.playerUid) && notDeleting(resource.data.coachUid)
+        && unchanged(['sessionId', 'coachUid', 'playerUid'])
+        && ((resource.data.playerUid == request.auth.uid
+            && request.resource.data.reviewedAt == null
+            && isActiveMember(resource.data.coachUid, request.auth.uid))
+          || (resource.data.coachUid == request.auth.uid && unchanged(['submittedAt'])));
+      allow delete: if false;
+    }
+
+    // ---- Notes -------------------------------------------------------------
+    match /notes/{noteId} {
+      allow read: if signedIn()
+        && (resource.data.coachUid == request.auth.uid
+          || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.coachUid == request.auth.uid
+        && isValidNote(request.resource.data, noteId)
+        && notDeleting(request.resource.data.playerUid)
+        && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(request.resource.data.playerUid));
+      allow update, delete: if false;
+    }
+
+    match /accountDeletions/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /recordings/{sessionId} {
+      function sessionData() { return get(/databases/$(database)/documents/sessions/$(sessionId)).data; }
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/recordings/$(sessionId))
+        || sessionData().ownerUid == request.auth.uid || request.auth.uid in sessionData().sharedWith);
+      allow create, update: if signedIn() && sessionData().ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['ownerUid', 'sessionId', 'version', 'videoBytes', 'reviewBytes', 'ready'])
+        && request.resource.data.ownerUid == request.auth.uid && request.resource.data.sessionId == sessionId
+        && request.resource.data.version == 1 && request.resource.data.ready == true
+        && request.resource.data.videoBytes is int && request.resource.data.videoBytes > 0 && request.resource.data.videoBytes <= 104857600
+        && request.resource.data.reviewBytes is int && request.resource.data.reviewBytes > 0 && request.resource.data.reviewBytes <= 10485760;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ---- Sessions ----------------------------------------------------------
+    // Owner full access; a coach reads only what was shared with them.
+    // `sharedWith` is append-only from the player's side — submit adds, and
+    // nothing (including leave) silently un-shares history in v1.
+    match /sessions/{sessionId} {
+      // A saved local recording may not have reached its cloud mirror yet.
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/sessions/$(sessionId));
+      allow read: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid
+          || request.auth.uid in resource.data.sharedWith);
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid && isValidSession(request.resource.data, sessionId);
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && isValidSession(request.resource.data, sessionId) && unchanged(['id', 'ownerUid', 'createdAt'])
+        && request.resource.data.sharedWith.hasAll(resource.data.sharedWith);
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}

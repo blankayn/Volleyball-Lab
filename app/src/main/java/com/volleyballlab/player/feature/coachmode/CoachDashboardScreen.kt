@@ -46,6 +46,8 @@ import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import java.time.LocalTime
@@ -142,6 +144,11 @@ fun CoachDashboardScreen(
     val greeting = remember { greetingRes() }
 
     LaunchedEffect(Unit) { viewModel.publishListing() }
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.Dashboard, contentPadding, modifier)
+        return
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -556,4 +563,3 @@ private fun greetingRes(): Int {
         else -> R.string.home_greeting_evening
     }
 }
-

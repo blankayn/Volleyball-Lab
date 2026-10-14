@@ -22,3 +22,27 @@ test_write.txt
 
 # Large ML model, fetched via app/src/main/assets/README.md instructions.
 /app/src/main/assets/*.task
+
+# Credentials for user-requested Firebase test accounts.
+/.codex-tmp/coach-test-accounts.json
+
+# Local tooling, deployment caches, and generated verification artifacts.
+/.codex-tmp/
+/.codex-verify-gap-main/
+/.firebase/
+/.kotlin/
+/tmp/
+/outputs/
+/backups/
+**/node_modules/
+**/dist/
+*.log
+
+# Environment credentials and private signing keys stay on this machine.
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pem

@@ -2,6 +2,28 @@ package com.volleyballlab.player.domain.model
 
 import kotlin.math.roundToInt
 
+/** Camera orientation during a guided stage. Enum names are persisted. */
+enum class CameraAngle { Front, Side, Rear, Unknown }
+
+/**
+ * A scored capture interval in one guided session. [startMs] and [endMs] use the
+ * same monotonic camera timestamps as [RepResult], not epoch time. Turning and
+ * countdown intervals fall outside these boundaries.
+ *
+ * The counts and score are live estimates. Final analysis remains in
+ * [SessionResult.reps], and may detect a different number of repetitions.
+ */
+data class SessionAngleStage(
+    val stageIndex: Int,
+    val angle: CameraAngle,
+    val startMs: Long,
+    val endMs: Long,
+    val liveRepCount: Int,
+    val validRepCount: Int,
+    val bestStreak: Int,
+    val estimatedFormScore: Int?,
+)
+
 /**
  * One cue, measured on one repetition.
  *
@@ -76,6 +98,12 @@ data class SessionResult(
     val startedAtEpochMs: Long,
     val durationMs: Long,
     val reps: List<RepResult>,
+    /** Private MP4 on this device, when CameraX recording succeeded. */
+    val videoPath: String? = null,
+    /** Optional guided-stage metadata; absent in ordinary and older sessions. */
+    val angleStages: List<SessionAngleStage> = emptyList(),
+    /** Local link used to resume and submit a coach-assigned recording. */
+    val assignmentId: String? = null,
 ) {
     val repCount: Int get() = reps.size
 

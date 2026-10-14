@@ -16,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
+import com.volleyballlab.player.ui.component.StudentCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +63,7 @@ import com.volleyballlab.player.domain.repository.JoinOutcome
 import com.volleyballlab.player.domain.repository.PlanRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.ui.component.SkillAccentRule
+import com.volleyballlab.player.ui.component.GhostLoadingCard
 import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +92,7 @@ data class CoachLinkState(
     val assignments: List<CoachAssignment> = emptyList(),
     val submissions: List<SessionSubmission> = emptyList(),
     val latestSession: SessionResult? = null,
+    val loaded: Boolean = false,
 ) {
     val isLinked: Boolean get() = link?.isActive == true
 
@@ -137,6 +140,7 @@ class CoachLinkViewModel(
             assignments = assignments,
             submissions = submissions,
             latestSession = sessions.maxByOrNull { it.startedAtEpochMs },
+            loaded = true,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -149,6 +153,7 @@ class CoachLinkViewModel(
 
     private val _error = MutableStateFlow<Int?>(null)
     val error: StateFlow<Int?> = _error.asStateFlow()
+    val sending = MutableStateFlow(false)
 
     fun clearError() {
         _error.value = null
@@ -164,8 +169,8 @@ class CoachLinkViewModel(
      * Step two: actually ask. Only the coach can move it on from here.
      *
      * The Pro check sits here rather than only in the UI because this is the one
-     * choke point every path to a request goes through. It is still not
-     * *entitlement* - see [PlanRepository] - but it means a screen that forgets to
+     * choke point every path to a request goes through. Firestore rules independently enforce
+     * server entitlement; this check also ensures a screen that forgets to
      * gate cannot silently create a membership.
      */
     fun sendRequest(coachUid: String) {
@@ -197,29 +202,17 @@ class CoachLinkViewModel(
         _error.value = null
     }
 
-    /**
-     * The upgrade mockup.
-     *
-     * Flips a local flag and nothing else. No card is collected, no processor is
-     * contacted and nobody is charged - the sheet that calls this says exactly that
-     * above the button. See [PlanRepository] for why it is built this way and what
-     * replaces it when billing is real.
-     */
-    fun unlockPro() {
-        viewModelScope.launch { planRepository.upgradeToPro() }
-    }
-
-    /** Undoes the mockup, so the locked state can be demonstrated again. */
-    fun switchToFree() {
-        viewModelScope.launch { planRepository.downgradeToFree() }
-    }
-
     fun leave() {
         viewModelScope.launch { coachRepository.leaveCoach() }
     }
 
     fun submit(sessionId: String) {
-        viewModelScope.launch { coachRepository.submitSession(sessionId) }
+        if (sending.value) return
+        sending.value = true
+        viewModelScope.launch {
+            try { coachRepository.submitSession(sessionId) }
+            finally { sending.value = false }
+        }
     }
 
     fun markDone(assignmentId: String) {
@@ -247,6 +240,7 @@ class CoachLinkViewModel(
                 JoinFailure.AlreadyLinked -> R.string.coach_link_error_linked
                 JoinFailure.NoSession -> R.string.coach_link_error_session
                 JoinFailure.NotPro -> R.string.coach_link_error_notpro
+                JoinFailure.Unavailable -> R.string.coach_link_error_unavailable
             }
     }
 }
@@ -280,11 +274,17 @@ class CoachLinkViewModel(
  * phone's recordings, the other is a person who wrote something.
  */
 @Composable
-fun CoachLinkSection(modifier: Modifier = Modifier) {
+fun CoachLinkSection(modifier: Modifier = Modifier, onOpenAssignment: (String) -> Unit = {}) {
     val viewModel: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val sending by viewModel.sending.collectAsStateWithLifecycle()
+
+    if (!state.loaded) {
+        GhostLoadingCard(modifier)
+        return
+    }
     val link = state.link
 
     var showUpgrade by rememberSaveable { mutableStateOf(false) }
@@ -304,7 +304,8 @@ fun CoachLinkSection(modifier: Modifier = Modifier) {
                 state = state,
                 onSubmit = viewModel::submit,
                 onLeave = viewModel::leave,
-                onMarkDone = viewModel::markDone,
+                onOpenAssignment = onOpenAssignment,
+                sending = sending,
             )
 
             // Figure 17: the upsell. Everything below this branch is Pro-only.
@@ -326,18 +327,10 @@ fun CoachLinkSection(modifier: Modifier = Modifier) {
     }
 
     if (showUpgrade) {
-        ProUpgradeSheet(
-            plan = state.plan,
-            onUnlock = {
-                viewModel.unlockPro()
-                showUpgrade = false
-            },
-            onSwitchToFree = {
-                viewModel.switchToFree()
-                showUpgrade = false
-            },
-            onDismiss = { showUpgrade = false },
-        )
+        androidx.compose.material3.AlertDialog(onDismissRequest = { showUpgrade = false },
+            title = { Text("Pro access") },
+            text = { com.volleyballlab.player.feature.profile.ProPlanCard() },
+            confirmButton = { TextButton(onClick = { showUpgrade = false }) { Text("Close") } })
     }
 }
 
@@ -401,156 +394,6 @@ private fun LockedFeatureRow(feature: ProFeature) {
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(
-                text = stringResource(feature.title),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(feature.body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * Figure 19, as a sheet: what Pro includes, and what upgrading here actually does.
- *
- * ## This is a mockup and says so above the button
- *
- * There is no billing in this build. The disclosure is placed *between* the feature
- * list and the action rather than as fine print underneath, because it is the one
- * thing a reader must not be able to skip: a plausible-looking upgrade that quietly
- * charges nobody is the exact shape of a dishonest demo. No card fields, no
- * price, no "payment successful" - just a switch and a plain statement of what it
- * is. See [PlanRepository].
- *
- * ## Planned features are listed separately
- *
- * Three of the document's five Pro benefits are not built. They appear under their
- * own heading, marked, rather than mixed in with the two that work - a list that
- * promised all five equally would be selling something that does not exist.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ProUpgradeSheet(
-    plan: UserPlan,
-    onUnlock: () -> Unit,
-    onSwitchToFree: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.pro_sheet_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.pro_sheet_current, stringResource(plan.displayName)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = stringResource(R.string.pro_sheet_included),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            ProFeature.Live.forEach { feature ->
-                FeatureRow(feature, icon = Icons.Rounded.CheckCircle, live = true)
-            }
-
-            Spacer(Modifier.height(18.dp))
-            Text(
-                text = stringResource(R.string.pro_sheet_planned),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ProFeature.Planned.forEach { feature ->
-                FeatureRow(feature, icon = Icons.Rounded.Schedule, live = false)
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.pro_sheet_planned_note),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(20.dp))
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
-                Text(
-                    text = stringResource(R.string.pro_sheet_no_payment),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(14.dp),
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            if (plan.isPro) {
-                OutlinedButton(
-                    onClick = onSwitchToFree,
-                    shape = VbButtonShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.pro_sheet_downgrade))
-                }
-            } else {
-                Button(
-                    onClick = onUnlock,
-                    shape = VbButtonShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.pro_sheet_upgrade))
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            TextButton(
-                onClick = onDismiss,
-                shape = VbButtonShape,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.pro_sheet_dismiss))
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeatureRow(feature: ProFeature, icon: ImageVector, live: Boolean) {
-    Row(
-        modifier = Modifier.padding(top = 10.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (live) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(10.dp))
         Column {
@@ -793,7 +636,8 @@ private fun LinkedCard(
     state: CoachLinkState,
     onSubmit: (String) -> Unit,
     onLeave: () -> Unit,
-    onMarkDone: (String) -> Unit,
+    onOpenAssignment: (String) -> Unit,
+    sending: Boolean,
 ) {
     val link = state.link ?: return
 
@@ -824,12 +668,19 @@ private fun LinkedCard(
             )
 
             else -> Button(
+                enabled = !sending,
                 onClick = { onSubmit(state.latestSession.id) },
                 shape = VbButtonShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.coach_link_submit))
+                Text(if (sending) "Sending recording and feedback…" else stringResource(R.string.coach_link_submit))
             }
+        }
+
+        if (state.latestSession != null && !state.latestIsSubmitted) {
+            Text(if (state.latestSession.videoPath != null)
+                "Sending shares your video, skeleton, and error markers privately with this coach."
+                else "This session sends a form summary without a video.", style = MaterialTheme.typography.bodySmall)
         }
 
         if (state.assignments.isNotEmpty()) {
@@ -841,7 +692,7 @@ private fun LinkedCard(
             )
             state.assignments.forEach { assignment ->
                 Spacer(Modifier.height(10.dp))
-                AssignmentRow(assignment, onMarkDone = { onMarkDone(assignment.id) })
+                AssignmentRow(assignment, onOpen = { onOpenAssignment(assignment.id) })
             }
         }
 
@@ -882,7 +733,7 @@ private fun LinkedCard(
 }
 
 @Composable
-private fun AssignmentRow(assignment: CoachAssignment, onMarkDone: () -> Unit) {
+private fun AssignmentRow(assignment: CoachAssignment, onOpen: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -912,24 +763,15 @@ private fun AssignmentRow(assignment: CoachAssignment, onMarkDone: () -> Unit) {
                 )
             }
         }
-        if (assignment.isOpen) {
-            TextButton(onClick = onMarkDone) {
-                Text(stringResource(R.string.coach_link_mark_done))
-            }
-        } else {
-            Text(
-                text = stringResource(assignment.status.displayName),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End,
-            )
+        TextButton(onClick = onOpen) {
+            Text("View task")
         }
     }
 }
 
 @Composable
 private fun LinkSurface(content: @Composable () -> Unit) {
-    Surface(
+    StudentCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,

@@ -12,6 +12,7 @@ class VolleyballLabApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        installAppCheckProvider()
         container = AppContainer(this)
     }
 }

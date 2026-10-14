@@ -2,6 +2,7 @@ package com.volleyballlab.player.feature.train.skill
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,10 +24,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -41,6 +45,10 @@ import androidx.compose.ui.unit.sp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.StudentCard
+import com.volleyballlab.player.ui.component.StudentPageHeading
+import com.volleyballlab.player.ui.component.CourtCardArtwork
+import com.volleyballlab.player.ui.component.studentBackground
 import com.volleyballlab.player.ui.component.pressScale
 import java.util.Locale
 
@@ -64,37 +72,41 @@ import java.util.Locale
 @Composable
 fun SkillSelectScreen(
     onSkillSelected: (Skill) -> Unit,
+    onOpenDrillLibrary: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize().studentBackground(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
             EntranceAnimation(index = 0) {
-                Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 6.dp)) {
-                    Text(
-                        text = stringResource(R.string.skill_select_title),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.skill_select_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                StudentPageHeading("SKILL DEVELOPMENT", stringResource(R.string.skill_select_title),
+                    stringResource(R.string.skill_select_subtitle),
+                    Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 6.dp))
             }
         }
 
+        item {
+            StudentCard(onClick = onOpenDrillLibrary, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Drill library", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Step-by-step guides and practice", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
         itemsIndexed(Skill.All, key = { _, skill -> skill.name }) { index, skill ->
             EntranceAnimation(
                 index = index + 1,
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.padding(horizontal = 20.dp),
             ) {
                 SkillCard(
                     skill = skill,
@@ -131,8 +143,11 @@ private fun SkillCard(skill: Skill, position: Int, onClick: () -> Unit) {
         shape = RoundedCornerShape(CARD_CORNER_DP.dp),
         color = palette.wash,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, palette.accent.copy(alpha = .18f)),
+        shadowElevation = 2.dp,
     ) {
         Box(Modifier.fillMaxWidth()) {
+            CourtCardArtwork(Modifier.matchParentSize(), ink = palette.accent)
             Image(
                 painter = painterResource(palette.illustration),
                 contentDescription = null,
@@ -277,8 +292,8 @@ private fun paletteFor(skill: Skill): SkillPalette = when (skill) {
     )
 }
 
-private const val CARD_HEIGHT_DP = 148
-private const val CARD_CORNER_DP = 20
+private const val CARD_HEIGHT_DP = 164
+private const val CARD_CORNER_DP = 24
 private const val BADGE_SIZE_DP = 38
 private const val BADGE_CORNER_DP = 11
 private const val BUTTON_SIZE_DP = 42

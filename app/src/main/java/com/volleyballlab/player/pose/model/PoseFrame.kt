@@ -22,7 +22,8 @@ data class Landmark(
 ) {
     /** Whether this landmark is trustworthy enough to score a cue from. */
     fun isReliable(threshold: Float = DEFAULT_VISIBILITY_THRESHOLD): Boolean =
-        visibility >= threshold
+        x.isFinite() && y.isFinite() && z.isFinite() &&
+            visibility >= threshold && presence >= threshold
 
     companion object {
         /**
@@ -73,6 +74,8 @@ data class PoseFrame(
     val imageWidth: Int,
     val imageHeight: Int,
     val mirrored: Boolean,
+    /** Original sensor clock, before the detector's monotonic timestamp adjustment. */
+    val cameraTimestampMs: Long = timestampMs,
 ) {
     init {
         require(image.size == EXPECTED_LANDMARK_COUNT) {
@@ -89,9 +92,15 @@ data class PoseFrame(
     /** Metric world-space landmark for [point]. Use for angles. */
     fun world(point: BodyPoint): Landmark = world[point.ordinal]
 
-    /** Mean visibility across the points any skill needs. A rough tracking-health signal. */
+    /** Mean joint confidence, including whether the joint is actually present. */
     fun torsoAndLimbVisibility(): Float =
-        BodyPoint.TorsoAndLimbs.map { image(it).visibility }.average().toFloat()
+        BodyPoint.TorsoAndLimbs.map { point ->
+            image(point).let { landmark ->
+                if (landmark.x.isFinite() && landmark.y.isFinite() && landmark.z.isFinite()) {
+                    minOf(landmark.visibility, landmark.presence).takeIf { it.isFinite() } ?: 0f
+                } else 0f
+            }
+        }.average().toFloat()
 
     companion object {
         const val EXPECTED_LANDMARK_COUNT = 33

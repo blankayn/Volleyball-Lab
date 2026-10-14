@@ -94,32 +94,114 @@ object Angles {
         fromVerticalBetween(hipCentre(frame), shoulderCentre(frame))
 
     /**
-     * Forward trunk lean from vertical, in degrees. Positive leans toward the
-     * camera, negative leans away.
+     * The direction the athlete is facing, as a horizontal unit vector in world
+     * x-z. Null when it cannot be determined.
+     *
+     * ## Why this is needed at all
+     *
+     * World landmarks are hip-centred but their **axes are the camera's**, not the
+     * body's. So camera -z means "toward the lens", which is only the athlete's
+     * forward when they happen to be facing it. Every depth measurement that means
+     * something anatomical - how far the chest leans, how far the hands reach past
+     * the shoulders - has to be projected onto this rather than read off z.
+     *
+     * The vector is the horizontal normal to the shoulder line. That leaves two
+     * candidates 180 degrees apart, and the nose picks between them: it sits in
+     * front of the shoulder line on any pose a camera can see the face in.
+     *
+     * Returns null rather than guessing when the nose projects too close to the
+     * shoulder line to resolve front from back. Measured across 2,849 real frames
+     * the nose sits a median 0.162 m forward, and under 0.02 m on 0.21% of them -
+     * so the guard costs almost nothing and prevents a silent 180-degree
+     * inversion, which is the failure this whole helper exists to end.
+     */
+    fun forwardAxis(frame: PoseFrame): ForwardAxis? {
+        val left = frame.world(BodyPoint.LEFT_SHOULDER)
+        val right = frame.world(BodyPoint.RIGHT_SHOULDER)
+        val acrossX = right.x - left.x
+        val acrossZ = right.z - left.z
+        val span = sqrt(acrossX * acrossX + acrossZ * acrossZ)
+        if (span < EPSILON) return null
+
+        // Rotate the shoulder line 90 degrees in the horizontal plane.
+        val normalX = -acrossZ / span
+        val normalZ = acrossX / span
+
+        val centre = shoulderCentre(frame)
+        val nose = frame.world(BodyPoint.NOSE)
+        val towardNose = (nose.x - centre.x) * normalX + (nose.z - centre.z) * normalZ
+        if (abs(towardNose) < MIN_FACING_EVIDENCE) return null
+
+        return if (towardNose < 0f) {
+            ForwardAxis(-normalX, -normalZ)
+        } else {
+            ForwardAxis(normalX, normalZ)
+        }
+    }
+
+    /**
+     * How far [to] sits ahead of [from] along the athlete's own forward
+     * direction, in metres. Negative is behind.
+     *
+     * This is the anatomical answer to "how far forward", as distinct from the
+     * camera-relative one that a raw z difference gives.
+     */
+    fun alongForward(frame: PoseFrame, from: Landmark, to: Landmark): Float? {
+        val axis = forwardAxis(frame) ?: return null
+        return (to.x - from.x) * axis.x + (to.z - from.z) * axis.z
+    }
+
+    /**
+     * Forward trunk lean from vertical, in degrees. Positive leans the way the
+     * athlete is facing, negative leans back.
      *
      * This is lean in the **sagittal** plane, and it is the one the coaching cues
      * mean. "Stay tall on the serve" is about not leaning back; "lean into the
      * ball on a pass" is about getting the chest forward. Neither has anything to
      * do with sideways lean, so both need depth rather than the x axis.
      *
-     * MediaPipe's world z decreases toward the camera, hence the negation: it
-     * makes leaning toward the lens read as positive, which is the direction a
-     * coach would call "forward".
+     * Measured against the athlete's own [forwardAxis] rather than against camera
+     * z. Those agree only while the athlete faces the lens: on 7,274 frames of
+     * real footage the camera-relative version averaged +15.5 degrees facing the
+     * lens and -20.8 facing away, so a rear-facing passer scored zero on
+     * `PassTrunkAngle` - whose band is entirely positive - no matter how well they
+     * were actually leaning.
      */
     fun trunkForwardLean(frame: PoseFrame): Float? {
         val hip = hipCentre(frame)
         val shoulder = shoulderCentre(frame)
-        val forward = -(shoulder.z - hip.z)
+        val forward = alongForward(frame, hip, shoulder) ?: return null
         val up = -(shoulder.y - hip.y)
         if (abs(forward) < EPSILON && abs(up) < EPSILON) return null
         return Math.toDegrees(atan2(forward.toDouble(), up.toDouble())).toFloat()
     }
 
     /**
-     * How far the shoulder line is off horizontal, in degrees, always positive.
+     * How far the shoulder line is off horizontal, in degrees, in `0f..90f`.
      *
      * Used by the forearm-pass cue for level shoulders: a tilted shoulder line
      * tilts the platform, and a tilted platform sends the ball sideways.
+     *
+     * ## Why the fold at the end
+     *
+     * The shoulder line is a *direction*, but tilt is an *orientation* - a line
+     * leaning ten degrees is equally tilted whichever end you measure from. The
+     * distinction matters here because world x is a camera axis, not a body one,
+     * so the vector left-shoulder to right-shoulder points one way when the
+     * athlete faces the lens and the other way when they face away.
+     *
+     * Without the fold, level shoulders read ~0 from behind and ~180 from the
+     * front, and the reading flips mid-rep as the athlete turns. `abs` alone does
+     * not help: it folds the sign of `dy`, not of `dx`. Measured over 7,318
+     * frames of real footage the unfolded value averaged 156.5 degrees and landed
+     * inside this cue's 0..12 band on 1.98% of frames - so `PassShouldersLevel`
+     * failed essentially every rep. Folded, the same frames average 13.8 with a
+     * median of 4.4.
+     *
+     * This survived because no fixture in the repo poses an athlete facing away,
+     * and `TestPoses.wellFramedStanding()` pairs a camera-facing nose with a
+     * rear-view shoulder layout - a combination real MediaPipe emits in under 4%
+     * of frames. See `AnglesTest.level shoulders read zero from the front too`.
      */
     fun shoulderTilt(frame: PoseFrame): Float? {
         val left = frame.world(BodyPoint.LEFT_SHOULDER)
@@ -127,7 +209,8 @@ object Angles {
         val dx = right.x - left.x
         val dy = right.y - left.y
         if (abs(dx) < EPSILON && abs(dy) < EPSILON) return null
-        return abs(Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat())
+        val directed = abs(Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat())
+        return minOf(directed, 180f - directed)
     }
 
     /** Midpoint of two landmarks. Visibility carries through as the weaker of the two. */
@@ -236,4 +319,14 @@ object Angles {
     }
 
     private const val EPSILON = 1e-6f
+
+    /**
+     * Least nose-to-shoulder-line offset, in metres, that resolves front from
+     * back. See [forwardAxis]; measured p0.1 of the real distribution is 0.011 m
+     * and the median 0.162 m, so this rejects genuine ambiguity and little else.
+     */
+    private const val MIN_FACING_EVIDENCE = 0.02f
 }
+
+/** A horizontal unit vector in world x-z. See [Angles.forwardAxis]. */
+data class ForwardAxis(val x: Float, val z: Float)

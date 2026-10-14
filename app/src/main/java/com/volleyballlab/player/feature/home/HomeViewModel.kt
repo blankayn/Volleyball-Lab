@@ -75,6 +75,7 @@ data class HomeUiState(
     val profile: AthleteProfile = AthleteProfile.Anonymous,
     val sessions: List<SessionResult> = emptyList(),
     val recommendation: SkillRecommendation? = null,
+    val loaded: Boolean = false,
 )
 
 class HomeViewModel(
@@ -92,6 +93,7 @@ class HomeViewModel(
             profile = profile,
             sessions = sessions,
             recommendation = SkillRecommendation.from(assessment, profile, sessions),
+            loaded = true,
         )
     }.stateIn(
         scope = viewModelScope,

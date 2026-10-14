@@ -16,6 +16,8 @@ data class AuthUser(
     val uid: String,
     val email: String,
     val displayName: String,
+    val emailVerified: Boolean = false,
+    val passwordProvider: Boolean = true,
 )
 
 /**
@@ -51,6 +53,9 @@ enum class AuthError(@param:StringRes val message: Int) {
      */
     ProjectNotConfigured(R.string.auth_error_not_configured),
     Unknown(R.string.auth_error_unknown),
+    RecentLoginRequired(R.string.auth_error_recent_login),
+    NoSession(R.string.auth_error_no_session),
+    TooManyRequests(R.string.auth_error_rate_limit),
 }
 
 sealed interface AuthOutcome {
@@ -116,6 +121,10 @@ interface AuthRepository {
     suspend fun signUp(name: String, email: String, password: String): AuthOutcome
 
     suspend fun sendPasswordReset(email: String): AuthOutcome
+
+    suspend fun sendVerificationEmail(): AuthOutcome = AuthOutcome.Failure(AuthError.ProviderDisabled)
+    suspend fun refreshAccount(): AuthOutcome = AuthOutcome.Failure(AuthError.ProviderDisabled)
+    suspend fun changePassword(currentPassword: String, newPassword: String): AuthOutcome = AuthOutcome.Failure(AuthError.ProviderDisabled)
 
     suspend fun signOut()
 }

@@ -1,57 +1,35 @@
 package com.volleyballlab.player.feature.home
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SportsVolleyball
 import androidx.compose.material.icons.rounded.TrackChanges
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.volleyballlab.player.R
@@ -59,18 +37,23 @@ import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.SkillRecommendation
 import com.volleyballlab.player.domain.model.TrainingTotals
-import com.volleyballlab.player.ui.component.AnimatedCounter
+import com.volleyballlab.player.domain.model.ReportAllowance
+import com.volleyballlab.player.feature.session.RecentSessionSummaryCard
 import com.volleyballlab.player.ui.component.EntranceAnimation
-import com.volleyballlab.player.ui.component.RiveMascot
-import com.volleyballlab.player.ui.component.SkillAccentRule
-import com.volleyballlab.player.ui.component.VbSectionHeader
-import com.volleyballlab.player.ui.component.pressScale
-import com.volleyballlab.player.ui.component.scoreColor
-import com.volleyballlab.player.ui.component.skillVisual
+import com.volleyballlab.player.ui.component.StudentCard
+import com.volleyballlab.player.ui.component.TrainingHeroCard
+import com.volleyballlab.player.ui.component.studentBackground
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
+import com.volleyballlab.player.ui.component.calendarDayFlow
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+
+private val CourtOrange = Color(0xFFCC5500)
+private val CourtApricot = Color(0xFFE9944A)
+private val DashboardShape = RoundedCornerShape(26.dp)
 
 @Composable
 fun HomeScreen(
@@ -78,668 +61,80 @@ fun HomeScreen(
     onSkillSelected: (Skill) -> Unit,
     onTakeAssessment: () -> Unit,
     onViewAllSessions: () -> Unit,
+    onOpenSession: (String) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    onViewAssignments: () -> Unit = onStartTraining,
 ) {
     val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var period by remember { mutableStateOf(TrainingPeriod.ThisWeek) }
-
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            EntranceAnimation(index = 0) {
-                HeroHeader(name = state.profile.name, sessions = state.sessions)
-            }
+    val dark = MaterialTheme.colorScheme.surface.luminance() < .3f
+    val scheme = MaterialTheme.colorScheme.copy(
+        primary = if (dark) Color(0xFFFFB680) else CourtOrange,
+        onPrimary = if (dark) Color(0xFF492000) else Color.White,
+        primaryContainer = if (dark) Color(0xFF542A11) else Color(0xFFFFD9BF),
+        onPrimaryContainer = if (dark) Color(0xFFFFDCC0) else Color(0xFF331500),
+    )
+    MaterialTheme(colorScheme = scheme) {
+        if (!state.loaded) {
+            GhostLoadingScreen(GhostLayout.Dashboard, contentPadding, modifier)
+            return@MaterialTheme
         }
-
-        item {
-            EntranceAnimation(index = 1) {
-                StartTrainingCard(
-                    onClick = onStartTraining,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
+        var period by remember { mutableStateOf(TrainingPeriod.ThisWeek) }
+        val dayFlow = remember { calendarDayFlow() }
+        val today by dayFlow.collectAsStateWithLifecycle(LocalDate.now())
+        val horizontal = Modifier.padding(horizontal = 20.dp)
+        LazyColumn(
+            modifier = modifier.fillMaxSize().studentBackground(),
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding() + 8.dp,
+                bottom = contentPadding.calculateBottomPadding() + 20.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            item(key = "greeting") {
+                EntranceAnimation(index = 0) { DashboardGreeting(state.profile.name, horizontal) }
             }
-        }
-
-        // ── Focus suggestion ─────────────────────────────────────────────
-        item {
-            EntranceAnimation(index = 2) {
+            item(key = "start") {
+                EntranceAnimation(index = 1) { TrainingHero(onStartTraining, horizontal) }
+            }
+            item(key = "overview") {
+                EntranceAnimation(index = 2) { DashboardOverview(state.sessions, period, { period = it }, today, horizontal) }
+            }
+            item(key = "agenda") {
+                TrainingAgendaCard(onSkillSelected, onViewAssignments, horizontal)
+            }
+            item(key = "focus") {
                 val recommendation = state.recommendation
-                if (recommendation == null) {
-                    TakeAssessmentCard(
-                        onClick = onTakeAssessment,
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                } else {
-                    FocusSuggestionCard(
-                        recommendation = recommendation,
-                        onClick = { onSkillSelected(recommendation.skill) },
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
+                FocusCard(recommendation, state.profile.goalSkill != null,
+                    onClick = { if (recommendation == null) onTakeAssessment() else onSkillSelected(recommendation.skill) },
+                    modifier = horizontal)
+            }
+            item(key = "recent_header") {
+                Row(horizontal.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.home_section_recent), style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (state.sessions.isNotEmpty()) TextButton(onViewAllSessions) {
+                        Text(stringResource(R.string.home_view_all))
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(18.dp))
+                    }
                 }
             }
-        }
-
-        // ── Skill focus ──────────────────────────────────────────────────
-        state.recommendation?.let { recommendation ->
-            item {
-                EntranceAnimation(index = 3) {
-                    VbSectionHeader(
-                        text = stringResource(R.string.home_section_skill_focus),
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
+            if (state.sessions.isEmpty()) {
+                item(key = "empty") {
+                    StudentCard(horizontal.fillMaxWidth(), shape = DashboardShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+                        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            IconTile(Icons.Rounded.SportsVolleyball)
+                            Text(stringResource(R.string.home_no_sessions), style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
-            }
-            item {
-                EntranceAnimation(index = 4) {
-                    SkillFocusCard(
-                        recommendation = recommendation,
-                        onClick = { onSkillSelected(recommendation.skill) },
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
-            }
-        }
-
-        // ── Recent sessions ──────────────────────────────────────────────
-        item {
-            EntranceAnimation(index = 5) {
-                SectionHeaderWithAction(
-                    title = R.string.home_section_recent,
-                    action = R.string.home_view_all,
-                    onAction = onViewAllSessions.takeIf { state.sessions.isNotEmpty() },
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-            }
-        }
-
-        if (state.sessions.isEmpty()) {
-            item {
-                EntranceAnimation(index = 6) {
-                    EmptySessionsCard(modifier = Modifier.padding(horizontal = 20.dp))
-                }
-            }
-        } else {
-            itemsIndexed(
-                state.sessions.take(RECENT_SESSION_LIMIT),
-                key = { _, session -> session.id },
-            ) { index, session ->
-                EntranceAnimation(index = index + 6) {
-                    RecentSessionRow(
-                        session = session,
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
-            }
-        }
-
-        // ── Daily progress ───────────────────────────────────────────────
-        item {
-            EntranceAnimation(index = 7) {
-                DailyProgressCard(
-                    totals = TrainingTotals.from(period.filter(state.sessions)),
-                    period = period,
-                    onPeriodChange = { period = it },
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-            }
-        }
-
-        item { Spacer(Modifier.height(8.dp)) }
-    }
-}
-
-// ─── Hero Header ────────────────────────────────────────────────────────────
-
-@Composable
-private fun HeroHeader(name: String, sessions: List<SessionResult>) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                // The greeting takes the athlete's first name only. "Good
-                // afternoon, Kirt Deniel Magno" reads like a summons.
-                text = name.trim().substringBefore(' ')
-                    .takeIf { it.isNotBlank() }
-                    ?.let { stringResource(greetingRes(), it) }
-                    ?: stringResource(greetingPlainRes()),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = summaryLine(sessions),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        RiveMascot(modifier = Modifier.size(112.dp))
-    }
-}
-
-// ─── Start Training Card ────────────────────────────────────────────────────
-
-@Composable
-private fun StartTrainingCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val infiniteTransition = rememberInfiniteTransition(label = "ctaPulse")
-    val arrowOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "arrowPulse",
-    )
-
-    val primary = MaterialTheme.colorScheme.primary
-    val gradientBrush = Brush.horizontalGradient(
-        colors = listOf(primary, primary.copy(alpha = 0.75f)),
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interactionSource),
-        shape = MaterialTheme.shapes.large,
-        color = Color.Transparent,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(brush = gradientBrush)
-                .padding(22.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.home_start_training),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.home_start_training_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f),
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .graphicsLayer { translationX = arrowOffset * density },
-                )
-            }
-        }
-    }
-}
-
-// ─── Focus suggestion ───────────────────────────────────────────────────────
-
-/**
- * What to work on next, and where the claim came from.
- *
- * ## The source line is not decoration
- *
- * The card carries either "From your assessment" or "From your recorded sets", and
- * that distinction is the honest part of this feature. Conflict 8 in the capstone
- * document is unresolved - Objective 4 calls Coach Mode AI personalisation, every
- * other section calls it a human coach - and the Coach tab already refuses to dress
- * its output up as a person for that reason. This card is held to the same standard.
- * A recommendation drawn from a questionnaire the athlete filled in during
- * onboarding is a restatement of their own opinion, and presenting it in the same
- * voice as a measurement would be the app taking credit for knowing something it
- * does not.
- */
-@Composable
-private fun FocusSuggestionCard(
-    recommendation: SkillRecommendation,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val visual = skillVisual(recommendation.skill)
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interactionSource),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.home_focus_suggestion),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(R.string.home_focus_improve),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(recommendation.skill.displayName),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = visual.accent,
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = stringResource(recommendation.skill.description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(
-                        if (recommendation.isMeasured) {
-                            R.string.home_focus_source_measured
-                        } else {
-                            R.string.home_focus_source_assessment
-                        },
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(visual.wash),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.TrackChanges,
-                    contentDescription = null,
-                    tint = visual.accent,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Shown instead of a suggestion when onboarding was skipped. */
-@Composable
-private fun TakeAssessmentCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interactionSource),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.home_assessment_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.home_assessment_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
-    }
-}
-
-// ─── Skill focus ────────────────────────────────────────────────────────────
-
-@Composable
-private fun SkillFocusCard(
-    recommendation: SkillRecommendation,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val visual = skillVisual(recommendation.skill)
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        modifier = modifier
-            .fillMaxWidth()
-            .pressScale(interactionSource),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(visual.accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.SportsVolleyball,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(recommendation.skill.displayName),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = stringResource(recommendation.skill.description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(
-                        R.string.home_skill_level,
-                        recommendation.level.number,
-                        stringResource(recommendation.level.label),
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = visual.accent,
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-// ─── Daily progress ─────────────────────────────────────────────────────────
-
-/**
- * Minutes trained, sets captured and accuracy, over a period the athlete picks.
- *
- * ## On "accuracy"
- *
- * This is the mean form score across the period's sessions - the same number the
- * results screen and the session rows show, averaged. It is worth being deliberate
- * about the word: the capstone document uses "accuracy" for MPJPE, which is the
- * *pose model's* accuracy against ground-truth joint positions. That is a different
- * quantity with a different unit, and the two should not be confused in the write-up
- * even though both appear in the same project.
- */
-@Composable
-private fun DailyProgressCard(
-    totals: TrainingTotals,
-    period: TrainingPeriod,
-    onPeriodChange: (TrainingPeriod) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.home_section_daily_progress),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            PeriodSelector(period = period, onPeriodChange = onPeriodChange)
-        }
-        Spacer(Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-        ) {
-            Row(
-                modifier = Modifier.padding(vertical = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatTile(
-                    icon = Icons.Rounded.Schedule,
-                    tint = MinutesColor,
-                    value = totals.totalMinutes,
-                    label = R.string.home_stat_minutes,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    icon = Icons.Rounded.SportsVolleyball,
-                    tint = MaterialTheme.colorScheme.primary,
-                    value = totals.sessionCount,
-                    label = R.string.home_stat_sets,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    icon = Icons.Rounded.TrackChanges,
-                    tint = AccuracyColor,
-                    // Null accuracy is a dash, not a zero. Nothing measurable in the
-                    // period is not the same as having been measured at nought.
-                    value = totals.averageScore,
-                    label = R.string.home_stat_accuracy,
-                    suffix = "%",
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: Color,
-    value: Int?,
-    label: Int,
-    modifier: Modifier = Modifier,
-    suffix: String = "",
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(26.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        if (value == null) {
-            Text(
-                text = stringResource(R.string.home_stat_unavailable),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Row(verticalAlignment = Alignment.Bottom) {
-                AnimatedCounter(
-                    value = value,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                )
-                if (suffix.isNotEmpty()) {
-                    Text(
-                        text = suffix,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun PeriodSelector(period: TrainingPeriod, onPeriodChange: (TrainingPeriod) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .clip(MaterialTheme.shapes.small)
-                .pressScale(remember { MutableInteractionSource() })
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                onClick = { expanded = true },
-                color = Color.Transparent,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(period.label),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowDropDown,
-                        contentDescription = stringResource(R.string.home_change_period),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            TrainingPeriod.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(option.label)) },
-                    onClick = {
-                        onPeriodChange(option)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-// ─── Recent sessions ────────────────────────────────────────────────────────
-
-@Composable
-private fun SectionHeaderWithAction(
-    title: Int,
-    action: Int,
-    onAction: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        VbSectionHeader(text = stringResource(title))
-        if (onAction != null) {
-            Surface(onClick = onAction, color = Color.Transparent) {
-                Text(
-                    text = stringResource(action),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentSessionRow(session: SessionResult, modifier: Modifier = Modifier) {
-    val score = session.formScore()
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SkillAccentRule(skill = session.skill, height = 40)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(session.skill.displayName),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = formatSessionSubtitle(session),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (score != null) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .border(
-                            width = 2.5.dp,
-                            color = scoreColor(score),
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = score.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = scoreColor(score),
-                    )
+            } else {
+                items(state.sessions.take(3), key = { it.id }) { session ->
+                    RecentSessionSummaryCard(session, { onOpenSession(session.id) }, horizontal)
                 }
             }
         }
@@ -747,70 +142,152 @@ private fun RecentSessionRow(session: SessionResult, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun EmptySessionsCard(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.home_no_sessions),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-private fun greetingRes(): Int {
+private fun DashboardGreeting(name: String, modifier: Modifier) {
+    val firstName = name.trim().substringBefore(' ').takeIf { it.isNotBlank() }
     val hour = LocalTime.now().hour
-    return when {
-        hour < 12 -> R.string.home_greeting_morning_named
-        hour < 18 -> R.string.home_greeting_afternoon_named
-        else -> R.string.home_greeting_evening_named
+    val greeting = when {
+        hour < 12 -> if (firstName == null) R.string.home_greeting_morning else R.string.home_greeting_morning_named
+        hour < 18 -> if (firstName == null) R.string.home_greeting_afternoon else R.string.home_greeting_afternoon_named
+        else -> if (firstName == null) R.string.home_greeting_evening else R.string.home_greeting_evening_named
     }
-}
-
-private fun greetingPlainRes(): Int {
-    val hour = LocalTime.now().hour
-    return when {
-        hour < 12 -> R.string.home_greeting_morning
-        hour < 18 -> R.string.home_greeting_afternoon
-        else -> R.string.home_greeting_evening
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("TRAINING HUB", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.5.sp,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(if (firstName == null) stringResource(greeting) else stringResource(greeting, firstName),
+            style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Make every rep count.", fontSize = 29.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface)
+        Text("Practice your skills. Review your form. Track your progress.", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun summaryLine(sessions: List<SessionResult>): String {
-    if (sessions.isEmpty()) return stringResource(R.string.home_no_streak)
-    val scores = sessions.mapNotNull { it.formScore() }
-    return if (scores.isEmpty()) {
-        pluralStringResource(R.plurals.home_sessions_count, sessions.size, sessions.size)
-    } else {
-        stringResource(R.string.home_avg_score, scores.average().toInt())
+private fun TrainingHero(onClick: () -> Unit, modifier: Modifier) {
+    TrainingHeroCard(onClick, modifier)
+}
+
+@Composable
+private fun DashboardOverview(sessions: List<SessionResult>, period: TrainingPeriod,
+    onPeriodChange: (TrainingPeriod) -> Unit, today: LocalDate, modifier: Modifier) {
+    // The weekly activity overview starts on Monday.
+    val selectedSessions = if (period == TrainingPeriod.ThisWeek) {
+        val week = ReportAllowance.week(today)
+        sessions.filter { Instant.ofEpochMilli(it.startedAtEpochMs)
+            .atZone(ZoneId.systemDefault()).toLocalDate() in week..today }
+    } else period.filter(sessions, today = today)
+    val totals = TrainingTotals.from(selectedSessions)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Your momentum", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f))
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(4.dp)) {
+                    Text(stringResource(period.label), style = MaterialTheme.typography.labelLarge)
+                    Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded, { expanded = false }) {
+                    TrainingPeriod.entries.forEach { option -> DropdownMenuItem(
+                        text = { Text(stringResource(option.label)) },
+                        onClick = { onPeriodChange(option); expanded = false }) }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            DashboardStat(totals.sessionCount.toString(), "Sessions", Icons.Rounded.SportsVolleyball, Modifier.weight(1f))
+            DashboardStat(totals.totalMinutes.toString(), "Minutes", Icons.Rounded.Schedule, Modifier.weight(1f))
+            DashboardStat(totals.averageScore?.let { "$it%" } ?: "—", "Est. form", Icons.Rounded.TrackChanges, Modifier.weight(1f))
+        }
+        ActivityStrip(sessions, today)
     }
 }
 
-private val sessionDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
-
-private fun formatSessionSubtitle(session: SessionResult): String {
-    val time = Instant.ofEpochMilli(session.startedAtEpochMs)
-        .atZone(ZoneId.systemDefault())
-        .format(sessionDateFormat)
-    return "${session.repCount} reps  ·  $time"
+@Composable
+private fun DashboardStat(value: String, label: String, icon: ImageVector, modifier: Modifier) {
+    StudentCard(modifier, shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.padding(horizontal = 13.dp, vertical = 15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(34.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .08f), RoundedCornerShape(11.dp)),
+                contentAlignment = Alignment.Center) {
+                Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+            Text(value, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
-/** Long enough to be a summary, short enough that Progress still has a job. */
-private const val RECENT_SESSION_LIMIT = 3
+@Composable
+private fun ActivityStrip(sessions: List<SessionResult>, today: LocalDate) {
+    val zone = ZoneId.systemDefault()
+    val daily = sessions.groupingBy { Instant.ofEpochMilli(it.startedAtEpochMs).atZone(zone).toLocalDate() }.eachCount()
+    val dates = (6 downTo 0).map { today.minusDays(it.toLong()) }
+    val maxCount = dates.maxOf { daily[it] ?: 0 }.coerceAtLeast(1)
+        val accent = MaterialTheme.colorScheme.primary
+    val rail = MaterialTheme.colorScheme.primaryContainer
+    StudentCard(Modifier.fillMaxWidth(), shape = DashboardShape) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Training activity", style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Last 7 days", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                dates.forEach { date ->
+                    val count = daily[date] ?: 0
+                    Column(Modifier.weight(1f).semantics { contentDescription = "$date: $count sessions" },
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Box(Modifier.height(42.dp).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+                            Box(Modifier.width(13.dp).fillMaxHeight().background(rail, CircleShape))
+                            if (count > 0) Box(Modifier.width(13.dp).height((12 + 30f * count / maxCount).dp)
+                                .background(Brush.verticalGradient(listOf(CourtApricot, accent)), CircleShape))
+                        }
+                        Text(date.dayOfWeek.name.take(1), style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (date == today) FontWeight.Bold else FontWeight.Normal,
+                            color = if (date == today) accent else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
 
-private val MinutesColor = Color(0xFF2563EB)
-private val AccuracyColor = Color(0xFF0FA06B)
+@Composable
+private fun FocusCard(recommendation: SkillRecommendation?, savedGoal: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    StudentCard(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = DashboardShape,
+        color = MaterialTheme.colorScheme.primaryContainer) {
+        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            IconTile(Icons.Rounded.TrackChanges)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(if (recommendation == null) "Find your starting point" else "Your training focus",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(if (recommendation == null) stringResource(R.string.home_assessment_title)
+                    else stringResource(recommendation.skill.displayName),
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(if (recommendation == null) stringResource(R.string.home_assessment_body)
+                    else stringResource(recommendation.skill.description),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                if (recommendation != null) {
+                    Text(stringResource(R.string.home_skill_level, recommendation.level.number, stringResource(recommendation.level.label)),
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    if (savedGoal) Text("From your saved training goal", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
+                    Text(stringResource(
+                        if (recommendation.isMeasured) R.string.home_focus_source_measured else R.string.home_focus_source_assessment),
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
+                }
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun IconTile(icon: ImageVector) {
+    Box(Modifier.size(44.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .09f), RoundedCornerShape(14.dp)),
+        contentAlignment = Alignment.Center) {
+        Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+    }
+}

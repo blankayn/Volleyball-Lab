@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="result_angle_summary_title">Guided angle summary</string>
+    <string name="result_angle_summary_body">Live estimates are recorded separately from final analysis. Turning and countdowns are excluded.</string>
+    <string name="result_angle_front">Front view</string>
+    <string name="result_angle_side">Side view</string>
+    <string name="result_angle_rear">Rear view</string>
+    <string name="result_angle_unknown">Unconfirmed view</string>
+    <string name="result_angle_stage_title">Stage %1$d · %2$s</string>
+    <string name="result_angle_live_reps">Live estimates · Good reps: %1$d · Completed: %2$d · Best streak: %3$d</string>
+    <string name="result_angle_live_score">Live estimated form: %1$d/100</string>
+    <string name="result_angle_live_unassessed">Live form: not assessable</string>
+    <string name="result_angle_final_score">Final analysis: %1$d/100 · Detected reps: %2$d</string>
+    <string name="result_angle_final_unassessed">Final analysis: no measurable score · Detected reps: %1$d</string>
+</resources>

@@ -13,7 +13,14 @@ import com.volleyballlab.player.data.auth.GoogleCredentialClient
 import com.volleyballlab.player.data.auth.GoogleIdResult
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CoachAccounts
+import com.volleyballlab.player.domain.model.CourtPosition
+import com.volleyballlab.player.domain.model.DominantHand
+import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.UserRole
+import com.volleyballlab.player.domain.model.AddressOption
+import com.volleyballlab.player.domain.model.AddressArea
+import com.volleyballlab.player.domain.model.ProfileAddress
+import com.volleyballlab.player.domain.repository.AddressCatalog
 import com.volleyballlab.player.domain.repository.AuthOutcome
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.ProfileRepository
@@ -24,6 +31,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 /**
  * The state of one auth form, shared by the login and sign-up screens.
@@ -34,20 +43,41 @@ import kotlinx.coroutines.launch
  * @param notice a non-error message, currently only the password-reset confirmation.
  */
 data class AuthFormState(
-    val name: String = "",
+    val firstName: String = "",
+    val lastName: String = "",
     val email: String = "",
     val password: String = "",
+    val confirmPassword: String = "",
+    val position: CourtPosition? = null,
+    val dominantHand: DominantHand? = null,
+    val goalSkill: Skill? = null,
+    val country: AddressOption? = null,
+    val area: AddressOption? = null,
+    val city: AddressOption? = null,
+    val barangay: AddressOption? = null,
+    val countries: List<AddressOption> = emptyList(),
+    val areas: List<AddressArea> = emptyList(),
+    val barangays: List<AddressOption> = emptyList(),
+    val loadingCountries: Boolean = false,
+    val loadingAreas: Boolean = false,
+    val loadingBarangays: Boolean = false,
+    val locationLoadFailed: Boolean = false,
     val rememberMe: Boolean = true,
     val passwordVisible: Boolean = false,
+    val confirmPasswordVisible: Boolean = false,
     val submitting: Boolean = false,
     @param:StringRes val error: Int? = null,
     @param:StringRes val notice: Int? = null,
 ) {
+    val name: String get() = listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+    val cities: List<AddressOption> get() = areas.firstOrNull { it.id == area?.id }?.cities.orEmpty()
+    val address: ProfileAddress? get() = country?.let { ProfileAddress(it, area, city, barangay) }
     val canSubmitLogin: Boolean
         get() = !submitting && email.isNotBlank() && password.isNotBlank()
 
     val canSubmitSignUp: Boolean
-        get() = canSubmitLogin && name.isNotBlank()
+        get() = canSubmitLogin && firstName.isNotBlank() && lastName.isNotBlank() &&
+            confirmPassword.isNotBlank() && country != null
 }
 
 class AuthViewModel(
@@ -55,16 +85,156 @@ class AuthViewModel(
     private val profileRepository: ProfileRepository,
     private val roleRepository: RoleRepository,
     private val googleCredentialClient: GoogleCredentialClient,
+    private val addressCatalog: AddressCatalog,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AuthFormState())
     val state: StateFlow<AuthFormState> = _state.asStateFlow()
+    private var countriesJob: Job? = null
+    private var areasJob: Job? = null
+    private var barangaysJob: Job? = null
+    private var editingUid: String? = null
 
-    fun onNameChange(value: String) = edit { it.copy(name = value.take(AthleteProfile.MAX_NAME_LENGTH)) }
+    fun loadAccount() {
+        if (editingUid != null) return
+        editingUid = authRepository.currentUid ?: return
+        _state.update { it.copy(submitting = true) }
+        viewModelScope.launch {
+            val profile = profileRepository.current()
+            if (authRepository.currentUid != editingUid) return@launch
+            _state.update { it.copy(firstName = profile.firstName.ifBlank { profile.name.substringBeforeLast(' ', profile.name) }.take(AthleteProfile.MAX_NAME_PART_LENGTH),
+                lastName = profile.lastName.ifBlank { profile.name.substringAfterLast(' ', "") }.take(AthleteProfile.MAX_NAME_PART_LENGTH), country = profile.address?.country, area = profile.address?.area,
+                city = profile.address?.city, barangay = profile.address?.barangay, submitting = true) }
+            try {
+                val countries = addressCatalog.countries()
+                val areas = profile.address?.country?.let { addressCatalog.areas(it.id) }.orEmpty()
+                val barangays = profile.address?.takeIf { it.country.id == "PH" }?.city
+                    ?.let { addressCatalog.barangays(it.id) }.orEmpty()
+                _state.update { it.copy(countries = countries, areas = areas, barangays = barangays,
+                    submitting = false) }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _state.update { it.copy(submitting = false, locationLoadFailed = true) }
+            }
+        }
+    }
+
+    fun saveAccount(onSaved: () -> Unit) {
+        val form = _state.value
+        if (form.submitting || editingUid == null || editingUid != authRepository.currentUid) return
+        when {
+            form.firstName.isBlank() -> return fail(R.string.auth_error_first_name_required)
+            form.lastName.isBlank() -> return fail(R.string.auth_error_last_name_required)
+            form.country == null -> return fail(R.string.auth_error_country_required)
+        }
+        _state.update { it.copy(submitting = true, error = null) }
+        viewModelScope.launch {
+            if (editingUid != authRepository.currentUid) {
+                _state.update { it.copy(submitting = false) }
+                return@launch
+            }
+            try {
+                profileRepository.update { it.copy(name = form.name, firstName = form.firstName.trim(),
+                    lastName = form.lastName.trim(), address = form.address) }
+                if (authRepository.currentUid == editingUid) onSaved()
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                fail(R.string.auth_error_unknown)
+            }
+        }
+    }
+
+    fun loadLocations() {
+        if (_state.value.countries.isNotEmpty() || countriesJob?.isActive == true) return
+        _state.update { it.copy(loadingCountries = true, locationLoadFailed = false) }
+        countriesJob = viewModelScope.launch {
+            try {
+                val countries = addressCatalog.countries()
+                _state.update { it.copy(countries = countries, loadingCountries = false) }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _state.update { it.copy(loadingCountries = false, locationLoadFailed = true) }
+            }
+        }
+    }
+
+    fun onCountryChange(value: AddressOption?) {
+        if (value == _state.value.country) return
+        areasJob?.cancel(); barangaysJob?.cancel()
+        edit { it.copy(country = value, area = null, city = null, barangay = null,
+            areas = emptyList(), barangays = emptyList(), loadingAreas = value != null,
+            loadingBarangays = false, locationLoadFailed = false) }
+        if (value == null) return
+        areasJob = viewModelScope.launch {
+            try {
+                val areas = addressCatalog.areas(value.id)
+                _state.update { if (it.country == value) it.copy(areas = areas, loadingAreas = false) else it }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _state.update { if (it.country == value) it.copy(loadingAreas = false, locationLoadFailed = true) else it }
+            }
+        }
+    }
+
+    fun onAreaChange(value: AddressOption?) {
+        if (value == _state.value.area) return
+        barangaysJob?.cancel()
+        edit { it.copy(area = value, city = null, barangay = null, barangays = emptyList(),
+            loadingBarangays = false, locationLoadFailed = false) }
+    }
+
+    fun onCityChange(value: AddressOption?) {
+        if (value == _state.value.city) return
+        barangaysJob?.cancel()
+        val needsBarangays = value != null && _state.value.country?.id == "PH"
+        edit { it.copy(city = value, barangay = null, barangays = emptyList(),
+            loadingBarangays = needsBarangays, locationLoadFailed = false) }
+        if (!needsBarangays) return
+        barangaysJob = viewModelScope.launch {
+            try {
+                val barangays = addressCatalog.barangays(value.id)
+                _state.update { if (it.city == value && it.country?.id == "PH")
+                    it.copy(barangays = barangays, loadingBarangays = false) else it }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _state.update { if (it.city == value) it.copy(loadingBarangays = false, locationLoadFailed = true) else it }
+            }
+        }
+    }
+
+    fun onBarangayChange(value: AddressOption?) = edit { it.copy(barangay = value) }
+
+    fun retryLocations() {
+        val current = _state.value
+        if (countriesJob?.isActive == true) return
+        _state.update { it.copy(loadingCountries = true, locationLoadFailed = false) }
+        countriesJob = viewModelScope.launch {
+            try {
+                val countries = addressCatalog.countries()
+                val areas = current.country?.let { addressCatalog.areas(it.id) }.orEmpty()
+                val barangays = current.city?.takeIf { current.country?.id == "PH" }
+                    ?.let { addressCatalog.barangays(it.id) }.orEmpty()
+                _state.update { state -> state.copy(countries = countries, loadingCountries = false,
+                    areas = if (state.country == current.country) areas else state.areas,
+                    barangays = if (state.country == current.country && state.city == current.city) barangays else state.barangays) }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                _state.update { it.copy(loadingCountries = false, locationLoadFailed = true) }
+            }
+        }
+    }
+
+    fun onFirstNameChange(value: String) = edit { it.copy(firstName = value.take(AthleteProfile.MAX_NAME_PART_LENGTH)) }
+    fun onLastNameChange(value: String) = edit { it.copy(lastName = value.take(AthleteProfile.MAX_NAME_PART_LENGTH)) }
     fun onEmailChange(value: String) = edit { it.copy(email = value) }
     fun onPasswordChange(value: String) = edit { it.copy(password = value) }
+    fun onConfirmPasswordChange(value: String) = edit { it.copy(confirmPassword = value) }
+    fun onPositionChange(value: CourtPosition?) = edit { it.copy(position = value) }
+    fun onHandChange(value: DominantHand?) = edit { it.copy(dominantHand = value) }
+    fun onGoalSkillChange(value: Skill?) = edit { it.copy(goalSkill = value) }
     fun onRememberChange(value: Boolean) = _state.update { it.copy(rememberMe = value) }
     fun togglePasswordVisible() = _state.update { it.copy(passwordVisible = !it.passwordVisible) }
+    fun toggleConfirmPasswordVisible() = _state.update { it.copy(confirmPasswordVisible = !it.confirmPasswordVisible) }
 
     /** Any edit clears the previous outcome, so stale feedback cannot linger. */
     private fun edit(transform: (AuthFormState) -> AuthFormState) =
@@ -93,8 +263,11 @@ class AuthViewModel(
     fun signUp(onSuccess: (UserRole) -> Unit) {
         val form = _state.value
         val complaint = when {
-            form.name.isBlank() -> R.string.auth_error_name_required
+            form.firstName.isBlank() -> R.string.auth_error_first_name_required
+            form.lastName.isBlank() -> R.string.auth_error_last_name_required
+            form.country == null -> R.string.auth_error_country_required
             else -> validateEmail(form.email) ?: validatePassword(form.password)
+                ?: validatePasswordConfirmation(form.password, form.confirmPassword)
         }
         if (complaint != null) return fail(complaint)
 
@@ -112,8 +285,17 @@ class AuthViewModel(
                     // a network. A coach's name lands in the coach profile the
                     // first time they open their Account tab; duplicating it here
                     // would mean two names to keep in step.
-                    val existing = profileRepository.profile.first()
-                    profileRepository.save(existing.copy(name = form.name.trim()))
+                    profileRepository.update { existing ->
+                        existing.copy(
+                            name = form.name.trim(),
+                            firstName = form.firstName.trim(),
+                            lastName = form.lastName.trim(),
+                            address = form.address,
+                            position = form.position ?: existing.position,
+                            dominantHand = form.dominantHand ?: existing.dominantHand,
+                            goalSkill = form.goalSkill ?: existing.goalSkill,
+                        )
+                    }
                 }
             }
         }
@@ -183,9 +365,7 @@ class AuthViewModel(
      */
     private suspend fun mirrorAccountNameIntoProfile() {
         val account = authRepository.currentUser.first() ?: return
-        val existing = profileRepository.profile.first()
-        if (existing.hasName || account.displayName.isBlank()) return
-        profileRepository.save(existing.copy(name = account.displayName))
+        if (account.displayName.isNotBlank()) profileRepository.seedAccountName(account.displayName)
     }
 
     /**
@@ -220,8 +400,9 @@ class AuthViewModel(
     }
 
     private fun submit(onSuccess: (UserRole) -> Unit, action: suspend () -> AuthOutcome) {
+        if (_state.value.submitting) return
+        _state.update { it.copy(submitting = true, error = null, notice = null) }
         viewModelScope.launch {
-            _state.update { it.copy(submitting = true, error = null, notice = null) }
             when (val outcome = action()) {
                 is AuthOutcome.Success -> {
                     // Read after the action, never from the form: by now there is a
@@ -252,6 +433,7 @@ class AuthViewModel(
                     profileRepository = appContainer.profileRepository,
                     roleRepository = appContainer.roleRepository,
                     googleCredentialClient = appContainer.googleCredentialClient,
+                    addressCatalog = appContainer.addressCatalog,
                 )
             }
         }
@@ -278,5 +460,12 @@ class AuthViewModel(
         @StringRes
         fun validatePassword(password: String): Int? =
             if (password.length >= MIN_PASSWORD_LENGTH) null else R.string.auth_error_weak_password
+
+        @StringRes
+        fun validatePasswordConfirmation(password: String, confirmation: String): Int? = when {
+            confirmation.isBlank() -> R.string.auth_error_confirm_required
+            password != confirmation -> R.string.auth_error_password_mismatch
+            else -> null
+        }
     }
 }

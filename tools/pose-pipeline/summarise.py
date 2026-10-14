@@ -31,7 +31,7 @@ LABELS = ("ok", "fault")
 
 def load(data_dir: Path) -> dict[str, dict[str, list[float]]]:
     """Gathers clean-frame feature values per label across every clip in a run."""
-    collected = {label: {name: [] for name in features.ANGLE_NAMES} for label in LABELS}
+    collected = {label: {name: [] for name in features.FEATURE_NAMES} for label in LABELS}
     clips = 0
 
     for path in sorted(data_dir.glob("*_frames.csv")):
@@ -44,7 +44,7 @@ def load(data_dir: Path) -> dict[str, dict[str, list[float]]]:
                 # form; it is evidence about the camera.
                 if row["valid"] != "1" or int(row["low_visibility_count"]) > 0:
                     continue
-                for name in features.ANGLE_NAMES:
+                for name in features.FEATURE_NAMES:
                     if row[name]:
                         collected[row["label"]][name].append(float(row[name]))
 
@@ -61,28 +61,31 @@ def main() -> int:
     collected = load(Path(args.data))
     ok, fault = collected["ok"], collected["fault"]
 
-    counts = (len(ok[features.ANGLE_NAMES[0]]), len(fault[features.ANGLE_NAMES[0]]))
+    counts = (len(ok[features.FEATURE_NAMES[0]]), len(fault[features.FEATURE_NAMES[0]]))
     if not all(counts):
         print(f"Need clean frames of both classes; have ok={counts[0]} fault={counts[1]}.",
               file=sys.stderr)
         return 1
 
     print(f"clean frames: {counts[0]} ok, {counts[1]} fault\n")
-    print(f"{'feature':<20}{'ok':>10}{'fault':>10}{'delta':>10}{'separation':>12}")
+    print(f"{'feature':<20}{'ok':>10}{'fault':>10}{'delta':>10}{'separation':>12}  unit")
 
     rows = []
-    for name in features.ANGLE_NAMES:
+    for name in features.FEATURE_NAMES:
         a, b = np.array(ok[name]), np.array(fault[name])
         if not a.size or not b.size:
             continue
         delta = float(np.mean(a) - np.mean(b))
-        # Pooled spread, so a feature measured in degrees and one measured in
-        # torso-lengths can be ranked against each other at all.
+        # Pooled spread, so degrees and metres can be ranked against each other at
+        # all. The unit is printed beside every row because the raw means cannot
+        # be compared across rows even though the separations can.
         spread = float(np.sqrt((np.var(a) + np.var(b)) / 2)) or 1e-9
         rows.append((abs(delta / spread), name, float(np.mean(a)), float(np.mean(b)), delta))
 
     for separation, name, mean_ok, mean_fault, delta in sorted(rows, reverse=True):
-        print(f"{name:<20}{mean_ok:10.2f}{mean_fault:10.2f}{delta:10.2f}{separation:12.2f}")
+        unit = features.FEATURE_UNITS.get(name, "")
+        print(f"{name:<20}{mean_ok:10.2f}{mean_fault:10.2f}{delta:10.2f}"
+              f"{separation:12.2f}  {unit}")
 
     print("\nSeparation is the mean gap in pooled standard deviations. Above ~0.8 is a\n"
           "feature worth keeping; near zero is one the model cannot learn from.")

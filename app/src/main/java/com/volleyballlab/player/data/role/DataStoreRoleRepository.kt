@@ -38,6 +38,14 @@ private val Context.roleStore: DataStore<Preferences> by preferencesDataStore(na
 class DataStoreRoleRepository(
     private val context: Context,
     private val authRepository: AuthRepository,
+    /**
+     * The role as the cloud knows it (`users/{uid}.role`, written by the coach
+     * web portal at registration). Consulted only when this device has never
+     * recorded an explicit choice for the account: a deliberate switch on this
+     * phone — either direction — always wins over a row written elsewhere.
+     * Null in unit tests, where there is no backend.
+     */
+    private val cloudRole: Flow<UserRole?> = kotlinx.coroutines.flow.flowOf(null),
 ) : RoleRepository {
 
     override val role: Flow<UserRole> = combine(
@@ -48,9 +56,21 @@ class DataStoreRoleRepository(
             // there, which is a recoverable state; a crash loop is not.
             if (failure is IOException) emit(emptyPreferences()) else throw failure
         },
-    ) { user, preferences ->
+        cloudRole,
+    ) { user, preferences, cloud ->
         val scope = UserScope.of(user?.uid) ?: return@combine UserRole.Player
-        UserRole.fromNameOrPlayer(preferences[scope.string(KEY_ROLE)])
+        // Presence of the key is the record of a choice. Its value still goes
+        // through fromNameOrPlayer, so a name written by a newer build degrades
+        // to the player shell rather than crashing this one.
+        if (preferences.contains(scope.string(KEY_ROLE))) {
+            UserRole.fromNameOrPlayer(preferences[scope.string(KEY_ROLE)])
+        } else {
+            // Fresh install, or an account that never touched the switch: the
+            // cloud row — set when a coach registers on the web portal — decides.
+            // A coach signing in on a new phone lands in the coach shell with no
+            // test account and no Profile detour.
+            cloud ?: UserRole.Player
+        }
     }
 
     override suspend fun current(): UserRole = role.first()
@@ -66,3 +86,6 @@ class DataStoreRoleRepository(
         const val KEY_ROLE = "role"
     }
 }
+
+internal suspend fun clearRoleAccount(context: Context, uid: String) =
+    com.volleyballlab.player.data.account.clearAccountPreferences(context.roleStore, uid)

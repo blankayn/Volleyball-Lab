@@ -47,6 +47,13 @@ data class AthleteProfile(
     val name: String = "",
     val position: CourtPosition? = null,
     val dominantHand: DominantHand? = null,
+    val goalSkill: Skill? = null,
+    val weeklySessionGoal: Int = 3,
+    val goalText: String = "",
+    val photoPath: String? = null,
+    val firstName: String = "",
+    val lastName: String = "",
+    val address: ProfileAddress? = null,
 ) {
     val hasName: Boolean get() = name.isNotBlank()
 
@@ -72,7 +79,8 @@ data class AthleteProfile(
          * Long enough for a full name, short enough that the avatar and the
          * header cannot be used to store an essay.
          */
-        const val MAX_NAME_LENGTH = 40
+        const val MAX_NAME_PART_LENGTH = 40
+        const val MAX_NAME_LENGTH = MAX_NAME_PART_LENGTH * 2 + 1
 
         private val WHITESPACE = Regex("\\s+")
     }

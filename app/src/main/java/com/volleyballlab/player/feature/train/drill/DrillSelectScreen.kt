@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,10 +24,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedButton
+import com.volleyballlab.player.feature.train.skill.SkillLearningDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import com.volleyballlab.player.VolleyballLabApplication
+import com.volleyballlab.player.data.drill.DrillEntitlement
+import com.volleyballlab.player.domain.model.DrillAccessPolicy
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -83,6 +92,13 @@ fun DrillSelectScreen(
         factory = DrillSelectViewModel.factory(skill),
     )
     val drills by viewModel.drills.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val graph = remember(context) { (context.applicationContext as VolleyballLabApplication).container }
+    val entitlement by graph.drillAccessController.entitlement.collectAsStateWithLifecycle(DrillEntitlement())
+    var upgrade by remember { mutableStateOf(false) }
+    if (upgrade) DrillUpgradeDialog { upgrade = false }
+    var learning by remember { mutableStateOf(false) }
+    if (learning) SkillLearningDialog(skill) { learning = false }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -113,11 +129,13 @@ fun DrillSelectScreen(
             }
         }
 
+        item { OutlinedButton(onClick = { learning = true }, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) { Text("Learn correct form & common mistakes") } }
         itemsIndexed(drills, key = { _, drill -> drill.id }) { index, drill ->
             EntranceAnimation(index = index + 1) {
                 DrillRow(
                     drill = drill,
-                    onClick = { onDrillSelected(drill) },
+                    onClick = { if (entitlement.canStart(drill)) onDrillSelected(drill) else upgrade = true },
+                    locked = !entitlement.canStart(drill),
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
             }
@@ -126,7 +144,7 @@ fun DrillSelectScreen(
 }
 
 @Composable
-private fun DrillRow(drill: Drill, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DrillRow(drill: Drill, onClick: () -> Unit, locked: Boolean, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
@@ -152,12 +170,13 @@ private fun DrillRow(drill: Drill, onClick: () -> Unit, modifier: Modifier = Mod
                 Text(text = drill.name, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = drill.description,
+                    text = if (locked) "Full instructions and practice require Pro." else drill.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (drill.id !in DrillAccessPolicy.starterIds) MetaChip(if (locked) "Pro · Locked" else "Pro")
                     MetaChip(stringResource(drill.level.displayName))
                     MetaChip(
                         pluralStringResource(

@@ -110,3 +110,6 @@ class DataStoreAssessmentRepository(
 
 private inline fun <reified T : Enum<T>> String.toEnumOrNull(): T? =
     enumValues<T>().firstOrNull { it.name == this }
+
+internal suspend fun clearAssessmentAccount(context: Context, uid: String) =
+    com.volleyballlab.player.data.account.clearAccountPreferences(context.assessmentStore, uid)

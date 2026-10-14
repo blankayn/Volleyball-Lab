@@ -32,6 +32,8 @@ class TabDerivationsTest {
     fun `no sessions produces the empty summary`() {
         val summary = ProgressSummary.from(emptyList())
 
+        assertTrue(!ProgressSummary.Empty.loaded)
+        assertTrue(summary.loaded)
         assertEquals(0, summary.sessionCount)
         assertNull(summary.meanScore)
         assertTrue(summary.trend.isEmpty())
@@ -111,6 +113,12 @@ class TabDerivationsTest {
     }
 
     // ── Coach ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun `empty coach history finishes loading before showing empty advice`() {
+        assertTrue(!CoachAdvice.Empty.loaded)
+        assertTrue(CoachAdvice.from(emptyList()).loaded)
+    }
 
     @Test
     fun `a cue measured too few times yields no advice at all`() {

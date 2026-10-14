@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -210,10 +212,12 @@ fun AuthField(
     passwordVisible: Boolean = false,
     onTogglePasswordVisible: (() -> Unit)? = null,
     enabled: Boolean = true,
+    @StringRes errorMessage: Int? = null,
 ) {
+    val fieldLabel = stringResource(label)
     Column(modifier.fillMaxWidth()) {
         Text(
-            text = stringResource(label),
+            text = fieldLabel,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = TitleColor,
@@ -223,6 +227,8 @@ fun AuthField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
+            isError = errorMessage != null,
+            supportingText = errorMessage?.let { { Text(stringResource(it)) } },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             placeholder = {
@@ -254,7 +260,7 @@ fun AuthField(
                             },
                         ),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable(onClick = toggle),
+                        modifier = Modifier.clickable(enabled = enabled, onClick = toggle),
                     )
                 }
             },
@@ -272,7 +278,7 @@ fun AuthField(
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = Color.White,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = fieldLabel },
         )
     }
 }

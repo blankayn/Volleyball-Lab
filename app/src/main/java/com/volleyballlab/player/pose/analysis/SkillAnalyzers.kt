@@ -188,26 +188,37 @@ class BlockAnalyzer : SkillAnalyzer {
      * decreases toward the camera, so hands in front of the shoulders produce a
      * positive value here.
      *
-     * Only meaningful from a side-on camera, so it is suppressed when the athlete
-     * is square to the lens. Reporting a confident zero from a front-on view
-     * would tell an athlete with excellent penetration that they have none.
+     * Measured along the athlete's own forward direction, not along camera depth,
+     * so it means the same thing from any angle the face is visible from.
+     *
+     * ## What this used to do, and why it was worse than wrong
+     *
+     * It read `shoulderCentre.z - wristMid.z` and suppressed itself when
+     * [Angles.facingCamera] exceeded 0.9. Both halves were backwards.
+     *
+     * A raw z difference is anatomical penetration only when the athlete faces
+     * the lens; side-on, their forward runs along camera **x**, and the
+     * expression measures lateral hand offset instead. Correlation against the
+     * true quantity, over real frames: **+0.92** when square to the camera,
+     * **-0.26** when most side-on. The gate then discarded exactly the frames
+     * where the measurement was nearly exact and kept the ones where it was
+     * anticorrelated.
+     *
+     * Worse, the app's own remediation string tells an athlete whose cues went
+     * unmeasured to "film from the side" - and this was the only cue that
+     * returned null for camera reasons. Following the advice moved you further
+     * into the broken regime.
+     *
+     * With the projection there is no regime to gate on: [Angles.alongForward]
+     * returns null only when the pose itself cannot say which way the athlete
+     * faces, which is the honest reason to decline.
      */
     private fun penetrationMetres(frame: PoseFrame): Float? {
-        if (Angles.facingCamera(frame) > MAX_FACING_FOR_DEPTH) return null
-        val shoulderZ = Angles.shoulderCentre(frame).z
-        val wristZ = (
-            frame.world(BodyPoint.LEFT_WRIST).z + frame.world(BodyPoint.RIGHT_WRIST).z
-            ) / 2f
-        return shoulderZ - wristZ
-    }
-
-    private companion object {
-        /**
-         * Above this the shoulders are too square to the camera for depth
-         * differences to be reliable. 0.9 corresponds to roughly 25 degrees off
-         * fully side-on.
-         */
-        const val MAX_FACING_FOR_DEPTH = 0.9f
+        val wrists = Angles.midpoint(
+            frame.world(BodyPoint.LEFT_WRIST),
+            frame.world(BodyPoint.RIGHT_WRIST),
+        )
+        return Angles.alongForward(frame, Angles.shoulderCentre(frame), wrists)
     }
 }
 

@@ -8,11 +8,10 @@ import com.volleyballlab.player.domain.repository.DrillRepository
 /**
  * The starter drill catalogue, compiled into the app.
  *
- * Three drills per skill, ordered easiest first, chosen so each one produces a
- * movement the corresponding analyzer can actually segment. A drill that never
- * returns the athlete to a resting posture between reps will not count reps
- * correctly, so "hold a low platform for thirty seconds" is deliberately absent
- * even though it is a real passing exercise.
+ * Three drills per skill, ordered easiest first, with repetitions performed from
+ * a fixed position. Jump variants take off and land in the same spot. Each rep
+ * returns to a ready posture, rather than holding a single pose continuously.
+ * Existing IDs stay stable so saved sessions and assignments retain their links.
  *
  * This is a stand-in for coach-authored content, not a design decision to ship a
  * fixed list. It exists so the training flow is exercisable end to end while
@@ -33,8 +32,8 @@ class StaticDrillRepository : DrillRepository {
                 id = "serve-standing-float",
                 skill = Skill.Serving,
                 name = "Standing float serve",
-                description = "Serve from behind the end line with no approach. " +
-                    "Work on a repeatable toss and a firm, flat contact.",
+                description = "Serve from a fixed, grounded stance. " +
+                    "Practice a repeatable toss and firm, flat contact, then reset in place.",
                 targetReps = 10,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -42,9 +41,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "serve-jump-float",
                 skill = Skill.Serving,
-                name = "Jump float serve",
-                description = "Add a one-step approach and a small jump. " +
-                    "The contact should still be flat, with no wrist snap.",
+                name = "In-place jump float serve",
+                description = "Use a controlled toss and small vertical jump from the same spot. " +
+                    "Keep the contact flat and land back in your starting position.",
                 targetReps = 10,
                 estimatedMinutes = 8,
                 level = DrillLevel.Intermediate,
@@ -52,9 +51,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "serve-topspin-jump",
                 skill = Skill.Serving,
-                name = "Topspin jump serve",
-                description = "Full approach, high toss in front, and a hard " +
-                    "snap over the top of the ball.",
+                name = "In-place topspin jump serve",
+                description = "Time a vertical jump to a controlled toss from a fixed stance. " +
+                    "Reach high, contact over the ball, and land in the same spot.",
                 targetReps = 8,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,
@@ -65,8 +64,8 @@ class StaticDrillRepository : DrillRepository {
                 id = "receive-wall-platform",
                 skill = Skill.Receiving,
                 name = "Wall platform passes",
-                description = "Pass repeatedly against a wall from three metres. " +
-                    "Reset to a tall ready position between every contact.",
+                description = "Pass gentle wall rebounds from a fixed stance. " +
+                    "Use a stable platform and reset upright between contacts.",
                 targetReps = 15,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -74,9 +73,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "receive-short-court",
                 skill = Skill.Receiving,
-                name = "Short-court passing",
-                description = "Controlled passing with a partner inside the " +
-                    "attack line. Emphasis on a still, angled platform.",
+                name = "Stationary partner passing",
+                description = "Receive controlled partner feeds delivered within your reach. " +
+                    "Keep your feet in place and direct a still, angled platform toward the target.",
                 targetReps = 20,
                 estimatedMinutes = 8,
                 level = DrillLevel.Beginner,
@@ -84,9 +83,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "receive-serve-to-target",
                 skill = Skill.Receiving,
-                name = "Serve receive to target",
-                description = "Receive live serves and pass to the setter's " +
-                    "position. Read the serve early and move before it arrives.",
+                name = "Fixed-stance serve receive",
+                description = "Receive gentle serves directed into your ready position. " +
+                    "Pass toward a fixed target and pause when a ball is outside your reach.",
                 targetReps = 15,
                 estimatedMinutes = 10,
                 level = DrillLevel.Intermediate,
@@ -97,8 +96,8 @@ class StaticDrillRepository : DrillRepository {
                 id = "set-wall-reps",
                 skill = Skill.Setting,
                 name = "Wall setting reps",
-                description = "Set against a wall above head height. " +
-                    "Hands form early, above the forehead, every time.",
+                description = "Set gentle wall rebounds from the same spot. " +
+                    "Prepare balanced hands above the forehead and extend under control.",
                 targetReps = 20,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -106,9 +105,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "set-toss-to-target",
                 skill = Skill.Setting,
-                name = "Set to target from a toss",
-                description = "Receive a tossed ball and set to a fixed target. " +
-                    "Drive the set with the legs, then finish extended.",
+                name = "Stationary set to target",
+                description = "Use a controlled self-toss or partner feed above your forehead. " +
+                    "Keep a fixed stance and coordinate leg and arm extension toward the target.",
                 targetReps = 15,
                 estimatedMinutes = 8,
                 level = DrillLevel.Beginner,
@@ -116,9 +115,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "set-back-set",
                 skill = Skill.Setting,
-                name = "Back set under pressure",
-                description = "Set behind you off a moving pass without " +
-                    "telegraphing the direction.",
+                name = "Controlled stationary back set",
+                description = "Set toward a rear target from a balanced, fixed stance. " +
+                    "Use an easy feed above the forehead and finish with coordinated extension.",
                 targetReps = 12,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,
@@ -129,8 +128,8 @@ class StaticDrillRepository : DrillRepository {
                 id = "spike-standing-swing",
                 skill = Skill.Spiking,
                 name = "Standing arm swing",
-                description = "Hit from a standing position with no approach. " +
-                    "Isolates the swing so the arm path can be corrected.",
+                description = "Keep both feet grounded and practice a controlled arm swing. " +
+                    "Use a feed within reach and reset your stance after each hit.",
                 targetReps = 12,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -138,9 +137,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-three-step",
                 skill = Skill.Spiking,
-                name = "Three-step approach",
-                description = "Full three-step approach into a hit. " +
-                    "Load deep on the last step and swing through the ball.",
+                name = "In-place spike timing",
+                description = "Time a vertical jump to a controlled partner feed. " +
+                    "Load from the same spot, contact high, and land back in your starting position.",
                 targetReps = 12,
                 estimatedMinutes = 10,
                 level = DrillLevel.Intermediate,
@@ -148,9 +147,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-four-step-lines",
                 skill = Skill.Spiking,
-                name = "Four-step, line and cross",
-                description = "Alternate hitting line and cross-court from a " +
-                    "four-step approach, keeping the same swing.",
+                name = "In-place line and cross",
+                description = "Alternate line and cross-court targets with a controlled swing. " +
+                    "Use a vertical jump from the same spot for each attempt.",
                 targetReps = 10,
                 estimatedMinutes = 12,
                 level = DrillLevel.Advanced,
@@ -161,8 +160,8 @@ class StaticDrillRepository : DrillRepository {
                 id = "block-ready-jumps",
                 skill = Skill.Blocking,
                 name = "Ready-position block jumps",
-                description = "Block jump from a still ready position at the net. " +
-                    "Press the hands over, not up.",
+                description = "Jump vertically from a fixed ready position and land in the same spot. " +
+                    "Extend both arms and present the hands slightly forward.",
                 targetReps = 15,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -170,9 +169,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "block-lateral-shuffle",
                 skill = Skill.Blocking,
-                name = "Lateral shuffle block",
-                description = "Shuffle two positions along the net and block. " +
-                    "Square up before jumping, never while drifting.",
+                name = "In-place block alignment",
+                description = "Keep a square, balanced stance while practicing block alignment. " +
+                    "Jump vertically, reach with both arms, and reset in the same spot.",
                 targetReps = 12,
                 estimatedMinutes = 8,
                 level = DrillLevel.Intermediate,
@@ -180,9 +179,9 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "block-read-setter",
                 skill = Skill.Blocking,
-                name = "Read blocking off the setter",
-                description = "Watch the setter, commit late, and close the " +
-                    "block on the hitter they choose.",
+                name = "Stationary read blocking",
+                description = "Watch a partner's controlled feed into your fixed blocking area. " +
+                    "Time a vertical jump and present both hands without changing position.",
                 targetReps = 10,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,

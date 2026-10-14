@@ -34,11 +34,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
+import com.volleyballlab.player.feature.coach.AssignmentResultActions
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.CueUnit
+import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.SessionResult
+import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.ui.component.EntranceAnimation
 import com.volleyballlab.player.ui.component.ScoreArc
@@ -47,6 +50,7 @@ import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.VbMotion
 import com.volleyballlab.player.ui.theme.vbTween
 import java.util.Locale
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -136,6 +140,8 @@ fun SessionResultScreen(
     onDone: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    assignmentId: String? = null,
+    doneLabel: String? = null,
 ) {
     val viewModel: SessionResultViewModel = viewModel(
         key = "result-$sessionId",
@@ -165,6 +171,8 @@ fun SessionResultScreen(
             onDone = onDone,
             contentPadding = contentPadding,
             modifier = modifier,
+            assignmentId = assignmentId ?: current.session.assignmentId,
+            doneLabel = doneLabel,
         )
     }
 }
@@ -175,9 +183,12 @@ private fun ResultContent(
     onDone: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    assignmentId: String? = null,
+    doneLabel: String? = null,
 ) {
     val session = state.session
     val score = session.formScore()
+    val playableVideo = session.videoPath?.takeIf { File(it).isFile }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -219,6 +230,50 @@ private fun ResultContent(
             }
         }
 
+        if (session.angleStages.isNotEmpty()) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                    Text(
+                        text = stringResource(R.string.result_angle_summary_title),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.result_angle_summary_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            itemsIndexed(session.angleStages.sortedBy { it.stageIndex }) { _, stage ->
+                AngleStageCard(session, stage, Modifier.padding(horizontal = 20.dp))
+            }
+        }
+
+        item { DetailedReportCard(session, Modifier.padding(horizontal = 20.dp)) }
+
+        if (playableVideo != null) {
+            item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                    Text(
+                        text = stringResource(R.string.result_review_video),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AnnotatedSessionVideo(session, playableVideo)
+                }
+            }
+        } else {
+            item {
+                Text(
+                    text = stringResource(R.string.result_video_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                )
+            }
+        }
+
         if (score != null) {
             session.weakestCue()?.let { weakest ->
                 item {
@@ -253,6 +308,10 @@ private fun ResultContent(
             }
         }
 
+        if (assignmentId != null) {
+            item { AssignmentResultActions(assignmentId, session, Modifier.padding(horizontal = 20.dp)) }
+        }
+
         item {
             EntranceAnimation(index = 8) {
                 Button(
@@ -262,9 +321,64 @@ private fun ResultContent(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                 ) {
-                    Text(stringResource(R.string.result_save))
+                    Text(doneLabel ?: if (assignmentId != null) "Back to assignment" else stringResource(R.string.result_save))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AngleStageCard(
+    session: SessionResult,
+    stage: SessionAngleStage,
+    modifier: Modifier = Modifier,
+) {
+    // Do not attribute a repetition that crosses a turning/countdown boundary.
+    val finalReps = session.reps.filter {
+        it.startMs >= stage.startMs && it.endMs <= stage.endMs
+    }
+    val scores = finalReps.mapNotNull { it.formScore(session.skill) }
+    val finalScore = scores.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
+    val angleLabel = stringResource(
+        when (stage.angle) {
+            CameraAngle.Front -> R.string.result_angle_front
+            CameraAngle.Side -> R.string.result_angle_side
+            CameraAngle.Rear -> R.string.result_angle_rear
+            CameraAngle.Unknown -> R.string.result_angle_unknown
+        }
+    )
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.result_angle_stage_title, stage.stageIndex + 1, angleLabel),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = stringResource(
+                    R.string.result_angle_live_reps, stage.validRepCount, stage.liveRepCount, stage.bestStreak,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = stage.estimatedFormScore?.let {
+                    stringResource(R.string.result_angle_live_score, it)
+                } ?: stringResource(R.string.result_angle_live_unassessed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = finalScore?.let {
+                    stringResource(R.string.result_angle_final_score, it, finalReps.size)
+                } ?: stringResource(R.string.result_angle_final_unassessed, finalReps.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.pose.model.PoseFrame
 
 /**
@@ -49,25 +50,51 @@ class LiveRepCounter(
         val minSignalRange: Float = 1e-3f,
         /** Frames to observe before counting anything, while the range settles. */
         val warmUpFrames: Int = 15,
+        val maxRepDurationMs: Long = 6_000,
+        val maxFrameGapMs: Long = 500,
     )
 
     var count: Int = 0
         private set
+
+    var lastCompletedWindow: RepWindow? = null
+        private set
+
+    /** Contact is confirmed only after the signal returns to rest. */
+    val currentPhase: RepPhase? get() = if (isInRep) null else RepPhase.Preparation
+
+    val partialWindow: RepWindow? get() = activeFrames.firstOrNull()?.let { first ->
+        RepWindow(count, activeFrames.toList(), mapOf(RepPhase.Preparation to first), Angles.hipCentreImage(first).y)
+    }
 
     private var observedLow = Float.NaN
     private var observedHigh = Float.NaN
     private var isInRep = false
     private var repStartMs = 0L
     private var framesSeen = 0
+    private var lastTimestampMs: Long? = null
+    private val preparationFrames = ArrayDeque<PoseFrame>()
+    private val activeFrames = mutableListOf<PoseFrame>()
 
     fun reset() {
         count = 0
+        resetSegment()
+    }
+
+    /** Abandons incomplete movement while keeping completed session reps. */
+    fun resetSegment() {
         observedLow = Float.NaN
         observedHigh = Float.NaN
         isInRep = false
         repStartMs = 0L
         framesSeen = 0
+        lastTimestampMs = null
+        lastCompletedWindow = null
+        preparationFrames.clear()
+        activeFrames.clear()
     }
+
+    fun abandon() = resetSegment()
 
     /**
      * Feeds one frame in.
@@ -76,7 +103,16 @@ class LiveRepCounter(
      *   caller can drive a one-shot animation without having to diff [count].
      */
     fun onFrame(frame: PoseFrame): Boolean {
-        val signal = analyzer.segmentationSignal(frame) ?: return false
+        val previous = lastTimestampMs
+        if (previous != null && (frame.timestampMs <= previous || frame.timestampMs - previous > config.maxFrameGapMs)) resetSegment()
+        lastTimestampMs = frame.timestampMs
+        lastCompletedWindow = null
+        val signal = analyzer.segmentationSignal(frame)?.takeIf { it.isFinite() }
+        if (signal == null) { resetSegment(); return false }
+        if (isInRep) activeFrames.add(frame) else {
+            preparationFrames.addLast(frame)
+            while (preparationFrames.size > 1 && frame.timestampMs - preparationFrames.first().timestampMs > 500L) preparationFrames.removeFirst()
+        }
         framesSeen++
 
         if (observedLow.isNaN()) {
@@ -106,7 +142,15 @@ class LiveRepCounter(
             if (signal >= activate) {
                 isInRep = true
                 repStartMs = frame.timestampMs
+                activeFrames.clear()
+                activeFrames.addAll(preparationFrames)
+                preparationFrames.clear()
             }
+            return false
+        }
+
+        if (frame.timestampMs - repStartMs > config.maxRepDurationMs) {
+            resetSegment()
             return false
         }
 
@@ -114,10 +158,36 @@ class LiveRepCounter(
             isInRep = false
             val duration = frame.timestampMs - repStartMs
             if (duration >= config.minRepDurationMs) {
+                lastCompletedWindow = buildWindow()
+                activeFrames.clear()
+                preparationFrames.addLast(frame)
+                if (lastCompletedWindow == null) return false
                 count++
                 return true
             }
+            activeFrames.clear()
+            preparationFrames.addLast(frame)
         }
         return false
+    }
+
+    private fun buildWindow(): RepWindow? {
+        if (activeFrames.size < 3) return null
+        val signals = activeFrames.map { analyzer.segmentationSignal(it) ?: return null }
+        val contactIndex = signals.indices.maxByOrNull { signals[it] } ?: return null
+        if (contactIndex == 0 || contactIndex == activeFrames.lastIndex) return null
+        val loadingIndex = (0..contactIndex).minByOrNull { signals[it] } ?: 0
+        val first = activeFrames.first()
+        return RepWindow(
+            index = count,
+            frames = activeFrames.toList(),
+            phaseFrames = mapOf(
+                RepPhase.Preparation to first,
+                RepPhase.Loading to activeFrames[loadingIndex],
+                RepPhase.Contact to activeFrames[contactIndex],
+                RepPhase.FollowThrough to activeFrames.last(),
+            ),
+            baselineHipImageY = Angles.hipCentreImage(first).y,
+        )
     }
 }

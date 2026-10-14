@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_card_estimated_form">Est. form</string>
+    <string name="session_card_form_percent">%1$d%%</string>
+    <string name="session_card_not_assessed">Not assessed</string>
+    <string name="session_card_metadata">%1$s · %2$s</string>
+    <plurals name="session_card_reps">
+        <item quantity="one">%1$d rep</item>
+        <item quantity="other">%1$d reps</item>
+    </plurals>
+    <string name="session_card_no_estimate">No form estimate. Check camera framing.</string>
+    <string name="session_card_focus">Focus next: %1$s</string>
+    <string name="session_card_consistent">Strongest area: %1$s</string>
+    <string name="session_card_limited_capture">Limited capture. Record more repetitions.</string>
+    <string name="session_card_open_technique">Open your technique summary.</string>
+    <string name="session_card_view_summary">View summary</string>
+</resources>

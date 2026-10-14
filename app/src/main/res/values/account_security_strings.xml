@@ -1,0 +1,5 @@
+<resources>
+    <string name="auth_error_recent_login">Sign in again, then retry this account change.</string>
+    <string name="auth_error_no_session">Sign in to manage your account.</string>
+    <string name="auth_error_rate_limit">Too many requests. Wait a few minutes before trying again.</string>
+</resources>

@@ -8,5 +8,7 @@
     -->
     <exclude domain="file" path="sessions/" />
     <exclude domain="file" path="captures/" />
+    <exclude domain="file" path="video_reviews/" />
+    <exclude domain="file" path="profile_photos/" />
     <exclude domain="sharedpref" path="auth.xml" />
 </full-backup-content>

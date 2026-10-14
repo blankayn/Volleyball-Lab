@@ -12,6 +12,7 @@ import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.domain.repository.SessionRepository
+import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -56,7 +57,15 @@ private val Context.sessionStore: DataStore<Preferences> by preferencesDataStore
 class DataStoreSessionRepository(
     private val context: Context,
     private val authRepository: AuthRepository,
+    /**
+     * Best-effort cloud mirror. Runs after the local write lands, so history on
+     * this phone never waits on the network and never fails because of it. Null
+     * in unit tests, where there is no backend.
+     */
+    private val cloud: SessionCloudStore? = null,
 ) : SessionRepository, SessionDirectory {
+
+    private val cloudMirror = cloud?.let { SessionCloudMirror(it, { authRepository.currentUid }) }
 
     /**
      * One athlete's sessions, never the phone's.
@@ -102,29 +111,53 @@ class DataStoreSessionRepository(
             }
 
     override suspend fun save(session: SessionResult) {
-        val scope = UserScope.of(authRepository.currentUid) ?: return
+        val ownerUid = authRepository.currentUid ?: return
+        val scope = UserScope.of(ownerUid) ?: return
+        val evictedVideos = mutableListOf<String>()
         context.sessionStore.edit { preferences ->
             val current = preferences[scope.string(KEY_SESSIONS)].decodeSessions()
-            val updated = (current.filterNot { it.id == session.id } + session)
+            val all = (current.filterNot { it.id == session.id } + session)
                 // Replace by id rather than append, so re-saving a session after a
                 // threshold change updates it instead of duplicating it.
                 .sortedByDescending { it.startedAtEpochMs }
-                .take(MAX_SESSIONS)
+            val updated = all.take(MAX_SESSIONS)
+            evictedVideos += all.drop(MAX_SESSIONS).mapNotNull { it.videoPath }
             preferences[scope.string(KEY_SESSIONS)] =
                 json.encodeToString(updated.map { it.toRecord() })
         }
+        evictedVideos.forEach(::deletePrivateVideo)
+        // After the local write, never before: the phone's history is the source
+        // of truth and the cloud row is what the coach portal reads.
+        cloudMirror?.upload(ownerUid, session)
     }
 
     override suspend fun byId(id: String): SessionResult? =
         sessions.first().firstOrNull { it.id == id }
 
     override suspend fun delete(id: String) {
-        val scope = UserScope.of(authRepository.currentUid) ?: return
+        val ownerUid = authRepository.currentUid ?: return
+        val scope = UserScope.of(ownerUid) ?: return
+        var deletedVideo: String? = null
         context.sessionStore.edit { preferences ->
             val key = scope.string(KEY_SESSIONS)
-            val remaining = preferences[key].decodeSessions().filterNot { it.id == id }
+            val sessions = preferences[key].decodeSessions()
+            deletedVideo = sessions.firstOrNull { it.id == id }?.videoPath
+            val remaining = sessions.filterNot { it.id == id }
             preferences[key] = json.encodeToString(remaining.map { it.toRecord() })
         }
+        deletedVideo?.let(::deletePrivateVideo)
+        cloudMirror?.delete(ownerUid, id)
+    }
+
+    private fun deletePrivateVideo(path: String) {
+        runCatching {
+            val directory = File(context.filesDir, "training_videos").canonicalFile
+            val video = File(path).canonicalFile
+            if (video.parentFile == directory) {
+                VideoReviewCache.delete(context, path)
+                video.delete()
+            }
+        }.onFailure { Log.w(TAG, "Could not delete session video", it) }
     }
 
     /**
@@ -163,3 +196,6 @@ class DataStoreSessionRepository(
         const val TAG = "SessionStore"
     }
 }
+
+internal suspend fun clearSessionAccount(context: Context, uid: String) =
+    com.volleyballlab.player.data.account.clearAccountPreferences(context.sessionStore, uid)

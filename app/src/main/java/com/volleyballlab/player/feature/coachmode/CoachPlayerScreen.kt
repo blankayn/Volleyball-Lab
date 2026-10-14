@@ -56,6 +56,8 @@ import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
@@ -137,6 +139,11 @@ fun CoachPlayerScreen(
     val viewModel: CoachPlayerViewModel = viewModel(factory = CoachPlayerViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val now = remember { System.currentTimeMillis() }
+
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.Detail, contentPadding, modifier)
+        return
+    }
     val snapshot = state.snapshotOf(playerUid)
 
     LazyColumn(

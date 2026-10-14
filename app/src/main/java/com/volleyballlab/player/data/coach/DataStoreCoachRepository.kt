@@ -395,6 +395,28 @@ class DataStoreCoachRepository(
         }
     }
 
+    override suspend fun submitAssignmentSession(assignmentId: String, session: com.volleyballlab.player.domain.model.SessionResult) {
+        val playerUid = checkNotNull(authRepository.currentUid)
+        val link = checkNotNull(myCoach.first()?.takeIf { it.isActive })
+        val scope = checkNotNull(UserScope.of(link.coachUid))
+        context.coachStore.edit { preferences ->
+            check(authRepository.currentUid == playerUid)
+            val assignment = preferences.assignmentsOf(scope).firstOrNull { it.id == assignmentId }
+                ?: error("This assignment is no longer available.")
+            require(assignment.playerUid == playerUid && session.assignmentId == assignmentId && session.skill == assignment.skill)
+            require(session.repCount > 0)
+            val current = preferences.submissionsOf(scope)
+            if (current.none { it.sessionId == session.id && it.playerUid == playerUid }) {
+                preferences.putSubmissions(scope, current + SessionSubmission(
+                    session.id, link.coachUid, playerUid, now(),
+                ))
+            }
+            preferences.putAssignments(scope, preferences.assignmentsOf(scope).map {
+                if (it.id == assignmentId) it.copy(status = AssignmentStatus.Completed) else it
+            })
+        }
+    }
+
     override suspend fun updateAssignmentStatus(id: String, status: AssignmentStatus) {
         val playerUid = authRepository.currentUid ?: return
         val assignment = assignmentsForMe.first().firstOrNull { it.id == id } ?: return
@@ -572,3 +594,6 @@ class DataStoreCoachRepository(
         val json = Json { ignoreUnknownKeys = true }
     }
 }
+
+internal suspend fun clearCoachAccount(context: Context, uid: String) =
+    com.volleyballlab.player.data.account.clearAccountPreferences(context.coachStore, uid)

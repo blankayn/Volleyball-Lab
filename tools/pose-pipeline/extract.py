@@ -4,16 +4,16 @@
 
 For each clip this writes four things:
 
-    <clip>_frames.csv      one row per frame: quality flags and fourteen joint angles
-    <clip>_landmarks.npz   the raw and normalised 33-point skeletons
-    <clip>_shots.csv       shot boundaries, badge label, and how usable each shot is
-    <clip>_sequences.npz   per-shot angle sequences resampled to a fixed length
+    <clip>_frames.csv      one row per frame: quality flags and the feature columns
+    <clip>_landmarks.npz   the image- and world-space 33-point skeletons
+    <clip>_segments.csv    one row per demonstration: label, boundaries, usability
+    <clip>_sequences.npz   per-segment feature sequences resampled to a fixed length
 
 plus a run-wide `manifest.json` with the totals worth reading before training
 anything.
 
 The model, and the confidences it runs at, are deliberately the same ones the
-Android app uses - `pose_landmarker_full.task`, one pose, 0.5 across the board.
+Android app uses - `pose_landmarker_full.task`, up to three poses, 0.5 across the board.
 Measuring form offline with a different detector than the phone ships would make
 every threshold derived here a threshold that does not transfer, and the failure
 would show up late, on a device, as "the app disagrees with our own numbers".
@@ -57,17 +57,29 @@ MIN_TRACKING_CONFIDENCE = 0.5
 
 # A landmark below this is a guess. Counting them per frame is what lets the
 # capture screen say "step back, your feet are out of frame" instead of scoring
-# a rep it could not actually see.
+# a rep it could not actually see. Matches Landmark.DEFAULT_VISIBILITY_THRESHOLD.
 VISIBILITY_FLOOR = 0.5
 
+# A torso shorter than this in world metres means the skeleton has collapsed
+# rather than that the athlete is small. Angles are scale-invariant so this does
+# not affect them directly, but a degenerate torso means the whole fit is
+# untrustworthy and the metric features derived from it are meaningless.
+MIN_TORSO_METRES = 0.15
+
 DEFAULT_SEQUENCE_LENGTH = 32
+
+# Stamped into every npz. Version 1 measured features in image space; version 2
+# measures them in the app's world space, and the two are not comparable - a
+# consumer that silently mixed them would train on 23 degrees of noise. Bump this
+# whenever FEATURE_NAMES changes meaning rather than merely growing.
+SCHEMA_VERSION = 2
 
 
 def build_landmarker(model_path: Path) -> vision.PoseLandmarker:
     options = vision.PoseLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=str(model_path)),
         running_mode=vision.RunningMode.VIDEO,
-        num_poses=1,
+        num_poses=3,
         min_pose_detection_confidence=MIN_DETECTION_CONFIDENCE,
         min_pose_presence_confidence=MIN_PRESENCE_CONFIDENCE,
         min_tracking_confidence=MIN_TRACKING_CONFIDENCE,
@@ -89,11 +101,55 @@ def collect_videos(inputs: list[str]) -> list[Path]:
     return found
 
 
+class PrimaryPoseTracker:
+    """Mirror the Android player's central-first, continuity-after selection."""
+
+    def __init__(self):
+        self.centre: np.ndarray | None = None
+        self.missing = 0
+
+    def select(self, poses) -> int | None:
+        candidates = []
+        for index, pose in enumerate(poses):
+            if len(pose) != 33:
+                continue
+            torso = [pose[i] for i in (11, 12, 23, 24)]
+            if any(not np.isfinite((p.x, p.y)).all() or
+                   p.visibility < 0.5 or p.presence < 0.5 for p in torso):
+                continue
+            centre = np.array([np.mean([p.x for p in torso]),
+                               np.mean([p.y for p in torso])])
+            visible = [pose[i].y for i in (11, 12, 13, 14, 15, 16, 23, 24,
+                                           25, 26, 27, 28)
+                       if pose[i].visibility >= 0.5 and np.isfinite(pose[i].y)]
+            height = max(visible) - min(visible) if len(visible) >= 8 else 0.0
+            candidates.append((index, centre, height))
+        if self.centre is None:
+            chosen = min(candidates,
+                         key=lambda c: np.linalg.norm(c[1] - 0.5) - c[2] * 0.25,
+                         default=None)
+        else:
+            chosen = min(candidates,
+                         key=lambda c: np.linalg.norm(c[1] - self.centre),
+                         default=None)
+            if chosen is not None and np.linalg.norm(chosen[1] - self.centre) > 0.20:
+                chosen = None
+        if chosen is None:
+            self.missing += 1
+            if self.missing >= 15:
+                self.centre = None
+                self.missing = 0
+            return None
+        self.missing = 0
+        self.centre = chosen[1]
+        return chosen[0]
+
+
 def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
-            read_badges: bool, overlay: bool, skill: str) -> dict:
-    capture = cv2.VideoCapture(str(path))
-    if not capture.isOpened():
-        raise RuntimeError(f"could not open {path}")
+            read_badges: bool, overlay: bool, skill: str,
+            clip_label: str | None = None,
+            source_group: str | None = None) -> dict:
+    capture, transcoded = vid.open_video(path)
 
     # One landmarker per clip, not one per run. In VIDEO mode MediaPipe keeps a
     # single monotonic timestamp cursor, so a second clip starting again at t=0
@@ -101,6 +157,7 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     # what we want across unrelated clips - carrying a pose hypothesis from one
     # athlete into another's footage is a bug that would be very hard to see.
     landmarker = build_landmarker(model_path)
+    primary_tracker = PrimaryPoseTracker()
 
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -108,8 +165,8 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
 
     signatures: list[np.ndarray] = []
     badges: list[str | None] = []
-    pixels_all: list[np.ndarray] = []
-    normalised_all: list[np.ndarray] = []
+    image_all: list[np.ndarray] = []
+    world_all: list[np.ndarray] = []
     visibility_all: list[np.ndarray] = []
     angles_all: list[np.ndarray] = []
     valid_all: list[bool] = []
@@ -131,7 +188,11 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
             break
 
         signatures.append(vid.frame_signature(frame))
-        badges.append(vid.read_badge(frame) if read_badges else None)
+        # Pre-cut coaching demonstrations can carry a reviewer-supplied label.
+        # This avoids inventing a visual badge and keeps the label provenance at
+        # the command line.  Badge reading remains the default for mixed clips.
+        badges.append(clip_label if clip_label else
+                      (vid.read_badge(frame) if read_badges else None))
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
@@ -140,30 +201,43 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
         # or fragmented time base, which YouTube downloads frequently have.
         result = landmarker.detect_for_video(mp_image, int(index * 1000 / fps))
 
-        if result.pose_landmarks:
-            marks = result.pose_landmarks[0]
-            raw = np.array([[m.x, m.y] for m in marks], dtype=np.float64)
+        # Both landmark lists are kept, and they are not interchangeable. World is
+        # metric, hip-centred and has real depth: the only correct input for
+        # angles, and what every analyzer in the app consumes. Image is a
+        # perspective projection: correct for drawing, and the only space that
+        # records a jump, since world puts the hips at the origin in every frame.
+        selected = primary_tracker.select(result.pose_landmarks)
+        if selected is not None and selected < len(result.pose_world_landmarks):
+            marks = result.pose_landmarks[selected]
+            image = np.array([[m.x, m.y] for m in marks], dtype=np.float64)
+            world = np.array([[m.x, m.y, m.z] for m in result.pose_world_landmarks[selected]],
+                             dtype=np.float64)
             visibility = np.array([m.visibility for m in marks], dtype=np.float64)
-            px = features.to_pixels(raw, width, height)
-            norm = features.normalise(px, visibility)
+            torso = float(np.linalg.norm(
+                features.shoulder_centre(world) - features.hip_centre(world)))
+            valid = np.isfinite(world).all() and torso >= MIN_TORSO_METRES
             detected_all.append(True)
         else:
-            px = np.full((features.NUM_LANDMARKS, 2), np.nan)
+            image = np.full((features.NUM_LANDMARKS, 2), np.nan)
+            world = np.full((features.NUM_LANDMARKS, 3), np.nan)
             visibility = np.zeros(features.NUM_LANDMARKS)
-            norm = features.Normalised(
-                np.full((features.NUM_LANDMARKS, 2), np.nan), visibility, float("nan"), False
-            )
+            torso, valid = float("nan"), False
             detected_all.append(False)
 
-        pixels_all.append(px)
-        normalised_all.append(norm.coords)
+        image_all.append(image)
+        world_all.append(world)
         visibility_all.append(visibility)
-        angles_all.append(features.angles(norm))
-        valid_all.append(norm.valid)
-        torso_all.append(norm.torso_px)
+        # Computed unconditionally. `valid` is reported, not enforced: the Kotlin
+        # has no all-or-nothing gate, and a distant athlete still has a
+        # measurable elbow. Whether the capture was good enough is
+        # PoseQualityValidator's question, asked about capture rather than about
+        # measurement, and answering it here would throw away real data.
+        angles_all.append(features.compute(world, image))
+        valid_all.append(bool(valid))
+        torso_all.append(torso)
 
         if writer is not None:
-            writer.write(draw(frame, px, visibility, badges[-1]))
+            writer.write(draw(frame, image, visibility, badges[-1], width, height))
 
         index += 1
 
@@ -171,11 +245,14 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     landmarker.close()
     if writer is not None:
         writer.release()
+    if transcoded is not None:
+        transcoded.unlink(missing_ok=True)
 
     if index == 0:
         raise RuntimeError(f"{path} decoded zero frames")
 
-    shots, segments = vid.find_segments(signatures, badges if read_badges else [None] * index)
+    shots, segments = vid.find_segments(
+        signatures, badges if (read_badges or clip_label) else [None] * index)
     angles_array = np.array(angles_all)
     visibility_array = np.array(visibility_all)
     low_vis = (visibility_array < VISIBILITY_FLOOR).sum(axis=1)
@@ -193,6 +270,25 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
             valid_all[i] and low_vis[i] == 0 for i in range(segment.start, segment.end)
         ]))
 
+        # The jump baseline is recoverable only from the segment as a whole, so
+        # it is filled here rather than per frame in `features.compute`. Filling
+        # before resampling uses every real frame's hip height for the baseline;
+        # filling after would use only the 32 interpolated samples.
+        raw = features.fill_hip_rise(angles_array[window])
+        resampled = features.resample(raw, sequence_length)
+
+        # Contact is located on the resampled sequence, because that is the
+        # timeline the model and the phase-mapped cues both speak in. The
+        # confidence is measured on the *raw* frames around it - resampling
+        # interpolates a blurred frame into its neighbours, which would launder
+        # exactly the blur this is trying to report.
+        contact = features.contact_frame_index(resampled, skill)
+        contact_raw = segment.start + round(contact * (segment.length - 1)
+                                           / max(1, sequence_length - 1))
+        half = features.CONTACT_WINDOW
+        lo, hi = max(segment.start, contact_raw - half), min(segment.end, contact_raw + half + 1)
+        contact_window = slice(lo, hi)
+
         segment_rows.append({
             "segment": segment.index,
             "skill": skill,
@@ -204,10 +300,22 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
             "label": segment.label,
             "usable_frac": round(usable, 3),
             "mean_visibility": round(float(np.mean(mean_vis[window])), 3),
+            # Where in the rep the athlete contacted, and how sure the detector
+            # was there. Contact is the frame landmark confidence is worst at -
+            # arms toward the lens, motion blur - so a segment can be perfectly
+            # usable overall and still have nothing trustworthy at the one
+            # instant the contact-phase cues are scored from. Carrying it here
+            # keeps that from surfacing for the first time during the defence.
+            "contact_frame": contact_raw,
+            "contact_s": round(contact_raw / fps, 3),
+            "contact_mean_visibility": round(
+                float(np.mean(mean_vis[contact_window])), 3),
+            "contact_low_visibility_count": int(low_vis[contact_window].sum()),
+            "contact_valid": int(valid_all[contact_raw]),
             "too_short": int(segment.length < vid.MIN_SEGMENT_FRAMES),
         })
 
-        sequences.append(features.resample(angles_array[window], sequence_length))
+        sequences.append(resampled)
         sequence_labels.append(segment.label)
         sequence_ids.append(segment.index)
 
@@ -222,14 +330,15 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
 
     with (out_dir / f"{stem}_frames.csv").open("w", newline="", encoding="utf-8") as handle:
         columns = ["frame", "time_s", "shot", "segment", "label", "detected", "valid",
-                   "torso_px", "mean_visibility", "low_visibility_count", *features.ANGLE_NAMES]
+                   "torso_metres", "mean_visibility", "low_visibility_count",
+                   *features.FEATURE_NAMES]
         out = csv.writer(handle)
         out.writerow(columns)
         for i in range(index):
             out.writerow([
                 i, round(i / fps, 4), int(shot_of_frame[i]), int(segment_of_frame[i]),
                 label_of_frame[i], int(detected_all[i]),
-                int(valid_all[i]), round(torso_all[i], 2) if np.isfinite(torso_all[i]) else "",
+                int(valid_all[i]), round(torso_all[i], 4) if np.isfinite(torso_all[i]) else "",
                 round(float(mean_vis[i]), 4), int(low_vis[i]),
                 *[("" if not np.isfinite(v) else round(float(v), 4)) for v in angles_all[i]],
             ])
@@ -241,8 +350,10 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
 
     np.savez_compressed(
         out_dir / f"{stem}_landmarks.npz",
-        pixels=np.array(pixels_all), normalised=np.array(normalised_all),
+        schema_version=SCHEMA_VERSION,
+        image=np.array(image_all), world=np.array(world_all),
         visibility=visibility_array, valid=np.array(valid_all),
+        torso_metres=np.array(torso_all),
         shot_of_frame=shot_of_frame, segment_of_frame=segment_of_frame,
         fps=fps, width=width, height=height,
     )
@@ -252,10 +363,20 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     # it, and it cannot do that if the flag lives in a different file.
     np.savez_compressed(
         out_dir / f"{stem}_sequences.npz",
+        schema_version=SCHEMA_VERSION,
         sequences=np.array(sequences), labels=np.array(sequence_labels),
-        segments=np.array(sequence_ids), angle_names=np.array(features.ANGLE_NAMES),
+        segments=np.array(sequence_ids), feature_names=np.array(features.FEATURE_NAMES),
         too_short=np.array([r["too_short"] for r in segment_rows], dtype=bool),
         skill=np.array([skill] * len(segment_rows)),
+        # Several short, reviewer-labelled clips may come from one original
+        # coaching video.  Preserve that identity so the trainer cannot leak the
+        # same athletes and gym into both train and holdout sets.
+        source_group=np.array([source_group or stem] * len(segment_rows)),
+        # Coaching clips cut between full-body demos and arms-only detail shots.
+        # The close-ups carry a perfectly good badge and no usable skeleton, so
+        # this has to reach the trainer or it will learn from frames in which the
+        # body it is judging was never visible.
+        usable_frac=np.array([r["usable_frac"] for r in segment_rows], dtype=float),
     )
 
     def count(label: str) -> int:
@@ -283,10 +404,16 @@ EDGES = ((11, 12), (11, 13), (13, 15), (12, 14), (14, 16), (11, 23), (12, 24),
          (23, 24), (23, 25), (25, 27), (24, 26), (26, 28), (27, 31), (28, 32))
 
 
-def draw(frame: np.ndarray, pixels: np.ndarray, visibility: np.ndarray, badge: str | None) -> np.ndarray:
-    """Annotated copy for eyeballing a batch. Dim joints are the low-confidence ones."""
+def draw(frame: np.ndarray, image: np.ndarray, visibility: np.ndarray,
+         badge: str | None, width: int, height: int) -> np.ndarray:
+    """Annotated copy for eyeballing a batch. Dim joints are the low-confidence ones.
+
+    Drawing is the one job image-space landmarks are right for - they map onto
+    the frame directly, which world coordinates have no relationship to.
+    """
     out = frame.copy()
-    if np.isfinite(pixels).all():
+    if np.isfinite(image).all():
+        pixels = image * np.array([width, height])
         for a, b in EDGES:
             cv2.line(out, tuple(pixels[a].astype(int)), tuple(pixels[b].astype(int)), (0, 255, 136), 2)
         for i, point in enumerate(pixels):
@@ -315,6 +442,12 @@ def main() -> int:
     parser.add_argument("--skill", default="unknown",
                         help="skill these clips demonstrate (serve, pass, set, spike, block). "
                              "Clips covering several need splitting first")
+    parser.add_argument("--label", choices=("ok", "fault"), default=None,
+                        help="reviewer label for every frame in pre-cut single-form clips; "
+                             "disables tick/cross badge reading")
+    parser.add_argument("--source-group", default=None,
+                        help="original video/session id for split clips; keeps all clips from "
+                             "that source in the same train or holdout partition")
     parser.add_argument("--overlay", action="store_true",
                         help="also write an annotated mp4 per clip, for visual review")
     args = parser.parse_args()
@@ -337,7 +470,8 @@ def main() -> int:
         print(f"[{len(summaries) + 1}/{len(videos)}] {path.name}", flush=True)
         try:
             summary = process(path, model_path, out_dir, args.resample,
-                              not args.no_badges, args.overlay, args.skill)
+                              not (args.no_badges or args.label), args.overlay,
+                              args.skill, args.label, args.source_group)
         except Exception as error:  # one bad clip must not lose the batch
             print(f"  FAILED: {error}", file=sys.stderr)
             summaries.append({"clip": path.name, "error": str(error)})

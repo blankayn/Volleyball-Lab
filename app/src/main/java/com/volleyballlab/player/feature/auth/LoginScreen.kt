@@ -6,7 +6,6 @@ import android.content.ContextWrapper
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,9 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.R
-import com.volleyballlab.player.domain.model.DemoAccounts
 import com.volleyballlab.player.domain.model.UserRole
 
 /**
@@ -143,35 +140,6 @@ fun LoginScreen(
                 { viewModel.signInWithGoogle(activity, onAuthenticated) }
             },
         )
-
-        // The way into either half of the app, in debug builds only.
-        //
-        // Coaches register on the web portal, so there is no coach sign-up here and
-        // no credentials for one to type. Until that portal exists this is the only
-        // door into coach mode. The athlete fixture sits beside it for a different
-        // reason: coach mode is a *relationship*, and showing a relationship needs
-        // both ends of it - the player who asks and the coach who answers. Both open
-        // real accounts rather than fake sessions; see DemoAccounts. Compiled out of
-        // release builds entirely.
-        if (BuildConfig.DEBUG) {
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = stringResource(R.string.demo_accounts_title),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(10.dp))
-            DemoAccountButtons(
-                accounts = DemoAccounts.All,
-                shape = RoundedCornerShape(12.dp),
-                // A coach needs no navigation here - the role flow is about to
-                // replace this whole graph with the coach shell - but an athlete is
-                // still standing on the login route inside the shell they belong to.
-                onEntered = onAuthenticated,
-            )
-        }
 
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -32,7 +32,17 @@ chapter, since MPJPE is the reported accuracy metric.
 |---------|---------|-------|
 | `lite`  | ~3 MB   | Fastest. Visibly worse on fast limb motion, which is most of volleyball. |
 | `full`  | ~9 MB   | **Default.** Best balance on mid-range Android hardware. |
-| `heavy` | ~29 MB  | Most accurate. Too slow for live overlay on mid-range phones. |
+| `heavy` | ~29 MB  | Largest; live latency is not yet measured on the target phone. |
+
+The current `full` asset was also checked on the 271-image held-out TUM
+Volleyball split. It detected 107 players (39.48%) and reached 17.76 px 2-D
+MPJPE on detected frames, or 15.71 px after filtering individual joints by
+visibility and image bounds. The `heavy` candidate lowered detected-frame
+MPJPE to 15.57 px, but did not improve person detections and reduced reliable
+joint coverage. These still-image results do not measure Android latency or
+tracking, so the app keeps `full` until a real-device video benchmark supports
+a switch. A second run using this exact Android asset reproduced every primary
+metric exactly, including a direct recomputation from all detected joint rows.
 
 Swap the variant by changing `full` to `lite` or `heavy` in both the URL above and
 the filename, then pass the new filename to `MediaPipePoseDetector.create(...)`,

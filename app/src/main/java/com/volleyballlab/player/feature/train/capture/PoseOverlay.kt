@@ -17,7 +17,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
+import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.model.Landmark
+import com.volleyballlab.player.pose.model.BodyPoint
 import com.volleyballlab.player.pose.model.PoseFrame
 import com.volleyballlab.player.pose.model.SkeletonBones
 import com.volleyballlab.player.ui.theme.VbMotion
@@ -26,6 +28,11 @@ import com.volleyballlab.player.ui.theme.vbTween
 
 /**
  * Draws the tracked skeleton over the camera preview.
+ *
+ * The bones tint with the live posture verdict while recording: green when the
+ * form reads good, amber/red when the coach card is showing a correction. The
+ * athlete reads the skeleton's colour peripherally while moving, and the card's
+ * words when they glance over - two channels, one verdict.
  *
  * ## Matching the preview's crop
  *
@@ -46,10 +53,23 @@ import com.volleyballlab.player.ui.theme.vbTween
 @Composable
 fun PoseOverlay(
     frame: PoseFrame?,
+    posture: LivePostureUi? = null,
     modifier: Modifier = Modifier,
 ) {
-    val boneColor = MaterialTheme.vbColors.poseBone
-    val jointColor = MaterialTheme.vbColors.poseJoint
+    val extended = MaterialTheme.vbColors
+    val measuredStatuses = posture?.takeUnless {
+        it.trackingLost || it.modelWarmingUp || it.modelUncertain
+    }?.statuses.orEmpty().filter { it.isMeasurable }
+    fun regionColor(points: Set<BodyPoint>, default: Color): Color {
+        val score = measuredStatuses.filter { status -> points.all { it in status.affectedPoints } }
+            .mapNotNull { it.score }.minOrNull() ?: return default
+        return when {
+            score < SEVERE_POSTURE_SCORE -> Color(0xFFFF6B5E)
+            score < 0.8f -> extended.cueWarn
+            else -> extended.cueGood
+        }
+    }
+    val jointColor = extended.poseJoint
     val description = stringResource(R.string.cd_pose_overlay)
 
     // Fades the whole skeleton rather than letting it blink out when tracking
@@ -75,7 +95,7 @@ fun PoseOverlay(
             val b = frame.image(to)
             if (!a.isReliable() || !b.isReliable()) return@forEach
             drawLine(
-                color = boneColor.copy(alpha = alpha * BONE_ALPHA),
+                color = regionColor(setOf(from, to), extended.poseBone).copy(alpha = alpha * BONE_ALPHA),
                 start = transform.map(a, frame.mirrored),
                 end = transform.map(b, frame.mirrored),
                 strokeWidth = BONE_WIDTH_DP.dp.toPx(),
@@ -92,7 +112,7 @@ fun PoseOverlay(
             if (index in FACE_LANDMARK_RANGE) return@forEachIndexed
             drawJoint(
                 centre = transform.map(landmark, frame.mirrored),
-                color = jointColor.copy(alpha = alpha),
+                color = regionColor(setOf(BodyPoint.All[index]), jointColor).copy(alpha = alpha),
             )
         }
     }
@@ -106,6 +126,32 @@ private fun DrawScope.drawJoint(centre: Offset, color: Color) {
         style = Stroke(width = JOINT_STROKE_DP.dp.toPx()),
     )
 }
+
+/**
+ * The skeleton's colour for the current posture verdict.
+ *
+ * Idle (no live judging yet, e.g. framing) and tracking-lost keep the default
+ * bone colour: tinting on an unjudged frame would claim knowledge the app does
+ * not have. While judging, green means the card reads "looks good" and amber/red
+ * means it is showing a correction - severe misses (< 0.35) take the error tone.
+ */
+private fun postureBoneColor(
+    posture: LivePostureUi?,
+    default: Color,
+    good: Color,
+    warn: Color,
+): Color {
+    if (
+        posture == null || posture.trackingLost || posture.modelWarmingUp ||
+        posture.modelUncertain || posture.statuses.isEmpty()
+    ) return default
+    if (posture.needsCorrection) {
+        return if ((posture.score ?: 1f) < SEVERE_POSTURE_SCORE) Color(0xFFFF6B5E) else warn
+    }
+    return good
+}
+
+private const val SEVERE_POSTURE_SCORE = 0.35f
 
 /**
  * The centre-crop mapping from normalised image space to Canvas space.

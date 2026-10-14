@@ -1,6 +1,7 @@
 package com.volleyballlab.player.pose.quality
 
 import com.volleyballlab.player.pose.TestPoses
+import com.volleyballlab.player.pose.model.BodyPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,6 +67,34 @@ class PoseQualityValidatorTest {
         val quality = validator.validate(faint)
 
         assertEquals(PoseQualityIssue.NoPersonDetected, quality.primaryIssue)
+    }
+
+    @Test
+    fun `confident looking joints with low presence do not count as a person`() {
+        val source = TestPoses.wellFramedStanding()
+        val absent = source.copy(image = source.image.map { it.copy(presence = 0.1f) })
+
+        assertEquals(PoseQualityIssue.NoPersonDetected, validator.validate(absent).primaryIssue)
+    }
+
+    @Test
+    fun `a joint outside the model presence confidence is not drawn or accepted`() {
+        val source = TestPoses.wellFramedStanding()
+        val weakAnkle = source.copy(image = source.image.mapIndexed { index, landmark ->
+            if (index == BodyPoint.LEFT_ANKLE.ordinal) landmark.copy(presence = 0.1f) else landmark
+        })
+
+        assertFalse(weakAnkle.image(BodyPoint.LEFT_ANKLE).isReliable())
+        assertTrue(validator.validate(weakAnkle).issues.contains(PoseQualityIssue.PartialBody))
+    }
+
+    @Test
+    fun `non finite landmarks cannot pass framing or drawing reliability`() {
+        val source = TestPoses.wellFramedStanding()
+        val invalid = source.copy(image = source.image.map { it.copy(x = Float.NaN) })
+
+        assertFalse(invalid.image(BodyPoint.LEFT_ANKLE).isReliable())
+        assertEquals(PoseQualityIssue.NoPersonDetected, validator.validate(invalid).primaryIssue)
     }
 
     @Test

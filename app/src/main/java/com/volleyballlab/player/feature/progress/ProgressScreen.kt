@@ -1,6 +1,7 @@
 package com.volleyballlab.player.feature.progress
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,8 +33,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -46,20 +51,31 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.SessionResult
+import com.volleyballlab.player.feature.session.RecentSessionSummaryCard
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.model.WeeklyProgress
+import com.volleyballlab.player.domain.model.DailyProgress
 import com.volleyballlab.player.domain.repository.SessionRepository
+import com.volleyballlab.player.ui.component.StudentCard
+import com.volleyballlab.player.ui.component.StudentPageHeading
+import com.volleyballlab.player.ui.component.studentBackground
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.VbSectionHeader
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbColors
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import java.time.LocalDate
+import com.volleyballlab.player.ui.component.calendarDayFlow
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -82,6 +98,8 @@ data class ProgressSummary(
     val trend: List<Int>,
     val bySkill: List<SkillProgress>,
     val history: List<SessionResult>,
+    val loaded: Boolean = false,
+    val week: List<DailyProgress> = emptyList(),
 ) {
     val hasSessions: Boolean get() = sessionCount > 0
 
@@ -92,8 +110,8 @@ data class ProgressSummary(
         /** How many sessions the trend chart shows. Beyond this the bars stop being readable. */
         const val TREND_LENGTH = 10
 
-        fun from(sessions: List<SessionResult>): ProgressSummary {
-            if (sessions.isEmpty()) return Empty
+        fun from(sessions: List<SessionResult>, today: LocalDate = LocalDate.now()): ProgressSummary {
+            if (sessions.isEmpty()) return Empty.copy(loaded = true, week = WeeklyProgress.from(sessions, today))
 
             val scores = sessions.mapNotNull { it.formScore() }
             // Oldest first for the chart, and only the tail of the history.
@@ -126,6 +144,8 @@ data class ProgressSummary(
                 trend = trend,
                 bySkill = bySkill,
                 history = sessions,
+                loaded = true,
+                week = WeeklyProgress.from(sessions, today),
             )
         }
     }
@@ -140,8 +160,7 @@ data class SkillProgress(
 
 class ProgressViewModel(sessionRepository: SessionRepository) : ViewModel() {
 
-    val summary: StateFlow<ProgressSummary> = sessionRepository.sessions
-        .map(ProgressSummary::from)
+    val summary: StateFlow<ProgressSummary> = combine(sessionRepository.sessions, calendarDayFlow()) { sessions, today -> ProgressSummary.from(sessions, today) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -166,24 +185,26 @@ class ProgressViewModel(sessionRepository: SessionRepository) : ViewModel() {
  * chart of invented numbers is indistinguishable from a chart of real ones and
  * the difference matters most in exactly the setting this app gets shown in.
  *
- * ## What it cannot show yet
- *
- * Sessions live in `InMemorySessionRepository` pending conflict 4 in the capstone
- * document (Firestore versus the relational data dictionary), so history resets
- * when the process dies. Everything here reads the repository interface, so
- * whichever store wins, this screen is unaffected.
+ * Sessions come from the repository so this screen reflects persisted local
+ * history and any sessions synchronized to the current account.
  */
 @Composable
 fun ProgressScreen(
     onStartTraining: () -> Unit,
+    onOpenSession: (String) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: ProgressViewModel = viewModel(factory = ProgressViewModel.Factory)
     val summary by viewModel.summary.collectAsStateWithLifecycle()
 
+    if (!summary.loaded) {
+        GhostLoadingScreen(GhostLayout.Progress, contentPadding, modifier)
+        return
+    }
+
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().studentBackground(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -192,6 +213,8 @@ fun ProgressScreen(
                 ProgressHeader(summary)
             }
         }
+
+        item { WeeklyProgressCard(summary.week, Modifier.padding(horizontal = 20.dp)) }
 
         if (!summary.hasSessions) {
             item {
@@ -251,7 +274,7 @@ fun ProgressScreen(
         }
         itemsIndexed(summary.history) { index, session ->
             EntranceAnimation(index = index) {
-                HistoryRow(session, Modifier.padding(horizontal = 20.dp))
+                RecentSessionSummaryCard(session, { onOpenSession(session.id) }, Modifier.padding(horizontal = 20.dp))
             }
         }
 
@@ -261,18 +284,10 @@ fun ProgressScreen(
 
 @Composable
 private fun ProgressHeader(summary: ProgressSummary) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.nav_progress),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = if (summary.hasSessions) {
+    StudentPageHeading(
+        eyebrow = "YOUR TRAINING RECORD",
+        title = stringResource(R.string.nav_progress),
+        subtitle = if (summary.hasSessions) {
                 stringResource(
                     R.string.progress_summary_line,
                     summary.sessionCount,
@@ -281,10 +296,8 @@ private fun ProgressHeader(summary: ProgressSummary) {
             } else {
                 stringResource(R.string.progress_summary_none)
             },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
@@ -325,7 +338,7 @@ private fun StatTile(
     modifier: Modifier = Modifier,
     valueColor: Color? = null,
 ) {
-    Surface(
+    StudentCard(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -360,47 +373,144 @@ private fun StatTile(
  */
 @Composable
 private fun TrendCard(trend: List<Int>, modifier: Modifier = Modifier) {
-    val barColors = trend.map { scoreColor(it) }
-    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val latest = trend.last()
+    val previous = trend[trend.lastIndex - 1]
+    val delta = latest - previous
+    val average = trend.average().roundToInt()
+    val chartColor = MaterialTheme.colorScheme.tertiary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val averageColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val chartDescription = stringResource(
+        R.string.progress_chart_description,
+        trend.size,
+        trend.joinToString(", "),
+        latest,
+    )
 
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.padding(18.dp)) {
-            Canvas(
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
+            Text(
+                text = stringResource(R.string.progress_chart_recent, trend.size).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
             ) {
-                val count = trend.size
-                val gap = size.width * BAR_GAP_FRACTION / count
-                val barWidth = (size.width - gap * (count - 1)) / count
-                val radius = CornerRadius(barWidth / 3f, barWidth / 3f)
-
-                trend.forEachIndexed { index, score ->
-                    val left = index * (barWidth + gap)
-                    // The track is drawn first at full height so a low score
-                    // reads as "short bar in a tall slot" rather than as a
-                    // missing bar.
-                    drawRoundRect(
-                        color = trackColor,
-                        topLeft = Offset(left, 0f),
-                        size = Size(barWidth, size.height),
-                        cornerRadius = radius,
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.progress_chart_latest_score),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    val barHeight = size.height * (score / 100f)
-                    drawRoundRect(
-                        color = barColors[index],
-                        topLeft = Offset(left, size.height - barHeight),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = radius,
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = latest.toString(),
+                            style = MaterialTheme.typography.displaySmall.merge(VbTabularNumerals),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.progress_chart_out_of),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 3.dp, bottom = 5.dp),
+                        )
+                    }
+                }
+                val deltaColor = when {
+                    delta > 0 -> MaterialTheme.vbColors.onSuccessContainer
+                    delta < 0 -> MaterialTheme.colorScheme.onErrorContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                StudentCard(
+                    color = when {
+                        delta > 0 -> MaterialTheme.vbColors.successContainer
+                        delta < 0 -> MaterialTheme.colorScheme.errorContainer
+                        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                    },
+                    shape = CircleShape,
+                ) {
+                    Text(
+                        text = when {
+                            delta > 0 -> stringResource(R.string.progress_chart_change_up, delta)
+                            delta < 0 -> stringResource(R.string.progress_chart_change_down, delta)
+                            else -> stringResource(R.string.progress_chart_change_flat)
+                        },
+                        style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
+                        color = deltaColor,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.height(22.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.height(CHART_HEIGHT).width(28.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    listOf("100", "50", "0").forEach { tick ->
+                        Text(
+                            text = tick,
+                            style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Canvas(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(CHART_HEIGHT)
+                        .semantics { contentDescription = chartDescription },
+                ) {
+                    listOf(0f, 0.5f, 1f).forEach { fraction ->
+                        val y = size.height * fraction
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
+                    val averageY = size.height * (1f - average / 100f)
+                    drawLine(
+                        color = averageColor,
+                        start = Offset(0f, averageY),
+                        end = Offset(size.width, averageY),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(5.dp.toPx(), 5.dp.toPx())
+                        ),
+                    )
+
+                    val slotWidth = size.width / trend.size
+                    val barWidth = minOf(slotWidth * 0.56f, 36.dp.toPx())
+                    trend.forEachIndexed { index, score ->
+                        if (score == 0) return@forEachIndexed
+                        val barHeight = size.height * score.coerceIn(0, 100) / 100f
+                        val left = slotWidth * (index + 0.5f) - barWidth / 2f
+                        drawRoundRect(
+                            color = chartColor.copy(alpha = if (index == trend.lastIndex) 1f else 0.50f),
+                            topLeft = Offset(left, size.height - barHeight),
+                            size = Size(barWidth, barHeight),
+                            cornerRadius = CornerRadius(
+                                minOf(barWidth / 3f, barHeight / 2f)
+                            ),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth().padding(start = 28.dp)) {
                 Text(
                     text = stringResource(R.string.progress_trend_oldest),
                     style = MaterialTheme.typography.labelSmall,
@@ -413,13 +523,34 @@ private fun TrendCard(trend: List<Int>, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Spacer(Modifier.height(18.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Canvas(Modifier.size(width = 20.dp, height = 2.dp)) {
+                    drawLine(
+                        color = averageColor,
+                        start = Offset.Zero,
+                        end = Offset(size.width, 0f),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(5.dp.toPx(), 5.dp.toPx())
+                        ),
+                    )
+                }
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    text = stringResource(R.string.progress_chart_average, average),
+                    style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modifier) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -468,58 +599,8 @@ private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modif
 }
 
 @Composable
-private fun HistoryRow(session: SessionResult, modifier: Modifier = Modifier) {
-    val score = session.formScore()
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(session.skill.displayName),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = formatHistorySubtitle(session),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (score != null) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .border(2.dp, scoreColor(score), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = score.toString(),
-                        style = MaterialTheme.typography.bodyLarge.merge(VbTabularNumerals),
-                        color = scoreColor(score),
-                    )
-                }
-            } else {
-                // An unscored session is not a failure and is not hidden: it is
-                // a session where no cue could be measured, which is a camera
-                // problem the athlete can act on.
-                Text(
-                    text = stringResource(R.string.progress_unscored),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun NoDataCard(onStartTraining: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
+    StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -556,16 +637,6 @@ private fun NoDataCard(onStartTraining: () -> Unit, modifier: Modifier = Modifie
 /** Fewer bars than this is not a trend, it is a number with a rectangle around it. */
 private const val MIN_TREND_POINTS = 2
 
-/** Total horizontal space given to gaps, as a fraction of the chart width. */
-private const val BAR_GAP_FRACTION = 0.35f
+private val CHART_HEIGHT = 154.dp
 
 private const val NO_VALUE = "—"
-
-private val historyDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
-
-private fun formatHistorySubtitle(session: SessionResult): String {
-    val time = Instant.ofEpochMilli(session.startedAtEpochMs)
-        .atZone(ZoneId.systemDefault())
-        .format(historyDateFormat)
-    return "${session.repCount} reps  ·  $time"
-}

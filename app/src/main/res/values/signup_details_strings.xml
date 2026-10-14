@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="auth_full_name_label">Full name</string>
+    <string name="auth_full_name_placeholder">Enter your full name</string>
+    <string name="auth_first_name_label">First name</string>
+    <string name="auth_first_name_placeholder">Enter your first name</string>
+    <string name="auth_last_name_label">Last name</string>
+    <string name="auth_last_name_placeholder">Enter your last name</string>
+    <string name="auth_error_first_name_required">Please enter your first name.</string>
+    <string name="auth_error_last_name_required">Please enter your last name.</string>
+    <string name="auth_location_title">Country &amp; address</string>
+    <string name="auth_location_optional">Choose your country. Province, city, and barangay are optional.</string>
+    <string name="auth_country_label">Country</string>
+    <string name="auth_area_ph_label">Province / area</string>
+    <string name="auth_area_world_label">State / province</string>
+    <string name="auth_city_label">City / municipality</string>
+    <string name="auth_barangay_label">Barangay</string>
+    <string name="auth_choose_country">Search or select a country</string>
+    <string name="auth_choose_area">Search or select a province</string>
+    <string name="auth_choose_city">Search or select a city</string>
+    <string name="auth_choose_barangay">Search or select a barangay</string>
+    <string name="auth_select_country_first">Choose a country first</string>
+    <string name="auth_select_area_first">Choose a province first</string>
+    <string name="auth_select_city_first">Choose a city first</string>
+    <string name="auth_options_loading">Loading choices…</string>
+    <string name="auth_options_empty">No choices listed. You can leave this blank.</string>
+    <string name="auth_options_no_match">No matching choices</string>
+    <string name="auth_options_skip">Leave blank</string>
+    <string name="auth_location_load_failed">Address choices could not be loaded.</string>
+    <string name="auth_retry_location">Retry</string>
+    <string name="auth_error_country_required">Please select your country.</string>
+    <string name="auth_signup_profile_note">Your name, country, and address are saved privately to your account and sync when you’re online.</string>
+    <string name="auth_confirm_password_label">Confirm password</string>
+    <string name="auth_confirm_password_placeholder">Re-enter your password</string>
+    <string name="auth_error_confirm_required">Please confirm your password.</string>
+    <string name="auth_error_password_mismatch">Your passwords do not match.</string>
+</resources>

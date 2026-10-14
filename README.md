@@ -1,14 +1,16 @@
-# Volleyball Lab — Android player app
+# Volleyball Lab — player app + coach portal
 
 An AI-powered volleyball training and form-detection app. BSIT capstone,
 University of Cebu, College of Computer Studies.
 
-This repository is the **Android app**. It holds both halves of the product: the
-player app, and — as of the coach-mode work — the coach experience too, running
-on the phone behind the same login form rather than as the separate ReactJS +
-Express web portal the document describes. See
-[Coach mode](#coach-mode-one-app-two-shells) for what that changes and what it
-does not.
+This repository holds **both halves of the product**, on one shared Firebase
+backend (`volleyball-lab`):
+
+- `app/` — the **Android player app**, including the on-phone coach shell.
+- `coach-web/` — the **coach web portal** (Vite + TypeScript + Three.js):
+  registration, roster, review queue, drill assignments and written feedback.
+- `firestore.rules` + `docs/coach-cloud-contract.md` — the shared schema and
+  its enforcement, which is what makes the two clients work together.
 
 The module implemented in depth here is **Training & Pose Capture Management**:
 skill selection → drill selection → camera session → full-body pose capture →
@@ -43,7 +45,48 @@ Verified locally with:
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-121 unit tests pass; lint reports one cosmetic warning (see *Known issues*).
+206 unit tests pass. Lint has no errors; it reports non-blocking warnings.
+
+### Updated manuscript delivery
+
+The app now includes five skill learning guides and common mistakes, guided
+camera angles with reactive TTS, skeleton loading states, seven-day progress
+and weekly rhythm, timed daily plans, editable goals, local profile photos,
+CSV/JSON export, email verification/password changes, and a notification inbox
+with optional Android delivery. Free detailed reports default to five per
+Monday–Sunday week; saved reports can be reopened without another credit.
+
+Students select a coach and request approval. No invite code is used.
+Owner Pro belongs to the confirmed Firebase UID for `kirt@gmail.com`; other
+accounts read server entitlements. GCash checkout for APK distribution is
+prepared and disabled pending merchant activation, price/access period,
+deployment and live payment verification.
+
+See [the manuscript checklist](docs/manuscript-gap-audit.md) for PDF pages,
+code evidence and remaining validation, and [GCash setup](docs/gcash-checkout-setup.md).
+
+The portal builds separately:
+
+```bash
+cd coach-web
+cp .env.example .env   # Firebase web config, same project
+npm install && npm run build
+```
+
+### How an account gets into it
+
+There are now two real doors, both leading to the same backend:
+
+1. **The portal** (`coach-web/#/register`) — a coach registers with their team
+   details. This writes the Firebase Auth account, `users/{uid}`
+   (`role: "COACH"`), the profile and the directory listing. Players find them
+   in the app's Coach tab immediately, and the coach account lands in the coach
+   shell on any install — the role comes from the account, not the device.
+2. **The app login** — unchanged for players. There is still no coach option on
+   the mobile sign-up form and there should not be one: coaches register on the
+   portal, the app only ever *receives* an account that already exists.
+
+`VolleyballLabApp` reads the account's role once and builds one of two shells.
 
 ---
 
@@ -126,13 +169,33 @@ side-on camera angle — scores `null`, and the remaining cue weights are
 renormalised around it. Scoring it zero would blame the athlete for the camera
 placement.
 
+**Multiple people in view.** MediaPipe detects up to three poses. The player
+starts in the centre for the framing gate; after that, a continuity tracker keeps
+the same person when pose result order changes. A bystander does not silently
+take over when the player briefly leaves the frame.
+
+**Video review.** CameraX records a silent MP4 alongside pose analysis when the
+device supports the preview, analysis and video use cases together. The result
+screen plays it from app-private storage. If video binding fails, the camera
+falls back to pose-only capture and still saves the scored session. Deleting a
+session removes its private video.
+
+**MPJPE evaluation.** The revised manuscript sets a research target below 50 mm
+for each of the five skills. `tools/pose-pipeline/evaluate_mpjpe.py` compares the
+app model's metric 3D joints with independently measured 3D ground truth and
+reports overall and per-skill error plus annotation coverage. There is no
+measured MPJPE claim yet; the evaluator needs calibrated reference data. Its
+input contract and limitations are in `tools/pose-pipeline/README.md`.
+
 ---
 
-## Coach mode: one app, two shells
+## Coach mode: one app, two shells — plus the portal
 
-The capstone document draws the coach side as a desktop ReactJS portal
-(Figures 23–29). This build runs it on the phone, in the same binary, behind the
-**same login screen**. Nothing about the player app changed to make room for it.
+The capstone document draws the coach side as a desktop portal (Figures 23–29).
+That portal now exists (`coach-web/`), and the phone keeps its coach shell too:
+a coach at a desk reviews in the browser, a coach on court reviews on the phone,
+both against the same Firestore rows. Nothing about the player app changed to
+make room for either.
 
 ### How an account gets into it
 
@@ -146,67 +209,36 @@ cannot press back into a review queue that is no longer theirs.
 anywhere on the mobile sign-up form and there should not be one — this app only
 ever *receives* an account that already exists. The login form likewise asks
 nothing about roles: `User_Role` is a property of the account (Table 7), so at
-login the app should simply read what the portal wrote.
+login the app reads `users/{uid}.role` — what the portal wrote.
 
-There is no backend to read it from yet, so two things stand in:
+Two stand-ins remain for the offline and legacy paths:
 
 - **An address convention** — `coach@…`, or the plus-tagged `you+coach@gmail.com`.
   Exact, not a prefix match: `coaching@` and `headcoach@` are ordinary addresses
-  and do not qualify. See `CoachAccounts`.
+  and do not qualify. See `CoachAccounts`. Still applied at sign-in, promotion
+  only.
 - **A switch in Profile**, and one back the other way in the coach's Account tab.
+
+Precedence for one account on one phone: an explicit choice recorded on the
+device (either of the above) wins; otherwise the cloud row — set when a coach
+registers on the portal — decides; otherwise Player. So a portal-registered
+coach lands in the coach shell on a fresh install, and a deliberate in-app
+switch is never silently undone by either fallback.
 
 The address rule only ever *promotes* — it can grant the coach role, never take it
 away — because a rule that could demote would silently undo that switch on the next
-launch. The debug test-account buttons are the one exception: they name the shell
-they open on their face, so they write the role in both directions.
+launch.
 
-### Getting into both sides for a demo
+### Signing in
 
-Debug builds carry a **Test accounts** block under the Google button on the login
-screen, offering one tap into each half of the app:
+Use your own registered account. Coaches register at `coach-web/#/register`.
+Students choose a coach from the directory and send a request for approval.
+There are no built-in demo accounts or account switching shortcuts.
 
-| | address | password |
-|---|---|---|
-| athlete | `player@volleyballlab.test` | `VolleyLab2026` |
-| coach | `coach@volleyballlab.test` | `VolleyLab2026` |
-
-Both are **real** accounts — real uids, real sessions, the ordinary
-`AuthRepository` path — because everything on both sides is scoped by uid, and a
-mocked session would demo a code path that ships to nobody. The credentials live
-in `DemoAccounts` and can safely: `.test` is reserved by RFC 2606, so neither address can
-resolve to a real inbox, and the whole block is compiled out of release builds.
-Delete an account from the Firebase console to reset it; the next tap makes a
-fresh one.
-
-**Why there is an athlete fixture too.** Anyone can sign up as a player, so it is
-not there for access. Coach mode is a *relationship*, and a relationship cannot be
-shown from one account: demonstrating it means being the player who asks and then
-the coach who answers, back and forth. So the same one-tap switch appears inside
-both shells — the athlete's Profile tab offers Demo Coach, the coach's Account tab
-offers Demo Player — and neither route goes through the login form.
-
-`DemoSignIn` is the single seam all three controls share. Two things about it are
-load-bearing and read as tidy-uppable:
-
-- It runs on its **own process-lifetime scope**, not the calling ViewModel's.
-  Signing in *is* the teardown — the role flow is a function of the signed-in uid,
-  so the moment sign-in lands, the calling screen can be destroyed and its scope
-  cancelled mid-sequence.
-- It writes the **role last**, after seeding names and publishing the coach's
-  directory listing, because the role write is what swaps the shell.
-
-**Demo in this order:** open Demo Coach *first* — that is what publishes the
-listing — then switch to Demo Player, unlock Pro, choose the coach and send the
-request. Switch back to approve it. Tapping Demo Player first shows an empty
-directory, which is correct and looks like a bug; the empty state says so in debug
-builds.
-
-**The limitation this has, stated plainly:** the role lives on the device, per
-uid. An account signing in on a *fresh* install lands in the player shell,
-because nothing on that phone remembers otherwise, and the Profile switch is how
-it gets corrected. Conflicts 4 and 6 below are what has to be settled before the
-role can come from the account itself — at which point both stand-ins and the
-test-account buttons all go away together.
+**The limitation this has, stated plainly:** the address rule and the Profile
+switch are per-device records, so an account that only ever used them still
+lands in the player shell on a *fresh* install. A coach who registered on the
+portal does not — their role comes from `users/{uid}` and follows them.
 
 ### Screens, against the figures
 
@@ -250,12 +282,11 @@ carries no contact address, no licence number and nothing about the coach's *oth
 players — a directory that leaked squad names would hand out other athletes'
 details to anyone who opened the tab.
 
-**Coach connection is what Pro buys.** `UserPlan` is per-uid and the gate is
-enforced in the ViewModel, not only in the UI, so a screen that forgets to check
-cannot silently create a membership. One deliberate exception: an athlete whose
+**New coach connection requests require Pro.** The ViewModel reads owner/server
+entitlement and Firestore rules independently check status and expiry. An athlete whose
 plan drops back to Free **keeps a link they already have**. Locking an existing
 relationship behind a paywall would be taking something away rather than gating
-something new. See conflict 7 for what the upgrade button actually does.
+something new. GCash setup is documented separately.
 
 **Consent runs the right way now.** Being on a roster is something the athlete
 asked for; the coach could only accept an offer that was made. The athlete's
@@ -265,11 +296,10 @@ there, and that their sessions reach the review queue only when they submit one.
 reaches another's screen — documents that its only legitimate caller is the coach
 shell, and only for a uid that came out of the roster flow.
 
-**This is device-local.** A player can only find a coach whose account has been
-used on the same handset. The linkage itself is genuine — real uids, real sessions
-— it is simply not distributed yet, for the reason conflict 4 gives. When there is
-a backend, `CoachRepository` is the interface it implements and nothing above it
-changes.
+**Coach connections use the shared Firestore backend.** The directory, pending
+requests, approved roster, assignments, submissions and notes work across the
+app and portal. Students read the public directory; licence/preferences stay
+in the coach's private profile.
 
 ### What the "AI-Assisted Analysis" panel actually is
 
@@ -370,8 +400,8 @@ or there is a visible flash at the handoff.
 
 ## Capstone document conflicts
 
-Three were resolved outright to make this build possible, and a fourth is now
-modelled on the device. Five remain open and still need the team and adviser.
+Five were resolved outright to make this build possible. Three remain open and
+still need the team and adviser.
 
 The numbering below is stable — other sections cross-reference it — so a conflict
 that has since moved keeps its number and says so in place.
@@ -390,45 +420,34 @@ that has since moved keeps its number and says so in place.
    Progress / Coach / Profile. The storyboard version splits skill selection and
    capture across two tabs, breaking one task into two entry points and leaving
    the results screen homeless.
-
-**Still open — these block real work**
-
-4. **Firestore vs. the relational data dictionary.** The network model specifies
-   Cloud Firestore; Tables 7–19 are MySQL with `INT(11)` keys. Until this is
-   settled, everything persists as serialised blobs in Preferences DataStore —
-   sessions, profile, role, and the whole coach side. There are no tables, no
-   entities, no migrations and no annotation processor, deliberately: nothing in
-   `data/` says how anything should be *modelled*, only that it should survive the
-   process dying. Committing to a Room schema or a Firestore collection shape
-   would pick a winner on the team's behalf. This is also why coach mode is
-   device-local rather than networked.
+4. **Firestore vs. the relational data dictionary — Firestore, for the coach
+   graph.** The network model specifies Cloud Firestore and the tables specify
+   MySQL; the coach side (roster, assignments, submissions, notes, sessions
+   shared for review, account roles) now lives in Firestore under
+   `docs/coach-cloud-contract.md`, read and written by both the app and the
+   `coach-web/` portal, enforced by `firestore.rules`. Player-private data
+   (profile, plan, the athlete's own session history) stays in on-device
+   DataStore blobs — nothing there says how anything should be *modelled*, only
+   that it survives the process dying.
 5. **MoveNet** appears in the tech-stack prose but in no table and no other
    section. The app uses MediaPipe/BlazePose.
-6. **Coach accounts have no home** in the ERD, and the portal's registration
-   fields (Fig. 24) exist in no table. Coach mode needed somewhere to put them
-   anyway, so `CoachProfile` combines Table 14's columns with the fields Figure 24
-   actually collects, and `UserRole` stands in for Table 7's `User_Role` on the
-   device. All three are the first things to move once this is settled.
-7. **Free/Pro tier — now modelled, but only on the device.** Gated features exist
-   in the UI mockups and in the Business Model Canvas; no plan or quota entity
-   exists in the ERD. `UserPlan` stands in, per uid, and `ProFeature` splits the
-   five claimed benefits into the two this build genuinely gates (coach
-   connection, session comments) and the three it does not (detailed corrections,
-   full drill library, advanced biomechanics). Listing all five as equals would
-   be selling three things that are not there.
+6. **Coach accounts have their home: the portal.** Registration (Fig. 24's
+   fields) lives at `coach-web/#/register` and writes Firebase Auth plus
+   `users/{uid}` — which is Table 7's `User_Role` at last — plus the profile and
+   directory rows. `CoachProfile` still combines Table 14 with the storyboard's
+   team-setup fields, and the address convention plus Profile switch remain as
+    device-level fallbacks with documented precedence.
 
-   **The upgrade is an explicit mockup, not a fake checkout.** No card fields, no
-   price, no "payment successful" — a switch, and a plain statement placed
-   *between* the feature list and the button so it cannot be skipped: no payment
-   is taken and billing is not built. There is a *Switch back to Free* so the
-   locked state can be demonstrated again without clearing app data.
+**Still open — three need the team and adviser**
 
-   Two things to say in the write-up: the local flag is a *record* of an upgrade,
-   not entitlement — anyone who can write to the app's data directory can set it,
-   which is fine for a prototype whose upgrade button is itself a mockup and stops
-   being fine the day money moves. And `PlanRepository` is what Play Billing would
-   implement; the only change above it is that `upgradeToPro` becomes slow and can
-   fail.
+7. **Free/Pro tier uses owner/server entitlements.** The local demonstration
+   toggle is removed from the production flow. The confirmed Kirt UID has owner
+   Pro; other accounts require a trusted active entitlement. Pro includes coach
+   connection and unlimited detailed reports. The default Free allowance is five
+   detailed reports per week, tracked locally. GCash hosted checkout and signed
+   webhook code are prepared for APK distribution; merchant activation and live
+   payment tests remain pending. Advanced biomechanical claims still require
+   independent validation; they are not sold as a measured result.
 8. **Coach Mode drifts** between "AI personalisation" (Objective 4) and "a human
    coach reviewing remotely" (everywhere else). Coach mode now builds the second
    reading in full — a real person, a real roster, real notes written back — and
@@ -456,8 +475,9 @@ Progress, Coach and Profile were placeholders until the tabs were built out.
 They are now real screens, and every number on them is **derived from sessions
 the user actually recorded**. In the player app there is no sample data at all:
 
-- **Progress** aggregates the stored sessions: totals, a form-score trend over
-  the last ten, a per-skill breakdown and the full history.
+- **Progress** aggregates stored sessions: seven calendar days of scores,
+  measurable valid reps, time and rhythm, plus latest-session trends,
+  per-skill breakdown and history.
 - **Coach** has two halves. At the top, the link to a real coach: the directory
   they pick from, the request they send, whose team they end up on, sessions they
   choose to submit, the notes that come back, the drills they were set, and the
@@ -466,11 +486,12 @@ the user actually recorded**. In the player app there is no sample data at all:
   coaching tip already written for it in `FormCueCatalog`, and a note when too
   many cues came back unmeasurable to trust it. The screen keeps the two apart
   and does not let the second claim to be the first — see conflict 8 below.
-- **Profile** holds the athlete's name, position and dominant hand in DataStore,
-  alongside read-only training totals derived from sessions.
+- **Profile** includes personal fields, goals, photo selection, CSV/JSON export,
+  account security, coaching preferences, notification inbox and Pro status.
 
 The coach shell is real on the same terms: every figure on it comes from sessions
-its rostered players actually recorded on this device.
+its rostered players actually recorded and submitted. The portal shows the same
+rows — one shared backend, two screens.
 
 With nothing recorded, each screen says so and offers the way to fix it. That is
 deliberate: during a defence, mock UI is indistinguishable from working UI, so a
@@ -478,10 +499,10 @@ chart with no data behind it is worse than an empty state.
 
 **The one exception, and the condition it survives on.** A coach account with an
 empty roster gets two stand-in athletes (`SampleTeam`) — Maya Reyes, improving at
-spiking, and Andrei Cruz, whose block knee-load trips the safety watch. Coach mode
-is device-local, so an examiner opening it on a fresh install would otherwise see
-a roster of nobody, a queue of nothing and four dashes where the team figures go,
-which demonstrates nothing about a screen whose whole job is reading a squad.
+spiking, and Andrei Cruz, whose block knee-load trips the safety watch. An
+examiner opening a new coach account would otherwise see a roster of nobody, a
+queue of nothing and four dashes where the team figures go, which demonstrates
+nothing about a screen whose whole job is reading a squad.
 
 This is allowed because it is **not indistinguishable from real data**, which is
 what the rule above is actually against:
@@ -501,10 +522,8 @@ Labelled scaffolding that removes itself is a different thing from UI that lies
 about having data. If that distinction ever stops holding, delete it.
 
 **Stand-in** — the drill catalogue is compiled into the app
-(`StaticDrillRepository`) pending conflict 4. Coach–player linking works only
-between accounts that have both been used on this handset, for the same reason.
-The Pro upgrade flips a local flag and charges nobody (conflict 7). Notification
-switches record a preference and send nothing.
+(`StaticDrillRepository`) pending a drill-library backend. Notification delivery
+uses optional Android alerts and periodic WorkManager refresh rather than FCM push.
 
 ---
 
@@ -514,7 +533,8 @@ switches record a preference and send nothing.
 ./gradlew :app:testDebugUnitTest
 ```
 
-121 tests covering the parts where being wrong is expensive and invisible:
+206 tests cover the pose/coaching engine, compatibility, seven-day aggregation,
+report reset/reuse, goals, entitlement logic, notifications and progress export:
 
 - `AnglesTest` — joint geometry, including that degenerate input returns `null`
   rather than zero, and that the image-space jump calibration is correct.
@@ -533,19 +553,17 @@ switches record a preference and send nothing.
   excluded from averages rather than counted as zero, that advice is withheld
   until a cue has enough measured reps, and that nothing mediocre gets called a
   strength.
-- `CoachAccountsTest` — the rule that decides which accounts open the coach app,
-  including every near miss (`coaching@`, `headcoach@`, `kirt+coaching@`) that
-  must *not* qualify, and both halves of the fixture pair: that the coach address
-  satisfies the rule and that the **athlete address does not**. Either failing is
-  silent and looks like the whole feature being broken — the first sends the demo
-  coach into the player shell, the second promotes the athlete fixture and leaves
-  nobody to demonstrate the other end of the relationship with.
+- `CoachAccountsTest` — exact coach address conventions and near misses.
 - `CoachDerivationsTest` — what the coach screens claim about an athlete: that a
   trend needs enough scored sessions on both sides before it is printed, that one
   session is not "perfectly consistent", that a cue measured once is not a
   correction, that an unmeasurable session reads as a camera problem rather than
   a safety flag, and that the team average weights players equally instead of
   letting whoever films most decide the squad's number.
+- `CloudSchemaTest` — the contract both clients share, pinned from the app side:
+  every collection round-trips, unknown enum names degrade instead of throwing,
+  session documents carry scores only (no landmark arrays), and a missing role
+  row is distinguishable from an explicit one.
 
 `SyntheticPoseDetector` is what makes `RepSegmenterTest` possible: it emits a
 scripted articulated figure, so "did it count the reps" is an assertion rather
@@ -555,7 +573,7 @@ than someone watching a badge on a phone and deciding it looked about right.
 
 ## Known issues and limitations
 
-- **Debug APK is ~74 MB.** MediaPipe ships native libraries for four ABIs. A
+- **Debug APK is ~144 MiB.** MediaPipe and LiteRT ship native libraries for multiple ABIs. A
   release App Bundle splits per-ABI and is far smaller; if install time during
   development becomes painful, add an `abiFilters` block for debug builds.
 - **Portrait only.** The framing gate assumes a standing athlete filling 45–95%
@@ -573,20 +591,18 @@ than someone watching a badge on a phone and deciding it looked about right.
 - **Block penetration** is only measurable from a side-on camera and reports
   itself as unmeasurable from a front view, rather than returning a confident
   zero.
-- **Coach mode is device-local.** A coach only appears in a player's directory if
-  that coach's account has been used on the same handset. A coach signing in on a
-  fresh install also lands in the player shell until they use the switch in
-  Profile, because the role has nowhere off-device to live yet. Both follow from
-  conflicts 4 and 6.
+- **Coach mode needs the network for first contact.** Roster, queue, assignments
+  and shared sessions live in Firestore, cached offline after first sync. A
+  signing-in on a fresh install with no signal sees empty coach screens until it
+  connects — the same as auth itself, which already needs the network for the
+  first sign-in. Player training capture and scoring are fully offline regardless.
 - **Being answered is silent.** The athlete finds out they were approved — or
   declined — by opening their Coach tab, not by being told. A decline is
   especially quiet: the pending card simply goes and the directory comes back.
   Telling them needs the Notification entity in Table 18, which nothing
   implements.
-- **The Pro flag is local and unenforced.** It records that someone tapped
-  upgrade; it is not entitlement, and nothing server-side agrees with it. Fine for
-  a prototype whose upgrade button is itself a mockup — see conflict 7 — and the
-  first thing to move when billing is real.
+- **Merchant activation is pending.** GCash checkout remains disabled until
+  verified merchant configuration and live payment testing are complete.
 - **A directory listing is whatever the coach typed.** Name, team, organisation,
   specialisation and years of experience are all self-reported and nothing
   verifies them, including the certification licence number the registration

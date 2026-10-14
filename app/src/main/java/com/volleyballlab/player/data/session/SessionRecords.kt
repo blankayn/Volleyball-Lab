@@ -1,9 +1,11 @@
 package com.volleyballlab.player.data.session
 
+import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.CueScore
 import com.volleyballlab.player.domain.model.RepResult
 import com.volleyballlab.player.domain.model.SessionResult
+import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.model.Skill
 import kotlinx.serialization.Serializable
 
@@ -34,6 +36,21 @@ internal data class SessionRecord(
     val startedAtEpochMs: Long,
     val durationMs: Long,
     val reps: List<RepRecord>,
+    val videoPath: String? = null,
+    val angleStages: List<AngleStageRecord> = emptyList(),
+    val assignmentId: String? = null,
+)
+
+@Serializable
+internal data class AngleStageRecord(
+    val stageIndex: Int,
+    val angle: String,
+    val startMs: Long,
+    val endMs: Long,
+    val liveRepCount: Int,
+    val validRepCount: Int,
+    val bestStreak: Int,
+    val estimatedFormScore: Int? = null,
 )
 
 @Serializable
@@ -59,6 +76,14 @@ internal fun SessionResult.toRecord(): SessionRecord = SessionRecord(
     startedAtEpochMs = startedAtEpochMs,
     durationMs = durationMs,
     reps = reps.map { it.toRecord() },
+    videoPath = videoPath,
+    assignmentId = assignmentId,
+    angleStages = angleStages.map { stage ->
+        AngleStageRecord(
+            stage.stageIndex, stage.angle.name, stage.startMs, stage.endMs,
+            stage.liveRepCount, stage.validRepCount, stage.bestStreak, stage.estimatedFormScore,
+        )
+    },
 )
 
 private fun RepResult.toRecord(): RepRecord = RepRecord(
@@ -89,6 +114,15 @@ internal fun SessionRecord.toDomain(): SessionResult? {
         startedAtEpochMs = startedAtEpochMs,
         durationMs = durationMs,
         reps = reps.map { it.toDomain() },
+        videoPath = videoPath,
+        assignmentId = assignmentId,
+        angleStages = angleStages.map { stage ->
+            SessionAngleStage(
+                stage.stageIndex, enumOrNull<CameraAngle>(stage.angle) ?: CameraAngle.Unknown,
+                stage.startMs, stage.endMs, stage.liveRepCount, stage.validRepCount,
+                stage.bestStreak, stage.estimatedFormScore,
+            )
+        },
     )
 }
 

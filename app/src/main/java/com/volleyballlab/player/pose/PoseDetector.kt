@@ -49,9 +49,9 @@ interface PoseDetector : AutoCloseable {
     /**
      * Submits a frame for inference. Returns immediately.
      *
-     * @param timestampMs monotonically increasing. MediaPipe's live-stream mode
-     *   rejects out-of-order timestamps outright, so this must come from a
-     *   single clock - use the ImageProxy's own timestamp, never wall time.
+     * @param timestampMs camera acquisition timestamp from the ImageProxy.
+     *   MediaPipe requires strictly increasing timestamps; the real detector
+     *   rebases this value if CameraX changes its origin after a rebind.
      * @param mirrored whether the source was the front camera. Carried through to
      *   [PoseFrame.mirrored] for rendering; it does not affect inference.
      */

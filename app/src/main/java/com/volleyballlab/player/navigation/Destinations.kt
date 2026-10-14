@@ -57,11 +57,21 @@ data object SkillSelectRoute
 @Serializable
 data class DrillSelectRoute(val skill: Skill)
 
-@Serializable
-data class CaptureRoute(val skill: Skill, val drillId: String)
+@Serializable data object DrillLibraryRoute
+@Serializable data class DrillDetailRoute(val drillId: String)
+@Serializable data class DrillPracticeRoute(val drillId: String, val sets: Int = 3, val reps: Int = 10, val restSeconds: Int = 30, val resumeId: String? = null)
+@Serializable data class DrillPracticeSummaryRoute(val workoutId: String)
 
 @Serializable
-data class SessionResultRoute(val sessionId: String)
+data class CaptureRoute(val skill: Skill, val drillId: String, val returnToDrillId: String? = null, val assignmentId: String? = null)
+
+@Serializable
+data class SessionResultRoute(val sessionId: String, val returnToDrillId: String? = null,
+    val assignmentId: String? = null, val returnToSummary: Boolean = false,
+    val summaryFromProgress: Boolean = false)
+
+@Serializable
+data class SessionSummaryRoute(val sessionId: String, val fromProgress: Boolean = false)
 
 @Serializable
 data object ProgressRoute
@@ -70,7 +80,13 @@ data object ProgressRoute
 data object CoachRoute
 
 @Serializable
+data class PlayerAssignmentRoute(val assignmentId: String)
+
+@Serializable
 data object ProfileRoute
+
+@Serializable
+data object EditAccountRoute
 
 // ---------------------------------------------------------------------------
 // Coach mode
@@ -201,4 +217,3 @@ enum class CoachTabDestination(
         val All: List<CoachTabDestination> = entries
     }
 }
-

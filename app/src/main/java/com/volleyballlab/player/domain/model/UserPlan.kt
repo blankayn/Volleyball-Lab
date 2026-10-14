@@ -73,7 +73,7 @@ enum class ProFeature(
     FullDrillLibrary(
         R.string.pro_feature_drills_title,
         R.string.pro_feature_drills_body,
-        enforced = false,
+        enforced = true,
     ),
     AdvancedBiomechanics(
         R.string.pro_feature_biomech_title,

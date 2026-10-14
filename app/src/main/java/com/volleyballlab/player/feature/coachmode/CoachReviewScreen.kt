@@ -59,6 +59,8 @@ import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.ui.component.EntranceAnimation
+import com.volleyballlab.player.ui.component.GhostLayout
+import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.ScoreArc
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
@@ -156,6 +158,11 @@ fun CoachReviewScreen(
     val viewModel: CoachReviewViewModel = viewModel(factory = CoachReviewViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    if (!state.loaded) {
+        GhostLoadingScreen(GhostLayout.Detail, contentPadding, modifier)
+        return
+    }
+
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     var sent by rememberSaveable(sessionId) { mutableStateOf(false) }
 
@@ -213,6 +220,10 @@ fun CoachReviewScreen(
             EntranceAnimation(index = 1) {
                 Scorecard(review, Modifier.padding(horizontal = CoachGutter))
             }
+        }
+
+        item {
+            SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter))
         }
 
         if (review.framingIsPoor) {

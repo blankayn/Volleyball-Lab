@@ -4,10 +4,33 @@ Turns a folder of volleyball clips into labelled, camera-independent pose
 sequences you can train a form classifier on.
 
 It runs the **same pose model the Android app runs** —
-`app/src/main/assets/pose_landmarker_full.task`, one pose, 0.5 confidences —
-so a threshold derived here is a threshold that transfers to the phone. Measuring
-form offline with a different detector than the app ships is the kind of mistake
-that only surfaces on a device, late, as "the app disagrees with our own numbers".
+`app/src/main/assets/pose_landmarker_full.task`, up to three poses, 0.5 confidences — and
+computes its features with a **direct port of the app's `Angles.kt`**, in the same
+world coordinate space. A threshold derived here is therefore expressible as a
+`FormCue` target range without translation.
+
+That second half was originally wrong and it mattered. The pipeline first measured
+angles in image space — a perspective projection — while every analyzer in the app
+consumes MediaPipe's metric, hip-centred world landmarks. Both produce plausible
+degrees. Measured against each other on 143 clean frames of real passing footage:
+
+```
+overall mean disagreement: 23.1 degrees
+off by more than 10 degrees: 70.5%
+off by more than 25 degrees: 32.5%   (elbows up to 128)
+```
+
+`compare_spaces.py` is that measurement and is kept deliberately. It does not go
+to zero after the fix — the gap is a property of projecting 3D onto 2D, not of any
+bug — so it stays as the standing argument for why the world-space port exists.
+
+`test_parity.py` pins the port against the Kotlin's own unit-test vectors,
+transcribed from `AnglesTest.kt` and `TestPoses.kt`. Run it after touching
+`features.py`:
+
+```bash
+.venv/Scripts/python test_parity.py
+```
 
 ## Setup
 
@@ -29,6 +52,42 @@ point `--model` somewhere else.
 ```bash
 .venv/Scripts/python summarise.py data
 ```
+
+## MPJPE validation from the updated manuscript
+
+`evaluate_mpjpe.py` implements the manuscript's mean per-joint position error:
+the mean 3D Euclidean distance between a predicted joint and an independently
+annotated joint, in millimetres. It reports overall, per-skill, per-clip and
+per-joint results, along with the fraction of annotations that were measurable.
+The manuscript's **< 50 mm** value is a target, not a measured result. No MPJPE
+value should be claimed until calibrated ground truth is supplied.
+
+Run `extract.py` on the evaluation clips first, using the same model bundle as
+the app. Prepare a CSV with one row per annotated joint:
+
+```csv
+clip,skill,frame,joint,x_mm,y_mm,z_mm
+serve_trial_01,serve,42,LEFT_SHOULDER,12.0,-415.0,36.0
+```
+
+`clip` is the input video's stem; `frame` is zero-based. The supported joints are
+both shoulders, elbows, wrists, hips, knees and ankles. Coordinates must be
+calibrated 3D positions in the **same hip-centred axis system** as MediaPipe's
+world landmarks. Keep the annotation method and coordinate transform with the
+dataset. Pixels or 2D image landmarks have no recoverable depth in millimetres,
+so the evaluator rejects a 2D-only CSV. Do not use MediaPipe's own output as the
+"ground truth"; that would measure the model against itself.
+
+```bash
+.venv/Scripts/python evaluate_mpjpe.py data ground_truth_3d.csv --out data/mpjpe_report.json
+```
+
+The report excludes joints with model visibility below 0.5 or missing pose
+coordinates and exposes that exclusion as `coverage`. It applies no fitting or
+rescaling to make the error look smaller. Record the device, camera position,
+lighting and skill for every evaluation clip, and review poor-coverage skills
+separately rather than trusting a low MPJPE from a tiny visible subset. The
+five-skill target remains `null` until every skill has valid annotated joints.
 
 `--overlay` writes an annotated mp4 per clip. Watch one before trusting a batch;
 both heuristics below are tuned, and tuned things drift when the footage changes.
@@ -88,37 +147,66 @@ lower-centre gate silently inverted its labels.
 
 ## Measured on the sample clips
 
-Two clips carry badges. `serve_receive` (16 s, 488 frames, 4 cuts) →
-**18 segments, 4 correct and 4 faulty**; `beginner_tips` (11 s, 338 frames) →
-**11 segments, 3 and 3**. Feature separation on serve-receive's 126 clean frames,
-in pooled standard deviations:
+Three clips carry badges: `serve_receive` (4 ok / 4 fault), `passing_easy2`
+(8 / 3), `beginner_tips` (3 / 3, mixed skills). Feature separation over 1110 clean
+frames, in pooled standard deviations:
 
-| Feature | ok | fault | separation |
-|---|---|---|---|
-| `torso_lean` | 18.1° | 7.0° | 0.99 |
-| `platform_tilt` | 70.1° | 49.9° | 0.89 |
-| `knee_l` | 149.0° | 162.9° | 0.87 |
-| `platform_height` | −0.00 | +0.36 | 0.84 |
-| `weight_forward` | +0.13 | −0.13 | 0.70 |
-| `knee_flexion_mean` | 158.0° | 159.3° | 0.09 |
+| Feature | ok | fault | separation | unit |
+|---|---|---|---|---|
+| `knee_r` | 138.6 | 155.6 | 0.92 | degrees |
+| `knee_mean` | 139.8 | 153.1 | 0.78 | degrees |
+| `facing_camera` | 0.94 | 0.84 | 0.50 | ratio |
+| `knee_l` | 141.0 | 150.6 | 0.49 | degrees |
+| `trunk_forward_lean` | 18.3 | 11.2 | 0.45 | degrees |
+| `elbow_mean` | 135.0 | 137.3 | 0.11 | degrees |
 
-Five features move in the direction coaching theory predicts. The faulty reps
-stand upright with the platform above the waist and the weight on the heels; the
-correct ones lean in, low, weight forward.
+Bent knees and a forward chest on the correct reps; straighter and more upright on
+the faulty ones. That is what a coach would say, which is mild evidence the
+measurement is real.
 
-**These are diagnostics, not thresholds.** One athlete, one gym, one session.
-With a single demonstrator there is no way to separate "this is what correct form
-looks like" from "this is what this person looks like". Thresholds need many
-athletes.
+**These numbers are lower than the image-space ones they replaced**, and that is
+the point rather than a regression. The old separations (`torso_lean` 0.99,
+`platform_tilt` 0.89) were partly measuring a projection that correlates with
+where the athlete happened to stand, so they flattered themselves.
+
+**They are diagnostics, not thresholds.** Two athletes, three sessions. There is
+still no way to separate "this is correct form" from "this is what these two
+people look like".
+
+**`facing_camera` at 0.50 is a warning, not a feature.** It measures how square
+the athlete is to the lens — a property of the camera, not of the rep. If it keeps
+separating the classes as clips are added, the model is learning that the faulty
+demos were filmed at a different angle. Watch it.
+
+## Source codecs
+
+Downloads arrive in whatever the platform served. OpenCV's bundled FFmpeg is
+narrower than the standalone one, and an HEVC, AV1 or VP9 clip will open, read
+zero frames, and report nothing useful. The pipeline detects that and transcodes
+to H.264 through ffmpeg automatically, so mixed batches just work.
+
+One case it cannot rescue: **TikTok serves ByteDance's proprietary `bvc2`**, which
+no standard decoder handles - not OpenCV, not ffmpeg 9. The clip is unusable and
+the only fix is to fetch it again forcing H.264:
+
+```bash
+yt-dlp -f "bv*[vcodec^=avc1]+ba/b[vcodec^=avc1]" <url>
+```
+
+The failure names the codec so this is obvious rather than mysterious.
 
 ## Known issues
 
-- `knee_flexion_mean` does not work (0.09). The knees separate well individually
-  but in opposite directions — the correct rep bends the left knee, the faulty
-  one the right. That is which-leg-forward, and both averaging and absolute
-  difference (tried: 0.16) destroy it. The fix is mirror-normalising the skeleton
-  so legs are ordered by stance rather than by side, which needs footage from
-  both sides to validate.
+- **`hitting_side` and the three columns derived from it are per-frame, not
+  per-rep.** The app resolves the hitting arm once, from the rep's contact frame.
+  This pipeline has no reps, so `elbow_hitting`, `shoulder_hitting` and
+  `shoulder_tossing` use whatever the frame itself says. `hitting_side` is emitted
+  as its own column precisely so a later rep segmenter can take the contact
+  frame's value and recompute the other three correctly.
+- **`hip_rise_m` is always NaN here.** Jump height needs a standing-hip baseline
+  that only a rep segmenter knows. `vertical_scale` and `hip_centre_image_y` are
+  its two ingredients and are both emitted, so it can be filled in later without
+  re-running MediaPipe.
 - **Segments are not reps.** A segment is a stretch with one label. In short-form
   coaching clips that is usually one demonstration, which is close enough to be
   useful and is not the same thing. Real rep segmentation needs the fault

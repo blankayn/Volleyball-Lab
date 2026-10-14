@@ -13,6 +13,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.google.firebase.FirebaseTooManyRequestsException
+import kotlinx.coroutines.CancellationException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -74,8 +78,10 @@ class FirebaseAuthRepository(
 
     override val currentUser: Flow<AuthUser?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser?.toAuthUser()) }
+        val tokenListener = FirebaseAuth.IdTokenListener { provider: FirebaseAuth -> trySend(provider.currentUser?.toAuthUser()) }
         auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
+        auth.addIdTokenListener(tokenListener)
+        awaitClose { auth.removeAuthStateListener(listener); auth.removeIdTokenListener(tokenListener) }
     }
 
     /**
@@ -126,10 +132,33 @@ class FirebaseAuthRepository(
             // phone; being asked to log in again on the very next launch would
             // read as the sign-up not having worked.
             setRememberSession(true)
+            runCatching { created.user?.sendEmailVerification()?.awaitResult() }
         }
 
     override suspend fun sendPasswordReset(email: String): AuthOutcome = attempt {
         auth.sendPasswordResetEmail(email.trim()).awaitResult()
+    }
+
+    override suspend fun sendVerificationEmail(): AuthOutcome {
+        val user = auth.currentUser ?: return AuthOutcome.Failure(AuthError.NoSession)
+        if (user.isEmailVerified) return AuthOutcome.Success
+        return attempt { user.sendEmailVerification().awaitResult() }
+    }
+
+    override suspend fun refreshAccount(): AuthOutcome {
+        val user = auth.currentUser ?: return AuthOutcome.Failure(AuthError.NoSession)
+        return attempt { user.reload().awaitResult(); user.getIdToken(true).awaitResult() }
+    }
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String): AuthOutcome {
+        val user = auth.currentUser ?: return AuthOutcome.Failure(AuthError.NoSession)
+        val email = user.email ?: return AuthOutcome.Failure(AuthError.ProviderDisabled)
+        if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return AuthOutcome.Failure(AuthError.ProviderDisabled)
+        if (newPassword.length < 6) return AuthOutcome.Failure(AuthError.WeakPassword)
+        return attempt {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, currentPassword)).awaitResult()
+            user.updatePassword(newPassword).awaitResult()
+        }
     }
 
     override suspend fun signOut() {
@@ -159,6 +188,7 @@ class FirebaseAuthRepository(
         runCatching { block() }.fold(
             onSuccess = { AuthOutcome.Success },
             onFailure = { failure ->
+                if (failure is CancellationException) throw failure
                 // The screen shows a sentence the athlete can act on, which
                 // necessarily discards everything needed to diagnose the cause.
                 // Without this line an unmapped failure is a dead end: the user
@@ -173,6 +203,8 @@ private fun FirebaseUser.toAuthUser() = AuthUser(
     uid = uid,
     email = email.orEmpty(),
     displayName = displayName.orEmpty(),
+    emailVerified = isEmailVerified,
+    passwordProvider = providerData.any { it.providerId == EmailAuthProvider.PROVIDER_ID },
 )
 
 /**
@@ -200,6 +232,8 @@ private fun FirebaseUser.toAuthUser() = AuthUser(
  * exception recoverable when that happens.
  */
 private fun Throwable.toAuthError(): AuthError = when {
+    this is FirebaseAuthRecentLoginRequiredException -> AuthError.RecentLoginRequired
+    this is FirebaseTooManyRequestsException -> AuthError.TooManyRequests
     this is FirebaseAuthWeakPasswordException -> AuthError.WeakPassword
     this is FirebaseAuthUserCollisionException -> AuthError.EmailAlreadyUsed
     this is FirebaseAuthInvalidUserException -> AuthError.WrongCredentials

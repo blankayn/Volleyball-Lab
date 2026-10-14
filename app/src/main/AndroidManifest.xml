@@ -3,17 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      CAMERA is the only runtime permission this app requests.
+      CAMERA supports capture; optional POST_NOTIFICATIONS supports training alerts.
 
       Deliberately NOT requested:
         RECORD_AUDIO      - form analysis is purely visual. Recording a minor
                             athlete's audio would need consent we do not collect.
         WRITE_EXTERNAL_*  - session clips stay in app-scoped storage.
-        INTERNET is declared because Firebase sync is planned, but nothing in the
+        INTERNET supports Firebase authentication, sync and optional reports; the
         training pipeline requires it: capture and analysis run fully on-device.
     -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <uses-feature
         android:name="android.hardware.camera.any"
@@ -52,6 +59,7 @@
         -->
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="true"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.VolleyballLab.Splash"

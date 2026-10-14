@@ -52,6 +52,10 @@ class MediaPipePoseDetector private constructor(
     val usingGpu: Boolean,
 ) : PoseDetector {
 
+    private val primaryPoseTracker = PrimaryPoseTracker()
+    private val frameClock = MonotonicFrameClock()
+    private var lastMirrored: Boolean? = null
+
     private val _poses = MutableSharedFlow<PoseFrame>(
         replay = 1,
         extraBufferCapacity = 1,
@@ -72,26 +76,39 @@ class MediaPipePoseDetector private constructor(
      * result, which would otherwise leak an entry per dropped frame.
      */
     private val mirroredByTimestamp = ConcurrentHashMap<Long, Boolean>()
+    private val cameraTimeByTimestamp = ConcurrentHashMap<Long, Long>()
 
     override fun submit(bitmap: Bitmap, timestampMs: Long, mirrored: Boolean) {
-        if (mirroredByTimestamp.size > MAX_PENDING_FRAMES) mirroredByTimestamp.clear()
-        mirroredByTimestamp[timestampMs] = mirrored
-        val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
-        runCatching { landmarker.detectAsync(mpImage, timestampMs) }
+        val monotonicTimestampMs = frameClock.adjust(timestampMs)
+        if (mirroredByTimestamp.size > MAX_PENDING_FRAMES) {
+            mirroredByTimestamp.clear()
+            cameraTimeByTimestamp.clear()
+        }
+        mirroredByTimestamp[monotonicTimestampMs] = mirrored
+        cameraTimeByTimestamp[monotonicTimestampMs] = timestampMs
+        runCatching {
+            val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
+            landmarker.detectAsync(mpImage, monotonicTimestampMs)
+        }
             .onFailure {
-                mirroredByTimestamp.remove(timestampMs)
-                // Out-of-order timestamps are rejected outright by live-stream
-                // mode. That is a caller bug, not a runtime condition, so it is
-                // logged loudly rather than surfaced to the athlete.
-                Log.w(TAG, "detectAsync rejected frame at $timestampMs", it)
+                mirroredByTimestamp.remove(monotonicTimestampMs)
+                cameraTimeByTimestamp.remove(monotonicTimestampMs)
+                Log.w(TAG, "detectAsync rejected frame at $monotonicTimestampMs", it)
             }
     }
 
     private fun onResult(result: PoseLandmarkerResult, input: MPImage) {
-        val imageLandmarks = result.landmarks().firstOrNull()
-        val worldLandmarks = result.worldLandmarks().firstOrNull()
         val timestampMs = result.timestampMs()
         val mirrored = mirroredByTimestamp.remove(timestampMs) ?: false
+        val cameraTimestampMs = cameraTimeByTimestamp.remove(timestampMs) ?: timestampMs
+        if (lastMirrored != null && lastMirrored != mirrored) primaryPoseTracker.reset()
+        lastMirrored = mirrored
+        val selectedIndex = primaryPoseTracker.select(
+            result.landmarks().map { pose -> pose.map { it.toLandmark() } },
+            timestampMs,
+        )
+        val imageLandmarks = selectedIndex?.let { result.landmarks().getOrNull(it) }
+        val worldLandmarks = selectedIndex?.let { result.worldLandmarks().getOrNull(it) }
 
         // No pose in frame is a normal, frequent condition - the athlete walks
         // out of shot between reps - so it emits nothing rather than an error.
@@ -112,12 +129,16 @@ class MediaPipePoseDetector private constructor(
                 imageWidth = input.width,
                 imageHeight = input.height,
                 mirrored = mirrored,
+                cameraTimestampMs = cameraTimestampMs,
             )
         )
     }
 
     override fun close() {
         mirroredByTimestamp.clear()
+        cameraTimeByTimestamp.clear()
+        primaryPoseTracker.reset()
+        lastMirrored = null
         runCatching { landmarker.close() }
             .onFailure { Log.w(TAG, "Failed to close PoseLandmarker", it) }
     }
@@ -127,6 +148,7 @@ class MediaPipePoseDetector private constructor(
         private const val MAX_PENDING_FRAMES = 32
 
         const val DEFAULT_MODEL_ASSET = "pose_landmarker_full.task"
+        internal const val MIN_PERSON_CONFIDENCE = 0.65f
 
         /**
          * Builds a detector, preferring the GPU delegate.
@@ -139,9 +161,9 @@ class MediaPipePoseDetector private constructor(
         fun create(
             context: Context,
             modelAsset: String = DEFAULT_MODEL_ASSET,
-            minDetectionConfidence: Float = 0.5f,
-            minTrackingConfidence: Float = 0.5f,
-            minPresenceConfidence: Float = 0.5f,
+            minDetectionConfidence: Float = MIN_PERSON_CONFIDENCE,
+            minTrackingConfidence: Float = MIN_PERSON_CONFIDENCE,
+            minPresenceConfidence: Float = MIN_PERSON_CONFIDENCE,
         ): MediaPipePoseDetector {
             if (!context.hasAsset(modelAsset)) {
                 throw PoseDetectorUnavailableException(
@@ -163,8 +185,8 @@ class MediaPipePoseDetector private constructor(
                 val options = PoseLandmarker.PoseLandmarkerOptions.builder()
                     .setBaseOptions(baseOptions)
                     .setRunningMode(RunningMode.LIVE_STREAM)
-                    // One athlete. Tracking a bystander in the background would
-                    // both waste inference budget and risk scoring the wrong body.
+                    // Only one athlete is assessed. The tracker confirms a
+                    // plausible body and prevents a jump to a nearby bystander.
                     .setNumPoses(1)
                     .setMinPoseDetectionConfidence(minDetectionConfidence)
                     .setMinTrackingConfidence(minTrackingConfidence)

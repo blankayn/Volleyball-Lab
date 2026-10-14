@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="review_preparing">Analyzing this older recording… %1$d%%</string>
+    <string name="review_captured_feedback_note">Tap a correction to pause at the measured moment and see the affected joints.</string>
+    <string name="review_unavailable">Skeleton analysis is unavailable for this recording. You can still watch your video.</string>
+    <string name="review_retry">Try again</string>
+    <string name="review_skeleton">Show skeleton</string>
+    <string name="review_legend">Blue: tracked joints · Amber: adjust form · Red: larger correction</string>
+    <string name="review_feedback_note">Feedback marks measured moments in this video. Tap a correction to pause there and see the affected joints. Video feedback may differ from the session score.</string>
+    <string name="review_no_pose">No clear body pose was detected. Keep your full body visible and use brighter lighting for your next recording.</string>
+    <string name="review_not_measurable">The skeleton is available, but no complete movement had enough visible joints for reliable form feedback.</string>
+    <string name="review_no_corrections">No corrections found in the movements that could be measured.</string>
+    <string name="review_corrections">Moments to review</string>
+    <string name="review_more">Show more moments</string>
+    <string name="review_pose_unavailable_here">Pose not visible at this moment</string>
+    <string name="review_seek">Recording timeline with correction markers</string>
+    <string name="review_play">Play</string>
+    <string name="review_pause">Pause</string>
+    <string name="review_playback_failed">This recording could not be played.</string>
+    <string name="review_overlay_description">Tracked body skeleton with highlighted joints for measured form corrections</string>
+    <string name="review_issue_at">Rep %1$d · %2$s</string>
+    <string name="review_show_moment">Show this moment</string>
+</resources>
