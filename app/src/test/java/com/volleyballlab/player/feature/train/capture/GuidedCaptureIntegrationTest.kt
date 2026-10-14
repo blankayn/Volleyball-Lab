@@ -113,6 +113,116 @@ class GuidedCaptureIntegrationTest {
         } finally { store.clear(); runCurrent() }
     }
 
+    @Test fun `failed session storage leaves analysis without reporting a saved result`() = runTest(dispatcher) {
+        val detector = FakeDetector()
+        val saveAttempted = CompletableDeferred<Unit>()
+        val repository = object : SessionRepository by NoOpRepository {
+            override suspend fun save(session: SessionResult) {
+                saveAttempted.complete(Unit)
+                throw java.io.IOException("Storage full")
+            }
+        }
+        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, repository, SessionScorer(), false)
+        val store = ViewModelStore().apply { put("capture", vm) }
+        runCurrent()
+        try {
+            val feed = Feed(this, detector)
+            feed.stand(100)
+            val id = (vm.uiState.value as CaptureUiState.Recording).sessionId
+            vm.onVideoFinalized(id, null)
+            vm.onStopRequested()
+            saveAttempted.await()
+            runCurrent()
+            assertEquals(CaptureUiState.SaveFailed, vm.uiState.value)
+            assertFalse("A failed save must end the busy state", vm.uiState.value is CaptureUiState.Analysing)
+            assertFalse("A failed save must not navigate to a missing result", vm.uiState.value is CaptureUiState.Finished)
+        } finally { store.clear(); runCurrent() }
+    }
+
+    @Test fun `retry saves the retained session and video once despite repeated taps`() = runTest(dispatcher) {
+        val detector = FakeDetector()
+        val firstAttempt = CompletableDeferred<Unit>()
+        val finishRetry = CompletableDeferred<Unit>()
+        val saved = CompletableDeferred<SessionResult>()
+        val attempts = mutableListOf<SessionResult>()
+        var reviewWrites = 0
+        val repository = object : SessionRepository by NoOpRepository {
+            override suspend fun save(session: SessionResult) {
+                attempts += session
+                if (attempts.size == 1) {
+                    firstAttempt.complete(Unit)
+                    throw java.io.IOException("Storage full")
+                }
+                finishRetry.await()
+                saved.complete(session)
+            }
+        }
+        val writer = CapturedReviewWriter { _, _, _ -> reviewWrites++ }
+        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, repository,
+            SessionScorer(), false, assignmentId = "assignment-1", capturedReviewWriter = writer)
+        val store = ViewModelStore().apply { put("capture", vm) }
+        runCurrent()
+        try {
+            vm.setGuidedAngles(true)
+            val feed = Feed(this, detector)
+            feed.stand(100)
+            val id = (vm.uiState.value as CaptureUiState.Recording).sessionId
+            feed.stand(35)
+            repeat(2) { feed.rep() }
+            vm.onVideoFinalized(id, "recording.mp4")
+            vm.onStopRequested()
+            firstAttempt.await()
+            runCurrent()
+            assertEquals(CaptureUiState.SaveFailed, vm.uiState.value)
+            assertEquals(1, reviewWrites)
+            val prepared = attempts.single()
+            assertTrue(prepared.repCount > 0)
+            assertEquals("assignment-1", prepared.assignmentId)
+            assertEquals("recording.mp4", prepared.videoPath)
+            assertTrue(prepared.angleStages.isNotEmpty())
+
+            feed.rep()
+            vm.onRetrySaveRequested()
+            vm.onRetrySaveRequested()
+            runCurrent()
+            assertEquals(CaptureUiState.Analysing, vm.uiState.value)
+            assertEquals(2, attempts.size)
+            finishRetry.complete(Unit)
+            assertEquals(prepared, saved.await())
+            runCurrent()
+            assertEquals(CaptureUiState.Finished(id, prepared.repCount), vm.uiState.value)
+            assertEquals(1, reviewWrites)
+            vm.onRetrySaveRequested()
+            runCurrent()
+            assertEquals(2, attempts.size)
+        } finally { store.clear(); runCurrent() }
+    }
+
+    @Test fun `cancelled storage does not become a retryable save failure`() = runTest(dispatcher) {
+        val detector = FakeDetector()
+        val saveAttempted = CompletableDeferred<Unit>()
+        val repository = object : SessionRepository by NoOpRepository {
+            override suspend fun save(session: SessionResult) {
+                saveAttempted.complete(Unit)
+                throw kotlinx.coroutines.CancellationException("Capture closed")
+            }
+        }
+        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, repository, SessionScorer(), false)
+        val store = ViewModelStore().apply { put("capture", vm) }
+        runCurrent()
+        try {
+            val feed = Feed(this, detector)
+            feed.stand(100)
+            val id = (vm.uiState.value as CaptureUiState.Recording).sessionId
+            vm.onVideoFinalized(id, null)
+            vm.onStopRequested()
+            saveAttempted.await()
+            runCurrent()
+            assertFalse(vm.uiState.value is CaptureUiState.SaveFailed)
+            assertFalse(vm.uiState.value is CaptureUiState.Finished)
+        } finally { store.clear(); runCurrent() }
+    }
+
     private suspend fun TestScope.withCapture(body: suspend TestScope.(CaptureViewModel, Feed) -> Unit) {
         val detector = FakeDetector()
         val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, NoOpRepository, SessionScorer(), false)
