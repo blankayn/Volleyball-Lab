@@ -20,6 +20,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { preferencesPath } from "./account-settings";
+import { normalizePreferences, type PortalPreferences } from "./preferences";
 
 export type MembershipStatus = "Pending" | "Active" | "Ended";
 export type AssignmentStatus = "Pending" | "InProgress" | "Completed";
@@ -326,11 +328,17 @@ export function emptyProfile(): CoachProfile {
   };
 }
 
+export interface ProfileSaveResult {
+  preferencesSaved: boolean;
+  accountNameSynced: boolean;
+}
+
 export async function saveProfile(
   uid: string,
   profile: CoachProfile,
   rosterSize: number,
-): Promise<void> {
+  preferences?: PortalPreferences,
+): Promise<ProfileSaveResult> {
   const now = Date.now();
   const batch = writeBatch(db);
   batch.set(
@@ -342,7 +350,19 @@ export async function saveProfile(
     doc(db, "coachDirectory", uid),
     directoryProjection(profile, rosterSize, now),
   );
+  // Keep the established coach profile and directory atomic. New optional
+  // documents may be unavailable until their rules have been deployed.
   await batch.commit();
+  const [settings, accountName] = await Promise.allSettled([
+    preferences
+      ? setDoc(preferencesPath(uid), { ...normalizePreferences(preferences), updatedAt: now })
+      : Promise.resolve(),
+    updateDoc(doc(db, "users", uid), { displayName: profile.name, updatedAt: now }),
+  ]);
+  return {
+    preferencesSaved: settings.status === "fulfilled",
+    accountNameSynced: accountName.status === "fulfilled",
+  };
 }
 
 /** Public fields only; preferences and licence remain in the private profile. */
@@ -488,4 +508,12 @@ export function queueQuery(coachUid: string): Query {
 
 export function rosterQuery(coachUid: string): Query {
   return query(collection(db, "roster", coachUid, "members"));
+}
+
+export function assignmentsQuery(coachUid: string): Query {
+  return query(collection(db, "assignments"), where("coachUid", "==", coachUid));
+}
+
+export function sharedSessionsQuery(coachUid: string): Query {
+  return query(collection(db, "sessions"), where("sharedWith", "array-contains", coachUid));
 }

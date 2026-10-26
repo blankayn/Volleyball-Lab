@@ -104,6 +104,24 @@ service cloud.firestore {
         && data.notifySubmissions is bool && data.notifyWeeklyDigest is bool
         && data.notifySafetyAlerts is bool && validDate(data.updatedAt);
     }
+    function isValidWebSettings(data) {
+      return data.keys().hasAll(['theme', 'accent', 'density', 'textSize', 'highContrast',
+          'reduceMotion', 'enhancedFocus', 'submissionAlerts', 'deadlineReminders',
+          'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
+        && data.keys().hasOnly(['theme', 'accent', 'density', 'textSize', 'highContrast',
+          'reduceMotion', 'enhancedFocus', 'submissionAlerts', 'deadlineReminders',
+          'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
+        && data.theme in ['light', 'dark', 'system']
+        && data.accent in ['rust', 'forest', 'plum']
+        && data.density in ['comfortable', 'compact']
+        && data.textSize in ['normal', 'large', 'larger']
+        && data.highContrast is bool && data.reduceMotion is bool && data.enhancedFocus is bool
+        && data.submissionAlerts is bool && data.deadlineReminders is bool
+        && data.trainingNotifications is bool && data.emailNotifications is bool
+        && boundedString(data.photo, 120000)
+        && (data.photo == '' || data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))
+        && boundedString(data.certifications, 1200) && validDate(data.updatedAt);
+    }
     function isValidDirectory(data) {
       // Optional legacy fields were published by the original web projection.
       return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
@@ -252,6 +270,12 @@ service cloud.firestore {
       allow read: if isUser(coachUid);
       allow create, update: if isUser(coachUid) && isValidCoach(request.resource.data);
       allow delete: if false;
+      match /webSettings/{settingsId} {
+        allow read: if isUser(coachUid) && settingsId == 'preferences';
+        allow create, update: if isUser(coachUid) && settingsId == 'preferences'
+          && isValidWebSettings(request.resource.data);
+        allow delete: if false;
+      }
     }
 
     match /coachDirectory/{coachUid} {

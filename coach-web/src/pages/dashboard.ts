@@ -13,7 +13,8 @@ import {
   queueQuery,
   rosterQuery,
   saveAssignment,
-  saveProfile,
+  assignmentsQuery,
+  sharedSessionsQuery,
   setMemberStatus,
   subscribe,
   uid as newId,
@@ -28,6 +29,9 @@ import { cueLabel, cuesFor, formatMeasured, formatTarget, SKILL_LABEL } from "..
 import { dueLabel, esc, fullDate, initials, timeAgo } from "../lib/format";
 import { appPath, go } from "../lib/router";
 import { avatar, emptyState, errorCard, iconChip, scoreBar, spinner } from "../lib/ui";
+import { hydrateAccountPreferences, renderAccount, wireAccount } from "./account";
+import { getPreferences } from "../lib/preferences";
+import { mountNotifications, notificationBell } from "../lib/notifications";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
@@ -37,16 +41,23 @@ interface DashData {
   assignments: Assignment[];
   sessionsByPlayer: Map<string, TrainingSession[]>;
   profileName: string;
+  profileTeam: string;
 }
 
 let unsubscribers: (() => void)[] = [];
 let expandedSession: string | null = null;
 let disposeSidebar: (() => void) | null = null;
+let disposeAccount: (() => void) | null = null;
+let disposeNotifications: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
   dashboardVersion++;
   stopLive();
+  disposeAccount?.();
+  disposeAccount = null;
+  disposeNotifications?.();
+  disposeNotifications = null;
   disposeSidebar?.();
   disposeSidebar = null;
   expandedSession = null;
@@ -120,7 +131,7 @@ async function loadData(coachUid: string): Promise<DashData> {
       sessionsByPlayer.set(m.playerUid, await getSessionsFor(m.playerUid, coachUid));
     }),
   );
-  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name };
+  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name, profileTeam: profile.teamName };
 }
 
 const PAGE_LABELS: Record<Tab, string> = {
@@ -278,6 +289,7 @@ export async function renderDashboard(
         </div>
         <div class="app-topbar-actions">
           <span class="sync-pill"><i></i>Live</span>
+          ${notificationBell()}
           <a class="btn btn-primary btn-sm topbar-cta" href="${appPath("assignments")}" aria-label="Set a new drill">${navIcon('<path d="M12 5v14M5 12h14"/>')}<span>New drill</span></a>
         </div>
       </header>
@@ -290,6 +302,10 @@ export async function renderDashboard(
   document.title = `${PAGE_LABELS[activeTab]} — Volleyball Lab Coach Portal`;
   wireSidebar(root);
   wireSignOut(root);
+  const notifications = mountNotifications(root, coachUid);
+  disposeNotifications = notifications.dispose;
+  await hydrateAccountPreferences(coachUid);
+  if (version !== dashboardVersion) return;
 
   const body = root.querySelector<HTMLElement>("#dash-body");
   if (!body) return;
@@ -299,11 +315,12 @@ export async function renderDashboard(
   body.addEventListener("input", () => { dirty = true; });
   body.addEventListener("change", () => { dirty = true; });
   const render = async (live = false) => {
-    if (live && dirty) return;
     const attempt = ++request;
     try {
       const data = await loadData(coachUid);
-      if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
+      if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
+      notifications.update(data);
+      if (live && dirty) return;
       nameCache = new Map(data.roster.map((m) => [m.playerUid, m.playerName || "Player"]));
       // Refresh badges and the selected-player link without replacing the shell.
       const nav = root.querySelector(".sidebar-nav");
@@ -317,18 +334,20 @@ export async function renderDashboard(
       }
       const html = await viewFor(activeTab, coachUid, data, playerUid);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
+      disposeAccount?.();
+      disposeAccount = null;
       body.innerHTML = html;
       dirty = false;
       const coachName = data.profileName || "Coach";
       const teamName = root.querySelector(".dash-team-name");
-      if (teamName) teamName.textContent = data.profileName ? `${data.profileName}’s team` : "Your team";
+      if (teamName) teamName.textContent = data.profileTeam || (data.profileName ? `${data.profileName}’s team` : "Your team");
       const sidebarUserName = root.querySelector("#sidebar-user-name");
       if (sidebarUserName) sidebarUserName.textContent = coachName;
       const workspaceName = root.querySelector("#workspace-name");
-      if (workspaceName) workspaceName.textContent = data.profileName ? `${data.profileName}’s workspace` : "Coach workspace";
+      if (workspaceName) workspaceName.textContent = data.profileTeam || (data.profileName ? `${data.profileName}’s workspace` : "Coach workspace");
       const avatarText = initials(coachName);
       const userAvatar = root.querySelector("#sidebar-user-avatar");
-      if (userAvatar) userAvatar.textContent = avatarText;
+      if (userAvatar) userAvatar.innerHTML = getPreferences().photo ? `<img src="${esc(getPreferences().photo)}" alt="" />` : esc(avatarText);
       const workspaceAvatar = root.querySelector("#workspace-avatar");
       if (workspaceAvatar) workspaceAvatar.textContent = avatarText;
       if (activeTab === "player" && playerUid) {
@@ -336,6 +355,17 @@ export async function renderDashboard(
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
       wireActions(root, coachUid, () => void render());
+      disposeAccount = wireAccount(root, coachUid, () => {
+        void getProfile(coachUid).then((profile) => {
+          if (version !== dashboardVersion) return;
+          const name = profile.name || "Coach";
+          if (sidebarUserName) sidebarUserName.textContent = name;
+          if (workspaceName) workspaceName.textContent = profile.teamName || `${name}’s workspace`;
+          if (teamName) teamName.textContent = profile.teamName || `${name}’s team`;
+          if (workspaceAvatar) workspaceAvatar.textContent = initials(name);
+          if (userAvatar) userAvatar.innerHTML = getPreferences().photo ? `<img src="${esc(getPreferences().photo)}" alt="" />` : esc(initials(name));
+        }).catch(() => undefined);
+      });
     } catch (e) {
       console.error(e);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
@@ -351,6 +381,8 @@ export async function renderDashboard(
   unsubscribers = [
     subscribe(queueQuery(coachUid), () => void render(true), () => undefined),
     subscribe(rosterQuery(coachUid), () => void render(true), () => undefined),
+    subscribe(assignmentsQuery(coachUid), () => void render(true), () => undefined),
+    subscribe(sharedSessionsQuery(coachUid), () => void render(true), () => undefined),
   ];
   await render();
 }
@@ -369,7 +401,7 @@ async function viewFor(
     case "assignments":
       return viewAssignments(data, null);
     case "account":
-      return viewAccount(coachUid);
+      return renderAccount(coachUid);
     case "player":
       return playerUid ? viewPlayer(coachUid, data, playerUid) : viewOverview(data);
     default:
@@ -539,9 +571,7 @@ function viewOverview(data: DashData): string {
           ? emptyState("team", "No players yet", "Approve a request to start building your team.")
           : `<div class="panel-list">${active.slice(0, 4).map((m) => playerRow(data, m)).join("")}</div>`}
       </section>
-    </div>
-
-    <p class="overview-footnote">Connected to the player app through the shared backend — requests, sessions and notes sync both ways. Pose analysis stays on athletes’ phones; only scores travel.</p>`;
+    </div>`;
 }
 
 function sessionTitle(data: DashData, sessionId: string): string {
@@ -567,7 +597,7 @@ function viewQueue(data: DashData, highlight: string | null): string {
   void highlight;
   const pending = data.submissions.filter((s) => s.reviewedAt === null);
   if (pending.length === 0) {
-    return `<div class="card" style="margin-top:14px">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here. They choose what to send; nothing is shared automatically.")}</div>`;
+    return `<div class="card" style="margin-top:14px">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here.")}</div>`;
   }
   return `<div class="card" style="margin-top:14px">
     <div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Review queue</h3></div>
@@ -628,7 +658,7 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
   ]);
 
   const sessionCards = sessions.length === 0
-    ? emptyState("session", "No shared sessions", "This player has not submitted a session yet. Only sessions they choose to send appear here.")
+    ? emptyState("session", "No shared sessions", "This player has not submitted a session yet.")
     : sessions.map((s) => sessionCard(coachUid, playerUid, s, notes)).join("");
 
   return `<div style="margin-top:14px"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">${icon("chevronLeft")} Back to roster</a></div>
@@ -648,7 +678,6 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
   ${weak ? `<div class="card-dark" style="margin-top:14px">
     <p class="eyebrow">Lowest-scoring cue</p>
     <h3 style="font-size:20px;margin-bottom:6px">${esc(cueLabel(weak.cueId))} — ${Math.round(weak.mean * 100)}</h3>
-    <p style="margin:0">Pooled across every rep recorded of it (min 3 measured reps). The same arithmetic the athlete's own app shows them.</p>
   </div>` : ""}
 
   <div class="page-grid">
@@ -704,7 +733,6 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
     ${open ? `<div style="margin-top:12px">
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
       <table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table>
-      <p class="muted" style="font-size:12px">Computed on-device from the athlete's stored pose data. Thresholds are first-pass coaching values, not measured ones.</p>
       <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">Your note to this player</label>
         <textarea id="note-${esc(s.id)}" maxlength="800" placeholder="What should they change before the next set?"></textarea></div>
       <button class="btn btn-primary btn-sm" data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">Send note</button>
@@ -749,37 +777,6 @@ function viewAssignments(data: DashData, editing: string | null): string {
         </div>`).join("")}</div>`}
     </div>
   </div>`;
-}
-
-// ---- Account ----------------------------------------------------------------
-
-async function viewAccount(coachUid: string): Promise<string> {
-  const profile = await getProfile(coachUid);
-  const specOptions = ["AllAround", "Serving", "Receiving", "Setting", "Spiking", "Blocking"]
-    .map((s) => `<option value="${s}"${(profile.specialisation ?? "AllAround") === s ? " selected" : ""}>${s === "AllAround" ? "All-around" : s}</option>`)
-    .join("");
-  return `<div class="page-grid"><div class="card">
-    <div class="chip-row" style="margin-bottom:12px">${iconChip("user", "rust")}<h3 class="section-title">Team &amp; credentials</h3></div>
-    <div id="profile-saved"></div>
-    <form id="profile-form">
-      <div class="form-grid">
-        <div class="field"><label for="p-name">Your name</label><input id="p-name" required maxlength="60" value="${esc(profile.name)}" /></div>
-        <div class="field"><label for="p-team">Team name</label><input id="p-team" maxlength="48" value="${esc(profile.teamName)}" /></div>
-      </div>
-      <div class="field"><label for="p-org">School or club</label><input id="p-org" maxlength="48" value="${esc(profile.organisation)}" /></div>
-      <div class="form-grid">
-        <div class="field"><label for="p-spec">Specialisation</label><select id="p-spec">${specOptions}</select></div>
-        <div class="field"><label for="p-years">Years coaching</label><input id="p-years" type="number" min="0" max="70" value="${profile.yearsExperience ?? ""}" /></div>
-      </div>
-      <div class="field"><label for="p-licence">Certification / licence no.</label><input id="p-licence" maxlength="40" value="${esc(profile.licenceNumber)}" />
-        <span class="hint">Stored on your profile only. Nothing here is verified by the app.</span></div>
-      <button class="btn btn-primary" style="width:100%" type="submit">Save</button>
-    </form>
-  </div>
-  <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("eye", "green")}<h3>What players see</h3></div>
-    <p class="muted">Your name, team, organisation, specialisation, experience and roster size appear in the app's coach directory. Your licence number and email never do.</p>
-    <div style="margin-top:16px"><button class="btn btn-ghost" data-action="sign-out">Sign out</button></div>
-  </div></div>`;
 }
 
 // ---- Actions ----------------------------------------------------------------
@@ -890,34 +887,4 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
     refresh();
   });
 
-  const profileForm = root.querySelector<HTMLFormElement>("#profile-form");
-  profileForm?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const button = profileForm.querySelector("button");
-    if (button) button.disabled = true;
-    try {
-      const [current, roster] = await Promise.all([getProfile(coachUid), getRoster(coachUid)]);
-      const years = Number.parseInt(val(root, "p-years"), 10);
-      await saveProfile(
-        coachUid,
-        {
-          ...current,
-          name: val(root, "p-name"),
-          teamName: val(root, "p-team"),
-          organisation: val(root, "p-org"),
-          specialisation: val(root, "p-spec") || null,
-          yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null,
-          licenceNumber: val(root, "p-licence"),
-        },
-        roster.filter((m) => m.status === "Active").length,
-      );
-      const saved = root.querySelector("#profile-saved");
-      if (saved) saved.innerHTML = `<div class="note-bubble" style="margin:0 0 14px">Saved.</div>`;
-    } catch (err) {
-      console.error(err);
-      const saved = root.querySelector("#profile-saved");
-      if (saved) saved.innerHTML = `<div class="form-error" role="alert">Could not save your profile. Please try again.</div>`;
-    }
-    if (button) button.disabled = false;
-  });
 }

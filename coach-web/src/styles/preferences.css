@@ -1,0 +1,213 @@
+/* Account controls and dashboard themes share semantic surfaces. */
+.app-shell {
+  --portal-surface: #fff;
+  --portal-subtle: #f6f8fa;
+  --portal-background: #fbfcfd;
+  --portal-accent-tint: #f9eee7;
+  --portal-button-text: #fff;
+  --portal-scale: 1;
+  --ink: #242b32;
+  --ink-soft: #52616d;
+  --ink-faint: #62717d;
+  --line: #dfe5e9;
+  --card: var(--portal-surface);
+  --page: var(--portal-background);
+  background: var(--page);
+  color: var(--ink);
+  color-scheme: light;
+}
+html[data-portal-accent="forest"] .app-shell { --rust: #26734f; --rust-deep: #1a573a; --portal-accent-tint: #eaf4ee; }
+html[data-portal-accent="plum"] .app-shell { --rust: #77479c; --rust-deep: #5d337e; --portal-accent-tint: #f2ecf8; }
+html[data-portal-theme="dark"] .app-shell {
+  --portal-surface: #22282d;
+  --portal-subtle: #2b333a;
+  --portal-background: #181e23;
+  --portal-accent-tint: #3f3029;
+  --portal-button-text: #191d21;
+  --ink: #f0f3f5;
+  --ink-soft: #bec9d2;
+  --ink-faint: #a8b7c3;
+  --line: #45505a;
+  --rust: #f3a67e;
+  --rust-deep: #ffbe9a;
+  --accent-indigo-bg: #303c56; --accent-indigo-fg: #bccdff;
+  --accent-green-bg: #243e33; --accent-green-fg: #a6e0bb;
+  --accent-violet-bg: #3c2f4c; --accent-violet-fg: #d6b5f2;
+  --accent-rust-bg: #473328; --accent-rust-fg: #f7bc99;
+  --good: #94d5ad; --warn: #f0cb81; --bad: #ff9eaa;
+  color-scheme: dark;
+}
+html[data-portal-theme="dark"][data-portal-accent="forest"] .app-shell { --rust: #8cd5ac; --rust-deep: #a8edc5; --portal-accent-tint: #233e31; }
+html[data-portal-theme="dark"][data-portal-accent="plum"] .app-shell { --rust: #d3abf1; --rust-deep: #e4c8f8; --portal-accent-tint: #3d2d4b; }
+.app-shell :is(.app-sidebar, .app-topbar, .card, .stat-card, .stat, .panel) { background: var(--portal-surface); border-color: var(--line); }
+.app-shell .app-sidebar { color: var(--ink); }
+.app-shell :is(.sidebar-logo, .sidebar-workspace strong, .sidebar-user strong) { color: var(--ink); }
+.app-shell :is(.sidebar-brand, .sidebar-footer) { border-color: var(--line); }
+.app-shell :is(.sidebar-link, .sidebar-signout, .sidebar-collapse) { color: var(--ink-soft); }
+.app-shell :is(.sidebar-link, .sidebar-signout, .sidebar-collapse):hover { color: var(--ink); background: var(--portal-subtle); }
+.app-shell .sidebar-link.active { background: var(--portal-accent-tint); color: var(--rust); border-color: transparent; }
+.app-shell .sidebar-link.active::before { background: var(--rust); }
+.app-shell .sidebar-link.active svg { color: var(--rust); }
+.app-shell :is(.sidebar-logo small, .sidebar-nav-label, .sidebar-context-label, .sidebar-workspace small, .sidebar-user small) { color: var(--ink-faint); }
+.app-shell :is(.sidebar-workspace, .workspace-avatar, .empty, .note-bubble, .activity-track) { background: var(--portal-subtle); border-color: var(--line); }
+.app-shell .workspace-avatar { color: var(--rust); overflow: hidden; }
+.workspace-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.app-shell .sidebar-badge, .app-shell .sidebar-link.active .sidebar-badge { background: var(--portal-subtle); color: var(--ink); }
+.app-shell .btn-primary { background: var(--rust); color: var(--portal-button-text); }
+.app-shell .btn-primary:hover { background: var(--rust-deep); }
+.app-shell .btn-ghost { background: var(--portal-surface); color: var(--ink); border-color: var(--line); }
+.app-shell .btn-ghost:hover { background: var(--portal-subtle); }
+.app-shell .icon-btn { color: var(--ink-soft); border-color: var(--line); background: var(--portal-surface); }
+.app-shell :is(.field label, .panel-title, .panel-title svg, .row-arrow, .stat-label) { color: var(--ink-soft); }
+.app-shell :is(.field input, .field select, .field textarea) { color: var(--ink); border-color: var(--line); background: var(--portal-surface); }
+.app-shell .field :is(input, textarea)::placeholder { color: var(--ink-faint); }
+.app-shell :is(.field input, .field select, .field textarea):focus { outline-color: var(--rust); border-color: var(--rust); }
+.app-shell .avatar { color: var(--rust); background: var(--portal-accent-tint); }
+.app-shell .empty .icon-chip { color: var(--ink-soft); background: var(--portal-subtle); }
+.app-shell .form-error { background: var(--portal-surface); color: var(--bad); border-color: var(--bad); }
+.app-shell .note-bubble { color: var(--ink); }
+.app-shell .activity-col.is-today .activity-track i { background: var(--rust); }
+.app-shell .row-item:hover { background: var(--portal-subtle); }
+.app-shell .pill { color: var(--ink-soft); background: var(--portal-subtle); }
+.app-shell .sync-pill { background: var(--portal-subtle); color: var(--ink-soft); border-color: var(--line); }
+.app-shell .dash-team-name { background: var(--portal-subtle); color: var(--ink-soft); border-color: var(--line); }
+.app-shell :is(.settings-card, .notification-tray) { background: var(--portal-surface); color: var(--ink); border: 1px solid var(--line); }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.app-shell [hidden] { display: none !important; }
+
+/* A calm two-column settings page; every group has its own anchor. */
+.account-settings { display: flex; flex-direction: column; gap: 24px; }
+.settings-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.settings-intro h2 { margin: 8px 0 12px; font-size: 36px; }
+.settings-intro .muted { margin: 0; }
+.settings-save-status { min-height: 20px; max-width: 32ch; text-align: right; font-size: 12px; color: var(--good); }
+.is-error { color: var(--bad) !important; }
+.is-warning { color: var(--warn) !important; }
+.settings-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.settings-nav a { padding: 9px 13px; border-radius: 6px; text-decoration: none; background: var(--portal-subtle); color: var(--ink-soft); font-size: 12px; font-weight: 500; }
+.settings-nav a:hover { color: var(--rust); background: var(--portal-accent-tint); }
+.settings-columns { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.settings-stack { display: grid; gap: 24px; min-width: 0; }
+.settings-card { min-width: 0; border-radius: 12px; padding: 25px; }
+.settings-card-heading { display: flex; align-items: center; gap: 13px; margin-bottom: 26px; }
+.settings-symbol { display: grid; place-items: center; flex: none; width: 39px; height: 39px; border-radius: 8px; color: var(--rust); background: var(--portal-accent-tint); }
+.settings-symbol .ui-icon { width: 21px; height: 21px; }
+.settings-index { display: block; margin-bottom: 4px; font-size: 9px; color: var(--ink-faint); letter-spacing: .12em; }
+.app-content .settings-card-heading h2 { font-family: var(--font); font-size: 17px; font-weight: 600; line-height: 1.25; }
+.settings-card h2[id] { scroll-margin-top: 120px; }
+.profile-photo-row { display: flex; align-items: center; gap: 19px; margin-bottom: 24px; }
+.profile-photo { display: grid; place-items: center; flex: none; width: 80px; height: 80px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--portal-subtle); color: var(--rust); font-size: 25px; }
+.profile-photo img { width: 100%; height: 100%; object-fit: cover; }
+.profile-photo-row > div:last-child { min-width: 0; }
+.photo-upload { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.photo-upload .ui-icon { width: 16px; height: 16px; }
+.photo-upload:has(+ input:focus-visible) { outline: 3px solid var(--rust); outline-offset: 3px; }
+.photo-remove { display: block; padding: 6px 0; margin-top: 2px; border: 0; background: transparent; color: var(--ink-soft); font-family: var(--font); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.profile-photo-row small { display: block; color: var(--ink-faint); margin-top: 8px; font-size: 10px; line-height: 1.6; }
+#photo-status:not(:empty) { font-size: 12px; margin: -8px 0 20px; color: var(--ink-soft); }
+.settings-profile .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.settings-profile .field { margin-bottom: 20px; }
+.settings-profile textarea { resize: vertical; }
+.settings-form-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding-top: 6px; }
+.settings-form-footer .btn { display: inline-flex; align-items: center; gap: 14px; }
+.settings-form-footer .ui-icon { width: 18px; height: 18px; }
+#profile-saved { max-width: 42ch; font-size: 12px; line-height: 1.6; color: var(--good); }
+.settings-fieldset { min-width: 0; margin: 0 0 24px; padding: 0; border: 0; }
+.settings-fieldset legend { margin-bottom: 12px; padding: 0; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.theme-option, .accent-option { position: relative; display: block; cursor: pointer; }
+.theme-option > input, .accent-option > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.theme-option > span { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 11px; min-height: 78px; padding: 12px 6px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; color: var(--ink-soft); background: var(--portal-surface); }
+.theme-option .ui-icon { width: 21px; height: 21px; }
+.theme-option:has(input:checked) > span { border-color: var(--rust); color: var(--rust); background: var(--portal-accent-tint); box-shadow: inset 0 0 0 1px var(--rust); }
+.theme-option:has(input:focus-visible), .accent-option:has(input:focus-visible) { outline: 3px solid var(--rust); outline-offset: 3px; border-radius: 8px; }
+.accent-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.accent-option > span { display: inline-flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px; color: var(--ink-soft); font-size: 11px; }
+.accent-option i { width: 14px; height: 14px; border-radius: 50%; background: #bd4318; }
+.accent-forest i { background: #26734f; }
+.accent-plum i { background: #77479c; }
+.accent-option:has(input:checked) > span { border-color: var(--line); background: var(--portal-subtle); color: var(--ink); }
+.settings-select-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 3px 0 5px; }
+.settings-select-row > label { font-size: 13px; font-weight: 500; color: var(--ink); }
+.settings-select-row > select { min-width: 0; max-width: 60%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--portal-surface); color: var(--ink); font-family: var(--font); font-size: 12px; }
+.settings-toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 17px 0; cursor: pointer; border-top: 1px solid var(--line); }
+.settings-card-heading + .settings-toggle-row { border-top: 0; padding-top: 0; }
+.settings-toggle-row:last-child { padding-bottom: 0; }
+.settings-select-row + .settings-toggle-row { margin-top: 15px; }
+.settings-toggle-row strong { display: block; font-size: 13px; font-weight: 500; line-height: 1.5; }
+.settings-toggle-row small { display: block; margin-top: 4px; font-size: 11px; color: var(--ink-faint); line-height: 1.6; }
+.settings-switch { position: relative; display: block; width: 38px; height: 22px; flex: none; }
+.settings-switch input { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.settings-switch > span { display: block; width: 38px; height: 22px; border: 1px solid var(--ink-faint); border-radius: 20px; background: var(--portal-subtle); transition: background .16s; }
+.settings-switch > span::before { content: ""; position: absolute; width: 14px; height: 14px; left: 4px; top: 4px; border-radius: 50%; background: var(--ink-faint); transition: transform .16s; }
+.settings-switch input:checked + span { background: var(--rust); border-color: var(--rust); }
+.settings-switch input:checked + span::before { transform: translateX(16px); background: var(--portal-button-text); }
+.settings-switch input:focus-visible + span { outline: 3px solid var(--rust); outline-offset: 4px; }
+.settings-email-verification { display: flex; align-items: center; gap: 12px; padding-top: 18px; }
+.settings-email-verification span { color: var(--ink-faint); font-size: 11px; line-height: 1.6; }
+.settings-signout { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 0 5px; border-top: 1px solid var(--line); }
+.settings-signout strong, .settings-signout .muted { display: block; font-size: 12px; line-height: 1.7; }
+
+/* Live team alerts, with read status scoped to the signed-in coach. */
+.notification-wrap { position: relative; }
+.notification-bell { position: relative; }
+#notification-count { position: absolute; top: -4px; right: -4px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 1px 4px; border-radius: 12px; font-size: 9px; background: var(--rust); color: var(--portal-button-text); border: 2px solid var(--portal-surface); }
+.notification-tray { position: absolute; right: 0; top: calc(100% + 12px); width: 350px; max-width: calc(100vw - 32px); border-radius: 12px; overflow: hidden; box-shadow: 0 16px 50px #00000024; z-index: 70; }
+.notification-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--line); }
+.notification-heading h2 { font-family: var(--font); font-size: 14px; margin: 0; font-weight: 600; }
+.notification-heading button { padding: 4px; background: transparent; border: 0; color: var(--rust); font-family: var(--font); font-size: 10px; cursor: pointer; }
+.notification-heading button:disabled { opacity: .55; cursor: default; }
+#notification-list { max-height: min(450px, 60dvh); overflow-y: auto; }
+.notification-item { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; text-decoration: none; border-bottom: 1px solid var(--line); }
+.notification-item:hover { background: var(--portal-subtle); }
+.notification-dot { flex: none; width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: transparent; }
+.notification-item.is-unread .notification-dot { background: var(--rust); }
+.notification-item > span:nth-child(2) { display: grid; gap: 5px; }
+.notification-item strong { font-size: 12px; font-weight: 500; color: var(--ink); }
+.notification-item span span, .notification-item small { font-size: 11px; color: var(--ink-soft); line-height: 1.6; }
+.notification-item small { font-size: 10px; color: var(--ink-faint); }
+.notification-settings-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; color: var(--rust); font-size: 11px; text-decoration: none; }
+.notification-settings-link .ui-icon { width: 17px; height: 17px; }
+.notification-empty { display: grid; justify-items: center; gap: 12px; padding: 32px 22px; font-size: 13px; color: var(--ink-soft); text-align: center; }
+.notification-empty p { margin: 0; font-size: 12px; }
+
+/* Preferences change the actual interface, rather than just their controls. */
+html[data-portal-size="large"] .app-shell { --portal-scale: 1.1; }
+html[data-portal-size="larger"] .app-shell { --portal-scale: 1.2; }
+.app-shell :is(p, .muted, .field label, .settings-select-row > label, .settings-toggle-row strong, .sidebar-link, .sidebar-signout) { font-size: calc(13px * var(--portal-scale)); }
+.app-shell :is(input, select, textarea, .btn) { font-size: calc(14px * var(--portal-scale)); }
+.app-shell :is(.settings-toggle-row small, .settings-fieldset legend, .settings-nav a, .theme-option > span, .accent-option > span, .settings-select-row select, .settings-save-status, .notification-item strong) { font-size: calc(12px * var(--portal-scale)); }
+.app-shell .settings-intro h2 { font-size: calc(36px * var(--portal-scale)); }
+.app-shell .settings-card-heading h2 { font-size: calc(17px * var(--portal-scale)); }
+html[data-portal-contrast="true"] .app-shell { --ink: #111; --ink-soft: #222; --ink-faint: #303030; --line: #545454; --portal-subtle: #fff; }
+html[data-portal-contrast="true"][data-portal-theme="dark"] .app-shell { --ink: #fff; --ink-soft: #fff; --ink-faint: #eee; --line: #b5c1ca; --portal-subtle: #151b20; }
+html[data-portal-focus="true"] .app-shell :focus-visible { outline: 3px solid var(--rust); outline-offset: 4px; box-shadow: 0 0 0 6px var(--portal-surface); }
+html[data-portal-density="compact"] .app-shell .app-content { padding-top: 20px; }
+html[data-portal-density="compact"] .app-shell :is(.settings-card, .card, .panel, .stat-card) { padding: 18px; }
+html[data-portal-density="compact"] .settings-columns, html[data-portal-density="compact"] .settings-stack { gap: 16px; }
+html[data-portal-density="compact"] .app-shell .row-item { padding-top: 10px; padding-bottom: 10px; }
+html[data-portal-density="compact"] .settings-toggle-row { padding-top: 12px; padding-bottom: 12px; }
+html[data-portal-density="compact"] .settings-profile .field { margin-bottom: 14px; }
+html[data-portal-motion="reduced"] .app-shell *, html[data-portal-motion="reduced"] .app-shell *::before, html[data-portal-motion="reduced"] .app-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+html[data-portal-motion="reduced"] { scroll-behavior: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *, .app-shell *::before, .app-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (max-width: 1180px) and (min-width: 961px) { .settings-columns { grid-template-columns: 1fr; } }
+@media (max-width: 740px) {
+  .settings-columns { grid-template-columns: 1fr; }
+  .settings-intro { flex-direction: column; gap: 10px; }
+  .settings-save-status { text-align: left; max-width: none; }
+  .app-shell .settings-intro h2 { font-size: calc(32px * var(--portal-scale)); }
+  .settings-card { padding: 22px; }
+  .settings-card-heading { margin-bottom: 22px; }
+  .notification-tray { position: fixed; top: 76px; right: 16px; }
+}
+@media (max-width: 420px) {
+  .settings-profile .form-grid { grid-template-columns: 1fr; }
+  .settings-nav { gap: 6px; }
+  .settings-nav a { padding: 8px 9px; }
+  .profile-photo { width: 64px; height: 64px; }
+  .profile-photo-row { gap: 14px; }
+  .settings-select-row { gap: 10px; }
+}

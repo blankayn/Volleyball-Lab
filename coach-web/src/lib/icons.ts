@@ -1,5 +1,12 @@
 /** A small, consistent set of court and coaching symbols. */
 const paths = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  moon: '<path d="M20 14A8.5 8.5 0 0 1 10 4a8.5 8.5 0 1 0 10 10Z"/>',
+  monitor: '<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5"/>',
+  bell: '<path d="M5 10a7 7 0 0 1 14 0c0 6 2 6 2 7H3c0-1 2-1 2-7m4 10a3 3 0 0 0 6 0"/>',
+  accessibility: '<circle cx="12" cy="4" r="2"/><path d="m4 8 8 2 8-2m-8 2v5m0 0-5 7m5-7 5 7"/>',
+  palette: '<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3c-1-2 0-3 2-3h2a3 3 0 0 0 3-3 9 9 0 0 0-9-9Z"/><circle cx="7.5" cy="10" r=".7"/><circle cx="10" cy="6.5" r=".7"/><circle cx="15" cy="7" r=".7"/><circle cx="17" cy="11" r=".7"/>',
+  upload: '<path d="M4 15v5h16v-5M12 16V3m-5 5 5-5 5 5"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
   play: '<path d="m9 5 10 7-10 7V5Z"/>',

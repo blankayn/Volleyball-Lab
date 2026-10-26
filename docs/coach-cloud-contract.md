@@ -69,6 +69,43 @@ figure. Written by the coach client (app `publishListing`, web profile save).
 | `rosterSize` | number | Active members, maintained by the coach client. |
 | `updatedAt` | number | |
 
+### `coaches/{coachUid}/webSettings/preferences` — private web workspace settings
+
+This separate owner-only document leaves the shared Android `coaches` profile
+shape intact. The web portal caches it under an account-specific browser key
+for immediate appearance changes and offline use; Firestore is the cloud copy.
+The existing coach `notifySubmissions` flag is updated in the same batch as
+these preferences so Android submission delivery keeps honoring that switch.
+
+| Field | Type |
+|---|---|
+| `theme` | `light` / `dark` / `system` |
+| `accent` | `rust` / `forest` / `plum` |
+| `density` | `comfortable` / `compact` |
+| `textSize` | `normal` / `large` / `larger` |
+| `highContrast`, `reduceMotion`, `enhancedFocus` | boolean |
+| `submissionAlerts`, `deadlineReminders`, `trainingNotifications`, `emailNotifications` | boolean |
+| `photo` | empty string or JPEG data URL, at most 120,000 characters |
+| `certifications` | string, at most 1,200 characters |
+| `updatedAt` | epoch milliseconds |
+
+Profile pictures are cropped to a 256-pixel square JPEG before saving. They
+remain in the private web settings document and are not added to the player
+directory. Account deletion recursively removes the web settings and clears
+the account's email delivery receipts.
+
+The web notification bell derives enabled alerts from unreviewed submissions,
+incomplete assignments due in the next 24 hours (plus recent overdue drills),
+and shared training sessions from the past seven days. Read status is stored
+per coach in the current browser. Live queries update the bell while profile
+edits are protected from being replaced.
+
+Resend email delivery is an additional optional channel, off by default. It
+requires a verified account email, explicit opt-in, a verified Resend sender,
+and deployed server functions. See [web settings setup](coach-web-settings.md).
+Email delivery receipts under `coachEmailDeliveries` are server-only; no API
+key or recipient override is accepted from the web client.
+
 ### `roster/{coachUid}/members/{playerUid}` — membership (Table 15)
 
 | Field | Type | Notes |

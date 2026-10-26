@@ -5,6 +5,8 @@ import { go, parseRoute } from "./lib/router";
 import "./styles/tokens.css";
 import "./styles/main.css";
 import "./styles/portal.css";
+import "./styles/preferences.css";
+import { setPreferenceAccount, watchSystemPreferences } from "./lib/preferences";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("#app missing");
@@ -128,6 +130,7 @@ async function render(): Promise<void> {
 }
 
 function boot(): void {
+  watchSystemPreferences();
   const missing = configError();
   if (missing) {
     setupScreen(missing);
@@ -148,7 +151,8 @@ function boot(): void {
   window.addEventListener("hashchange", safelyRender);
 
   // Auth state drives re-render: sign-in/out anywhere swaps the shell.
-  onAuthStateChanged(auth, () => {
+  onAuthStateChanged(auth, (user) => {
+    setPreferenceAccount(user?.uid ?? null);
     const route = parseRoute(window.location.hash);
     if (current !== null && (route.name === "login" || route.name === "register")) return;
     current = null;
