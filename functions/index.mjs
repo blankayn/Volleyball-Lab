@@ -7,6 +7,7 @@ import { validConfig, verifySignature, paidCheckout, expiryForPayment } from "./
 export { deleteAccount, resumeAccountDeletion } from './account-deletion.mjs';
 export { notifyPlayerOnCoachNote, notifyPlayerOnAssignment, notifyCoachOnSubmission, notifyPlayerOnCoachConnection } from './push-notifications.mjs';
 export { emailCoachOnSubmission, emailCoachDeadlineReminders } from './coach-email.mjs';
+export { explainTrainingSession, removeSessionExplanation } from './session-explanation.mjs';
 
 initializeApp();
 const db = getFirestore();

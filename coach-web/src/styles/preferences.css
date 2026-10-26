@@ -171,6 +171,22 @@ html[data-portal-theme="dark"][data-portal-accent="plum"] .app-shell { --rust: #
 .notification-empty { display: grid; justify-items: center; gap: 12px; padding: 32px 22px; font-size: 13px; color: var(--ink-soft); text-align: center; }
 .notification-empty p { margin: 0; font-size: 12px; }
 
+.session-explanation { margin: 24px 0; padding: 22px; border: 1px solid var(--line); border-left: 3px solid var(--rust); border-radius: 9px; background: var(--portal-subtle); }
+.explanation-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.explanation-heading .eyebrow { margin: 0; }
+.explanation-badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; color: var(--rust); background: var(--portal-accent-tint); }
+.session-explanation p { line-height: 1.8; margin: 0 0 12px; color: var(--ink-soft); }
+.explanation-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.explanation-consent, .explanation-section small { font-size: 11px; color: var(--ink-faint); line-height: 1.6; }
+.explanation-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 24px; }
+.explanation-section h4 { margin: 7px 0 14px; font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--ink); }
+.explanation-section article + article { margin-top: 18px; }
+.explanation-section article > strong { display: block; font-size: 13px; margin-bottom: 6px; }
+.session-explanation .explanation-practice { margin-top: 12px; color: var(--ink); }
+.session-explanation .explanation-status { margin: 14px 0 0; font-size: 11px; }
+.session-explanation .explanation-status:empty { display: none; }
+.session-explanation .explanation-coverage { margin: 20px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; }
+
 /* Preferences change the actual interface, rather than just their controls. */
 html[data-portal-size="large"] .app-shell { --portal-scale: 1.1; }
 html[data-portal-size="larger"] .app-shell { --portal-scale: 1.2; }

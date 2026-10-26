@@ -266,6 +266,7 @@ class AppContainer(private val context: Context) {
 
     /** Gemini writes grounded copy; measured scores and cue choice stay on-device. */
     val aiCoachRepository: AiCoachRepository by lazy { FirebaseAiCoachRepository(context) }
+    val sessionExplanationRepository by lazy { com.volleyballlab.player.data.ai.CloudSessionExplanationRepository() }
 
     /** The real detector. Throws if the model asset is missing. */
     val poseDetectorFactory = PoseDetectorFactory {

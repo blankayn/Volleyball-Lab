@@ -34,7 +34,7 @@ const CUES: Record<string, CueDef[]> = {
     { id: "SetExtensionFollowThrough", label: "Finish extended", tip: "Follow through until the arms are straight and the hands finish toward the target.", unit: "deg", target: [155, 180] },
   ],
   Spiking: [
-    { id: "SpikeApproachLoad", label: "Load the approach", tip: "Drop into a deep last step. A shallow load caps how high you can get.", unit: "deg", target: [80, 115] },
+    { id: "SpikeApproachLoad", label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
     { id: "SpikeArmExtension", label: "Swing through full extension", tip: "Contact with the hitting arm straight, above the shoulder.", unit: "deg", target: [155, 180] },
     { id: "SpikeJumpHeight", label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },
     { id: "SpikeTrunkDrive", label: "Drive the trunk", tip: "Snap the chest forward through contact instead of hanging back.", unit: "deg", target: [-5, 25] },

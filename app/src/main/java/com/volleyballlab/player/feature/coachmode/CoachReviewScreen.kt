@@ -225,6 +225,9 @@ fun CoachReviewScreen(
         item {
             SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter))
         }
+        item {
+            com.volleyballlab.player.feature.session.SessionExplanationCard(review.session.id, Modifier.padding(horizontal = CoachGutter))
+        }
 
         if (review.framingIsPoor) {
             item {

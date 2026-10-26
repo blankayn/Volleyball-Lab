@@ -14,7 +14,10 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
       await batch.commit();
     }
   }
-  await erase(db.collection('sessions').where('ownerUid', '==', uid));
+  await erase(db.collection('sessions').where('ownerUid', '==', uid), async session => {
+    await erase(session.ref.collection('aiExplanations'));
+  });
+  await db.doc(`aiUsage/${uid}`).delete();
   await erase(db.collection('recordings').where('ownerUid', '==', uid));
   await erase(db.collection('pushTokens').where('uid', '==', uid));
   await erase(db.collection('coachEmailDeliveries').where('coachUid', '==', uid));

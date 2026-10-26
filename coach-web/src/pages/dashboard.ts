@@ -32,6 +32,7 @@ import { avatar, emptyState, errorCard, iconChip, scoreBar, spinner } from "../l
 import { hydrateAccountPreferences, renderAccount, wireAccount } from "./account";
 import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
+import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
@@ -49,6 +50,7 @@ let expandedSession: string | null = null;
 let disposeSidebar: (() => void) | null = null;
 let disposeAccount: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
+let disposeExplanations: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
@@ -58,6 +60,8 @@ export function disposeDashboard(): void {
   disposeAccount = null;
   disposeNotifications?.();
   disposeNotifications = null;
+  disposeExplanations?.();
+  disposeExplanations = null;
   disposeSidebar?.();
   disposeSidebar = null;
   expandedSession = null;
@@ -336,6 +340,8 @@ export async function renderDashboard(
       if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
       disposeAccount?.();
       disposeAccount = null;
+      disposeExplanations?.();
+      disposeExplanations = null;
       body.innerHTML = html;
       dirty = false;
       const coachName = data.profileName || "Coach";
@@ -355,6 +361,7 @@ export async function renderDashboard(
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
       wireActions(root, coachUid, () => void render());
+      disposeExplanations = wireSessionExplanations(root);
       disposeAccount = wireAccount(root, coachUid, () => {
         void getProfile(coachUid).then((profile) => {
           if (version !== dashboardVersion) return;
@@ -733,6 +740,7 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
     ${open ? `<div style="margin-top:12px">
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
       <table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table>
+      ${sessionExplanationPanel(s.id)}
       <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">Your note to this player</label>
         <textarea id="note-${esc(s.id)}" maxlength="800" placeholder="What should they change before the next set?"></textarea></div>
       <button class="btn btn-primary btn-sm" data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">Send note</button>

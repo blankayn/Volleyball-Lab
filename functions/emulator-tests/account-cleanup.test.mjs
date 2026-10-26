@@ -16,6 +16,8 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
     'coachEmailDeliveries/own': { coachUid: uid, state: 'sent' },
     'coachEmailDeliveries/other': { coachUid: 'other', state: 'sent' },
     'sessions/own': { ownerUid: uid, sharedWith: ['other'] },
+    'sessions/own/aiExplanations/session-explanation-v1': { status: 'ready', explanation: { overview: 'Private feedback' } },
+    'aiUsage/delete-owner': { day: '2026-10-26', count: 1 },
     'sessions/other': { ownerUid: 'other', sharedWith: [uid, 'retained-coach'] },
     'recordings/own': { ownerUid: uid }, 'recordings/other': { ownerUid: 'other' },
     'pushTokens/own': { uid }, 'pushTokens/other': { uid: 'other' },

@@ -156,6 +156,7 @@ fun SessionSummaryContent(
                 }
             }
         }
+        item { SessionExplanationCard(session.id, horizontal) }
         if (review.framingIsPoor || (review.formScore == null && session.repCount > 0)) {
             item {
                 SummarySection(stringResource(R.string.session_summary_capture_title), Icons.Rounded.Videocam,
