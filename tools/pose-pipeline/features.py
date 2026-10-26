@@ -521,11 +521,11 @@ def resample(sequence: np.ndarray, length: int,
 # `hip_rise_m` is a difference from a *standing* hip height. The app gets that
 # height from `RepSegmenter`, which knows where a repetition begins; extraction
 # has segments, not reps, so the baseline is estimated from the segment itself.
-# The athlete spends most of a demonstration on the ground, so where the hips
-# spend most of their time is where standing put them. Image y grows downward,
-# hence a *high* percentile rather than a low one - and hence a baseline that
-# would read as the top of the jump if the sign were taken the other way.
-STANDING_BASELINE_PERCENTILE = 90.0
+# This estimate assumes the athlete stands for most of the segment. The median
+# resists brief crouches (larger image y) and jumps (smaller image y). A high
+# percentile instead selects the crouch and overstates rise, even while standing.
+# Continuous jumping/crouching without a standing majority needs a measured
+# baseline; this segment estimate cannot establish one.
 
 HIP_RISE_COLUMN = FEATURE_NAMES.index("hip_rise_m")
 HIP_IMAGE_Y_COLUMN = FEATURE_NAMES.index("hip_centre_image_y")
@@ -543,7 +543,7 @@ def standing_baseline_image_y(sequence: np.ndarray) -> float:
     finite = column[np.isfinite(column)]
     if finite.size == 0:
         return float("nan")
-    return float(np.percentile(finite, STANDING_BASELINE_PERCENTILE))
+    return float(np.median(finite))
 
 
 def fill_hip_rise(sequence: np.ndarray) -> np.ndarray:

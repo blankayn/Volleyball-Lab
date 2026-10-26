@@ -5,8 +5,6 @@ import androidx.core.view.WindowCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -90,6 +88,7 @@ import com.volleyballlab.player.feature.train.drill.DrillLibraryScreen
 import com.volleyballlab.player.feature.train.drill.DrillDetailScreen
 import com.volleyballlab.player.feature.train.drill.DrillPracticeScreen
 import com.volleyballlab.player.feature.train.drill.DrillPracticeSummaryScreen
+import com.volleyballlab.player.feature.welcome.WelcomeScreen
 import com.volleyballlab.player.ui.component.VolleyballBackdrop
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbMotion
@@ -172,8 +171,13 @@ fun VolleyballLabApp() {
                     if (!startupViewModel.hasSession) {
                         // A coach sign-out rebuilds this shell, but startup may
                         // still say CoachHome. Never reuse it without a session.
-                        StartDestination.Login
-                    } else if (start != StartDestination.Login && start != StartDestination.CoachHome) {
+                        if (start == StartDestination.Welcome) {
+                            StartDestination.Welcome
+                        } else {
+                            StartDestination.Login
+                        }
+                    } else if (start != StartDestination.Login && start != StartDestination.CoachHome &&
+                        start != StartDestination.Welcome) {
                         start
                     } else if (startupViewModel.hasOnboarded.value) {
                         StartDestination.Home
@@ -215,6 +219,7 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
     // is nothing yet to switch to, and offering the switch would imply there is.
     val hiddenBarRoutes = listOf(
         CaptureRoute::class,
+        WelcomeRoute::class,
         LoginRoute::class,
         SignUpRoute::class,
         AssessmentRoute::class,
@@ -425,17 +430,17 @@ private fun CoachNavHost(
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = LocalReduceMotion.current
-    val medium = VbMotion.tween<Float>(VbMotion.Medium, reduceMotion = reduceMotion)
+    val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = CoachDashboardRoute,
         modifier = modifier,
-        enterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 0.96f) },
+        enterTransition = { fadeIn(page) },
         exitTransition = { fadeOut(quick) },
-        popEnterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 1.04f) },
-        popExitTransition = { fadeOut(quick) + scaleOut(medium, targetScale = 0.96f) },
+        popEnterTransition = { fadeIn(quick) },
+        popExitTransition = { fadeOut(quick) },
     ) {
         composable<CoachDashboardRoute> {
             CoachDashboardScreen(
@@ -607,12 +612,13 @@ private fun VbNavHost(
     // NavHost's transition parameters are plain lambdas, not composable ones, so
     // the reduce-motion preference is read here and captured.
     val reduceMotion = LocalReduceMotion.current
-    val medium = VbMotion.tween<Float>(VbMotion.Medium, reduceMotion = reduceMotion)
+    val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = when (start) {
+            StartDestination.Welcome -> WelcomeRoute
             StartDestination.Login -> LoginRoute
             StartDestination.Assessment -> AssessmentRoute
             StartDestination.Home -> HomeRoute
@@ -623,14 +629,28 @@ private fun VbNavHost(
             StartDestination.CoachHome -> HomeRoute
         },
         modifier = modifier,
-        // A fade-through with a slight scale, rather than a horizontal slide.
-        // Slides imply a left-to-right hierarchy that bottom tabs do not have, and
-        // sliding between sibling tabs looks like the user navigated backwards.
-        enterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 0.96f) },
+        // A single short fade-through. Scale and the staggered entrances that
+        // followed it made a tab switch feel like three animations competing.
+        enterTransition = { fadeIn(page) },
         exitTransition = { fadeOut(quick) },
-        popEnterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 1.04f) },
-        popExitTransition = { fadeOut(quick) + scaleOut(medium, targetScale = 0.96f) },
+        popEnterTransition = { fadeIn(quick) },
+        popExitTransition = { fadeOut(quick) },
     ) {
+        composable<WelcomeRoute> {
+            WelcomeScreen(
+                onGetStarted = {
+                    navController.navigate(SignUpRoute) {
+                        popUpTo<WelcomeRoute> { inclusive = true }
+                    }
+                },
+                onLogIn = {
+                    navController.navigate(LoginRoute) {
+                        popUpTo<WelcomeRoute> { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable<LoginRoute> {
             LoginScreen(
                 // Nothing to do for a coach: the role flow is about to swap this

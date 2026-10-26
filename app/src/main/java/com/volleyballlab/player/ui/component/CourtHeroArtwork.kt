@@ -48,14 +48,21 @@ fun rememberCourtHeroMotion(accelerateCourt: Boolean): CourtHeroMotion {
         if (reduceMotion) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             var previousFrame = 0L
+            var lastUpdate = 0L
             while (true) {
                 withFrameNanos { frame ->
-                    val deltaSeconds = if (previousFrame == 0L) 0f else
-                        ((frame - previousFrame) / 1_000_000_000f).coerceIn(0f, .05f)
-                    previousFrame = frame
-                    ambient.floatValue = (ambient.floatValue + deltaSeconds) % 3600f
-                    court.floatValue = (court.floatValue + deltaSeconds *
-                        if (accelerated.value) 8f else 1f) % 7f
+                    if (lastUpdate == 0L) {
+                        previousFrame = frame
+                        lastUpdate = frame
+                    } else if (frame - lastUpdate >= FRAME_BUDGET_NANOS) {
+                        val deltaSeconds = ((frame - previousFrame) / 1_000_000_000f)
+                            .coerceIn(0f, .05f)
+                        previousFrame = frame
+                        lastUpdate = frame
+                        ambient.floatValue = (ambient.floatValue + deltaSeconds) % 3600f
+                        court.floatValue = (court.floatValue + deltaSeconds *
+                            if (accelerated.value) 8f else 1f) % 7f
+                    }
                 }
             }
         }
@@ -170,3 +177,6 @@ private fun DrawScope.drawReferenceCourt(progress: Float, opacity: Float) {
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 12f), 0f))
     }
 }
+
+/** 30 fps for ambient art: the court motion is slow enough that 60 adds heat, not smoothness. */
+private const val FRAME_BUDGET_NANOS = 33_000_000L

@@ -113,6 +113,19 @@
     <string name="progress_trend_newest">Latest</string>
     <string name="progress_section_by_skill">By skill</string>
     <string name="progress_section_history">Session history</string>
+    <string name="progress_calendar_title">Training calendar</string>
+    <string name="progress_calendar_previous_month">Previous month</string>
+    <string name="progress_calendar_next_month">Next month</string>
+    <string name="progress_calendar_pick_day">Tap a day to see its sessions.</string>
+    <string name="progress_calendar_empty_day">No sessions on this day.</string>
+    <string name="progress_calendar_start_training">Train now</string>
+    <string name="progress_calendar_sessions">sessions</string>
+    <string name="progress_calendar_valid_reps">valid reps</string>
+    <string name="progress_calendar_minutes">min</string>
+    <string name="progress_calendar_average">avg</string>
+    <string name="progress_calendar_day_description">%1$d, %2$d sessions</string>
+    <string name="progress_skill_best">best %1$d</string>
+    <string name="progress_skill_last">last %1$s</string>
     <string name="progress_unscored">Not scored</string>
     <string name="progress_empty_title">Nothing to chart yet</string>
     <string name="progress_empty_body">Record a session and your scores, reps and per-skill breakdown appear here.</string>
@@ -173,6 +186,11 @@
     <string name="result_save">Save session</string>
     <string name="result_review_video">Review your recording</string>
     <string name="result_video_unavailable">No video was saved for this session. Your pose analysis is still available.</string>
+    <string name="session_delete_video">Delete video</string>
+    <string name="session_delete_video_title">Delete this video?</string>
+    <string name="session_delete_video_body">Your scores and session history stay. The recording is permanently removed from this device.</string>
+    <string name="session_delete_video_confirm">Delete video</string>
+    <string name="session_delete_video_cancel">Keep video</string>
     <string name="result_analysing">Analysing your reps…</string>
     <string name="result_no_reps_title">No complete reps detected</string>
     <string name="result_no_reps_body">The capture ran but no full repetition was recognised. Check the framing guidance and try again.</string>
@@ -663,6 +681,36 @@
     <string name="coach_link_assignments">Drills set for you</string>
     <string name="coach_link_start_drill">Start this</string>
     <string name="coach_link_mark_done">Mark done</string>
+
+    <!-- Skill and drill progress -->
+    <string name="skill_progress_none">Not trained yet</string>
+    <string name="skill_progress_one">1 session · %1$d avg</string>
+    <string name="skill_progress_many">%1$d sessions · %2$d avg</string>
+    <string name="skill_progress_one_no_score">1 session · no score yet</string>
+    <string name="skill_progress_many_no_score">%1$d sessions · no score yet</string>
+    <string name="drill_progress_none">No practice yet</string>
+    <string name="drill_progress_last">last %1$s</string>
+    <string name="drill_progress_best">best %1$d%%</string>
+    <plurals name="drill_progress_practices">
+        <item quantity="one">%1$d practice</item>
+        <item quantity="other">%1$d practices</item>
+    </plurals>
+    <plurals name="drill_progress_camera">
+        <item quantity="one">%1$d camera check</item>
+        <item quantity="other">%1$d camera checks</item>
+    </plurals>
+
+    <!-- Welcome -->
+    <string name="welcome_title">Your form, measured.</string>
+    <string name="welcome_subtitle">Record a rep, get pose-scored feedback, and see the progress add up — one session at a time.</string>
+    <string name="welcome_feature_form_title">Every rep scored</string>
+    <string name="welcome_feature_form_body">On-device pose analysis counts valid reps and shows you what to fix.</string>
+    <string name="welcome_feature_coach_title">Coach feedback</string>
+    <string name="welcome_feature_coach_body">Share sessions with your coach and keep their notes beside your results.</string>
+    <string name="welcome_feature_progress_title">Progress you can see</string>
+    <string name="welcome_feature_progress_body">Skill scores and drill habits are tracked separately, so both show real improvement.</string>
+    <string name="welcome_get_started">Get started</string>
+    <string name="welcome_log_in">Log in</string>
 
     <!-- Accessibility -->
     <string name="cd_coach_avatar">Coach</string>

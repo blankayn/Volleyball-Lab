@@ -97,6 +97,7 @@ dependencies {
     // Coach cloud: the shared roster/assignment/review backend also served by
     // the coach web portal. See docs/coach-cloud-contract.md.
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
     implementation(libs.androidx.credentials)

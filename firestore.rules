@@ -232,6 +232,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Device tokens for training push. Keyed by token; a signed-in account may
+    // claim the token for its own UID, and only that UID may remove it.
+    match /pushTokens/{tokenId} {
+      allow read: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasAll(['uid', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.token == tokenId
+        && boundedString(tokenId, 4096)
+        && request.resource.data.platform == 'android'
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // ---- Coach profile (private) and directory (public to signed-in) -------
     match /coaches/{coachUid} {
       allow read: if isUser(coachUid);

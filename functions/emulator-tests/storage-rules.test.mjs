@@ -5,6 +5,7 @@ import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, listAll } from 'firebase/storage';
 let env;
 before(async () => {
+  // Storage cross-service reads use the startup project. Keep this fixture isolated via test:rules.
   env = await initializeTestEnvironment({ projectId: 'demo-volleyball-lab',
     firestore: { host: '127.0.0.1', port: 8087, rules: await readFile(new URL('../../firestore.rules', import.meta.url), 'utf8') },
     storage: { host: '127.0.0.1', port: 9199, rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8') } });

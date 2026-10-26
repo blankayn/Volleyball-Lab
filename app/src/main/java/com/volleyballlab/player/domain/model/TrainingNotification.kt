@@ -3,7 +3,7 @@ package com.volleyballlab.player.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class TrainingNotificationType { AnalysisComplete, FeedbackDelivered, ProgressMilestone, CoachAssignment, PlayerSubmission, WeeklyDigest }
+enum class TrainingNotificationType { AnalysisComplete, FeedbackDelivered, ProgressMilestone, CoachAssignment, PlayerSubmission, WeeklyDigest, CoachConnection }
 
 @Serializable
 data class TrainingNotification(val id: String, val type: TrainingNotificationType, val title: String,
@@ -11,6 +11,36 @@ data class TrainingNotification(val id: String, val type: TrainingNotificationTy
     val delivered: Boolean = false)
 
 object NotificationEvents {
+    fun connection(coachUid: String, member: RosterMember): TrainingNotification? {
+        val decidedAt = member.decidedAtEpochMs ?: return null
+        if (member.isPending) return null
+        return TrainingNotification(
+            "connection:$coachUid:${member.requestedAtEpochMs}:${member.status.name}:$decidedAt",
+            TrainingNotificationType.CoachConnection,
+            if (member.isActive) "Coach request approved" else "Coach connection ended",
+            if (member.isActive) "Your coach approved your request. Open Coach to see your team."
+                else "This coach connection is closed. You can choose a coach in the Coach tab.",
+            decidedAt, coachUid,
+        )
+    }
+
+    /** Reject stale-account pushes before storing or displaying private text. */
+    fun push(data: Map<String, String>, currentUid: String?): TrainingNotification? {
+        if (currentUid == null || data["uid"] != currentUid) return null
+        val type = when (data["type"]) {
+            "feedback" -> TrainingNotificationType.FeedbackDelivered
+            "assignment" -> TrainingNotificationType.CoachAssignment
+            "submission" -> TrainingNotificationType.PlayerSubmission
+            "connection" -> TrainingNotificationType.CoachConnection
+            else -> return null
+        }
+        val id = data["eventId"]?.takeIf { it.isNotBlank() && it.length <= 512 } ?: return null
+        val title = data["title"]?.takeIf { it.isNotBlank() }?.take(120) ?: return null
+        val body = data["body"]?.takeIf { it.isNotBlank() }?.take(240) ?: return null
+        val createdAt = data["createdAt"]?.toLongOrNull()?.takeIf { it >= 0 } ?: return null
+        return TrainingNotification(id, type, title, body, createdAt, data["referenceId"])
+    }
+
     fun session(s: SessionResult) = TrainingNotification("analysis:${s.id}", TrainingNotificationType.AnalysisComplete,
         "Analysis complete", "${s.skill.name} session analyzed · ${s.repCount} completed reps", s.startedAtEpochMs + s.durationMs, s.id)
     fun feedback(n: CoachNote) = TrainingNotification("feedback:${n.id}", TrainingNotificationType.FeedbackDelivered,

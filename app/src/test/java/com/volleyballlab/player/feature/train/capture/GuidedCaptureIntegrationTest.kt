@@ -270,5 +270,6 @@ class GuidedCaptureIntegrationTest {
         override suspend fun save(session: SessionResult) = Unit
         override suspend fun byId(id: String): SessionResult? = null
         override suspend fun delete(id: String) = Unit
+        override suspend fun deleteVideo(id: String) = Unit
     }
 }

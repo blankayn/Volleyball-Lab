@@ -132,7 +132,7 @@ private fun WaveLoader() {
         },
     ) {
         val gradient = Brush.linearGradient(
-            listOf(Color(0xFFA78BFA), Color(0xFF8B5CF6), Color(0xFF6D28D9)),
+            listOf(Color(0xFFFFB280), Color(0xFFCC5500), Color(0xFF993F00)),
             start = Offset.Zero,
             end = Offset(size.width, size.height),
         )

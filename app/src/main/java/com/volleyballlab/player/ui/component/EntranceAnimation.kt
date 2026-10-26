@@ -51,13 +51,13 @@ fun EntranceAnimation(
         modifier = modifier,
         enter = fadeIn(
             animationSpec = vbTween(
-                durationMillis = VbMotion.Medium,
+                durationMillis = VbMotion.Short,
                 delayMillis = VbMotion.staggerDelay(index),
                 easing = VbMotion.EmphasizedDecelerate,
             ),
         ) + slideInVertically(
             animationSpec = vbTween(
-                durationMillis = VbMotion.Medium,
+                durationMillis = VbMotion.Short,
                 delayMillis = VbMotion.staggerDelay(index),
                 easing = VbMotion.EmphasizedDecelerate,
             ),

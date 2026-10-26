@@ -30,4 +30,7 @@ interface SessionRepository {
     suspend fun byId(id: String): SessionResult?
 
     suspend fun delete(id: String)
+
+    /** Removes the private recording but keeps the scored session. */
+    suspend fun deleteVideo(id: String)
 }

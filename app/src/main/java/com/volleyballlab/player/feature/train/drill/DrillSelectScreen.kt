@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.drill.DrillEntitlement
 import com.volleyballlab.player.domain.model.DrillAccessPolicy
@@ -48,22 +49,60 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.Drill
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.repository.DrillPracticeRepository
 import com.volleyballlab.player.domain.repository.DrillRepository
+import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.ui.component.EntranceAnimation
 import com.volleyballlab.player.ui.component.pressScale
 import com.volleyballlab.player.ui.component.SkillAccentRule
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 
+/** Practice habit for one drill, kept separate from skill form scores. */
+data class DrillPracticeProgress(
+    val practiceCount: Int,
+    val completedWorkouts: Int,
+    val totalReps: Int,
+    val cameraSessionCount: Int,
+    val bestCameraScore: Int?,
+    val lastPracticedEpochMs: Long?,
+)
+
 class DrillSelectViewModel(
     drillRepository: DrillRepository,
+    drillPracticeRepository: DrillPracticeRepository,
+    sessionRepository: SessionRepository,
     skill: Skill,
 ) : ViewModel() {
 
     val drills: StateFlow<List<Drill>> = flow { emit(drillRepository.drillsFor(skill)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val progress: StateFlow<Map<String, DrillPracticeProgress>> = combine(
+        flow { emit(drillRepository.drillsFor(skill)) },
+        drillPracticeRepository.history,
+        sessionRepository.sessions,
+    ) { drills, practiceHistory, sessions ->
+        drills.associate { drill ->
+            val practices = practiceHistory.filter { it.drillId == drill.id }
+            val cameraSessions = sessions.filter { it.drillId == drill.id }
+            drill.id to DrillPracticeProgress(
+                practiceCount = practices.size,
+                completedWorkouts = practices.count { it.completed },
+                totalReps = practices.sumOf { it.totalReps },
+                cameraSessionCount = cameraSessions.size,
+                bestCameraScore = cameraSessions.mapNotNull { it.formScore() }.maxOrNull(),
+                lastPracticedEpochMs = (practices.map { it.startedAtEpochMs } +
+                    cameraSessions.map { it.startedAtEpochMs }).maxOrNull(),
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     companion object {
         /**
@@ -72,7 +111,14 @@ class DrillSelectViewModel(
          * plain constructor-injected class with no SavedStateHandle parsing in it.
          */
         fun factory(skill: Skill): ViewModelProvider.Factory = viewModelFactory {
-            initializer { DrillSelectViewModel(appContainer.drillRepository, skill) }
+            initializer {
+                DrillSelectViewModel(
+                    appContainer.drillRepository,
+                    appContainer.drillPracticeRepository,
+                    appContainer.sessionRepository,
+                    skill,
+                )
+            }
         }
     }
 }
@@ -92,6 +138,7 @@ fun DrillSelectScreen(
         factory = DrillSelectViewModel.factory(skill),
     )
     val drills by viewModel.drills.collectAsStateWithLifecycle()
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val graph = remember(context) { (context.applicationContext as VolleyballLabApplication).container }
     val entitlement by graph.drillAccessController.entitlement.collectAsStateWithLifecycle(DrillEntitlement())
@@ -134,6 +181,7 @@ fun DrillSelectScreen(
             EntranceAnimation(index = index + 1) {
                 DrillRow(
                     drill = drill,
+                    progress = progress[drill.id],
                     onClick = { if (entitlement.canStart(drill)) onDrillSelected(drill) else upgrade = true },
                     locked = !entitlement.canStart(drill),
                     modifier = Modifier.padding(horizontal = 20.dp),
@@ -144,8 +192,41 @@ fun DrillSelectScreen(
 }
 
 @Composable
-private fun DrillRow(drill: Drill, onClick: () -> Unit, locked: Boolean, modifier: Modifier = Modifier) {
+private fun DrillRow(
+    drill: Drill,
+    progress: DrillPracticeProgress?,
+    onClick: () -> Unit,
+    locked: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val interactionSource = remember { MutableInteractionSource() }
+    val locale = LocalLocale.current.platformLocale
+    val progressText = progress?.let { item ->
+        val base = when {
+            item.practiceCount > 0 -> pluralStringResource(
+                R.plurals.drill_progress_practices,
+                item.practiceCount,
+                item.practiceCount,
+            )
+            item.cameraSessionCount > 0 -> pluralStringResource(
+                R.plurals.drill_progress_camera,
+                item.cameraSessionCount,
+                item.cameraSessionCount,
+            )
+            else -> stringResource(R.string.drill_progress_none)
+        }
+        val last = item.lastPracticedEpochMs?.let { epoch ->
+            Instant.ofEpochMilli(epoch).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("d MMM", locale))
+        }
+        val best = item.bestCameraScore
+        when {
+            last != null && best != null -> "$base · ${stringResource(R.string.drill_progress_last, last)} · ${stringResource(R.string.drill_progress_best, best)}"
+            last != null -> "$base · ${stringResource(R.string.drill_progress_last, last)}"
+            best != null -> "$base · ${stringResource(R.string.drill_progress_best, best)}"
+            else -> base
+        }
+    }
     Surface(
         onClick = onClick,
         interactionSource = interactionSource,
@@ -174,6 +255,15 @@ private fun DrillRow(drill: Drill, onClick: () -> Unit, locked: Boolean, modifie
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (progressText != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = progressText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (drill.id !in DrillAccessPolicy.starterIds) MetaChip(if (locked) "Pro · Locked" else "Pro")

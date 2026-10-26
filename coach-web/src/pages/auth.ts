@@ -14,6 +14,34 @@ import { SPECIALISATIONS } from "../lib/cloud";
 import { esc } from "../lib/format";
 import { go } from "../lib/router";
 import { footer, topbar } from "../lib/ui";
+import { icon } from "../lib/icons";
+
+function authLayout(kind: "login" | "register", content: string): string {
+  const registering = kind === "register";
+  return `<div class="auth-page">${topbar(false, "auth")}
+    <main class="auth-layout${registering ? " auth-layout-register" : ""}">
+      <aside class="auth-story" aria-label="Coaching with Volleyball Lab">
+        <div class="auth-story-top"><span class="auth-edition">VOLLEYBALL LAB / COACH PORTAL</span>${icon("court")}</div>
+        <div class="auth-story-copy"><p class="eyebrow">Built for the work between match days</p><h2>${registering ? "A stronger team.<br />Starts with you." : "Back to the court.<br />Back to progress."}</h2><p>Turn your athletes’ training into a clear next step.</p></div>
+        <div class="auth-story-tools"><div>${icon("review")}<span>Review the session<small>See the details behind every rep.</small></span></div><div>${icon("clipboard")}<span>Set the next drill<small>Give each athlete a plan to work on.</small></span></div><div>${icon("message")}<span>Make feedback count<small>Focused cues that players can revisit.</small></span></div></div>
+        <div class="auth-story-bottom"><span>Train. Review. Improve.</span><span>01 — 03</span></div>
+      </aside>
+      <section class="auth-form-panel" aria-label="${registering ? "Create coach account" : "Coach sign in"}">${content}</section>
+    </main>${footer()}</div>`;
+}
+
+function wirePasswordVisibility(root: HTMLElement): void {
+  const field = root.querySelector<HTMLInputElement>("#password");
+  const toggle = root.querySelector<HTMLButtonElement>("#password-toggle");
+  toggle?.addEventListener("click", () => {
+    if (!field) return;
+    const visible = field.type === "password";
+    field.type = visible ? "text" : "password";
+    toggle.setAttribute("aria-pressed", String(visible));
+    toggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+    toggle.innerHTML = icon(visible ? "eyeOff" : "eye");
+  });
+}
 
 /* Firebase's raw errors are written for developers. These are for coaches. */
 function friendly(code: string): string {
@@ -36,27 +64,28 @@ function friendly(code: string): string {
 
 export function renderLogin(root: HTMLElement): void {
   document.title = "Sign in — Volleyball Lab Coach Portal";
-  root.innerHTML = `${topbar(false, "portal")}
-  <div class="wrap"><div class="auth-shell"><div class="auth-card">
-    <p class="eyebrow">Coach portal</p>
+  root.innerHTML = authLayout("login", `<div class="auth-card">
+    <p class="eyebrow">Your coaching workspace</p>
     <h1>Welcome back</h1>
     <p class="muted">Your queue, roster and assignments are where you left them.</p>
     <div id="form-error"></div>
     <form id="login-form">
       <div class="field"><label for="email">Email</label>
-        <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu" /></div>
+        <div class="input-affix">${icon("mail")}<input id="email" type="email" autocomplete="email" required placeholder="you@school.edu" /></div></div>
       <div class="field"><label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••" /></div>
-      <button class="btn btn-primary" style="width:100%" type="submit">Sign in</button>
+        <div class="password-input"><input id="password" type="password" autocomplete="current-password" required placeholder="Your password" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div></div>
+      <button class="btn btn-primary auth-submit" type="submit">Sign in ${icon("arrow")}</button>
     </form>
     <p class="auth-switch">New here? <a href="#/register">Register as a coach</a></p>
-  </div></div></div>${footer()}`;
+    <p class="auth-privacy">${icon("shield")} Your workspace. Your team’s progress.</p>
+  </div>`);
 
+  wirePasswordVisibility(root);
   const form = root.querySelector<HTMLFormElement>("#login-form");
   const err = root.querySelector<HTMLElement>("#form-error");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const button = form.querySelector("button");
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (button) button.disabled = true;
     if (err) err.innerHTML = "";
     try {
@@ -102,15 +131,13 @@ export function renderRegister(root: HTMLElement): void {
     (s) => `<option value="${s}">${s === "AllAround" ? "All-around" : s}</option>`,
   ).join("");
 
-  root.innerHTML = `${topbar(false, "portal")}
-  <div class="wrap"><div class="auth-shell" style="max-width:640px"><div class="auth-card">
+  root.innerHTML = authLayout("register", `<div class="auth-card">
     <p class="eyebrow">Coach registration</p>
     <h1>Set up your team</h1>
-    <p class="muted">This creates your real coach account — the same one players find in
-      their app's Coach tab. Your coaching details appear in the player directory. Your email, password, and
-      licence number are never shown to athletes.</p>
+    <p class="muted">Create your profile, connect your athletes, and plan their next session.</p>
     <div id="form-error"></div>
     <form id="register-form">
+      <div class="form-section-title"><span>01</span><h2>Your account &amp; team</h2></div>
       <div class="form-grid">
         <div class="field"><label for="name">Your name</label>
           <input id="name" autocomplete="name" required maxlength="60" placeholder="Coach Rivera" /></div>
@@ -121,8 +148,9 @@ export function renderRegister(root: HTMLElement): void {
         <div class="field"><label for="email">Email</label>
           <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu" /></div>
         <div class="field"><label for="password">Password</label>
-          <input id="password" type="password" autocomplete="new-password" required minlength="6" placeholder="6+ characters" /></div>
+          <div class="password-input"><input id="password" type="password" autocomplete="new-password" required minlength="6" placeholder="6+ characters" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div></div>
       </div>
+      <div class="form-section-title"><span>02</span><h2>Your coaching profile</h2></div>
       <div class="form-grid">
         <div class="field"><label for="org">School or club</label>
           <input id="org" maxlength="48" placeholder="University of Cebu" /></div>
@@ -136,14 +164,16 @@ export function renderRegister(root: HTMLElement): void {
         <div class="field"><label for="years">Years coaching</label>
           <input id="years" type="number" min="0" max="70" placeholder="e.g. 6" /></div>
       </div>
-      <button class="btn btn-primary" style="width:100%" type="submit">Create coach account</button>
+      <button class="btn btn-primary auth-submit" type="submit">Create coach account ${icon("arrow")}</button>
       <p class="hint" style="font-size:12.5px;color:var(--ink-faint);margin-top:12px">
         Players discover you by name, team and specialisation. Only sessions they
         explicitly submit are ever shared — nothing uploads automatically.</p>
     </form>
     <p class="auth-switch">Already registered? <a href="#/login">Sign in</a></p>
-  </div></div></div>${footer()}`;
+    <p class="auth-privacy">${icon("shield")} Your email, password, and licence number stay private.</p>
+  </div>`);
 
+  wirePasswordVisibility(root);
   const form = root.querySelector<HTMLFormElement>("#register-form");
   const err = root.querySelector<HTMLElement>("#form-error");
   const val = (id: string): string =>
@@ -151,7 +181,7 @@ export function renderRegister(root: HTMLElement): void {
 
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const button = form.querySelector("button");
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (button) button.disabled = true;
     if (err) err.innerHTML = "";
     const name = val("name");

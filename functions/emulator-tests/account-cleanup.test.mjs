@@ -15,6 +15,7 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
     'sessions/own': { ownerUid: uid, sharedWith: ['other'] },
     'sessions/other': { ownerUid: 'other', sharedWith: [uid, 'retained-coach'] },
     'recordings/own': { ownerUid: uid }, 'recordings/other': { ownerUid: 'other' },
+    'pushTokens/own': { uid }, 'pushTokens/other': { uid: 'other' },
     'assignments/a': { playerUid: uid, coachUid: 'other' },
     'submissions/s': { playerUid: 'other', coachUid: uid },
     'notes/n': { playerUid: uid, coachUid: 'other' },
@@ -36,7 +37,7 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
   assert.equal((await db.doc('sessions/other').get()).data().ownerUid, 'other');
   assert.deepEqual((await db.doc('sessions/other').get()).data().sharedWith, ['retained-coach']);
   for (const path of Object.keys(records)) {
-    const keep = ['sessions/other', 'recordings/other', 'roster/other/members/survivor', 'profiles/other'].includes(path);
+    const keep = ['sessions/other', 'recordings/other', 'pushTokens/other', 'roster/other/members/survivor', 'profiles/other'].includes(path);
     assert.equal((await db.doc(path).get()).exists, keep, path);
   }
   assert.equal((await db.doc(`accountDeletions/${uid}`).get()).data().status, 'deleted');

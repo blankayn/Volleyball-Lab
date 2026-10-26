@@ -4,6 +4,7 @@ import { getUserRole } from "./lib/cloud";
 import { go, parseRoute } from "./lib/router";
 import "./styles/tokens.css";
 import "./styles/main.css";
+import "./styles/portal.css";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("#app missing");

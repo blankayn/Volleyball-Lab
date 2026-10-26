@@ -40,6 +40,10 @@ data object LoginRoute
 @Serializable
 data object SignUpRoute
 
+/** First launch only: the product introduction shown before an account exists. */
+@Serializable
+data object WelcomeRoute
+
 /** Onboarding. Shown once per install, then never again unless retaken. */
 @Serializable
 data object AssessmentRoute

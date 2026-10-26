@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getBooleanExtra("open_notifications", false)) showNotificationInbox.value = true
+        if (opensInbox(intent)) showNotificationInbox.value = true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Hand straight to the first Compose frame, which is the branded splash.
         launchSplash.setOnExitAnimationListener { it.remove() }
-        showNotificationInbox.value = intent.getBooleanExtra("open_notifications", false)
+        showNotificationInbox.value = opensInbox(intent)
 
         // Edge to edge with transparent bars. The scaffolds inside consume the
         // insets themselves, which matters most on the capture screen: the camera
@@ -78,7 +78,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun opensInbox(intent: Intent): Boolean =
+        intent.getBooleanExtra("open_notifications", false) || intent.action == ACTION_OPEN_NOTIFICATIONS
+
     private companion object {
+        const val ACTION_OPEN_NOTIFICATIONS = "com.volleyballlab.player.OPEN_NOTIFICATIONS"
+
         /**
          * Transparent bars keep edge-to-edge content. Their light or dark icon
          * appearance is managed by the active player or coach shell.

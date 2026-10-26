@@ -88,6 +88,9 @@ class AppContainer(private val context: Context) {
     val sharedRecordingStore by lazy {
         com.volleyballlab.player.data.session.SharedRecordingStore(context, authRepository, firestore, videoReviewStore)
     }
+    val pushTokenRegistrar by lazy {
+        com.volleyballlab.player.data.push.PushTokenRegistrar({ authRepository.currentUid }, firestore)
+    }
     suspend fun observeNotifications() {
         authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collectLatest { uid ->
             androidx.core.app.NotificationManagerCompat.from(context).cancelAll()
@@ -101,11 +104,13 @@ class AppContainer(private val context: Context) {
                 }
                 launch { sessionRepository.sessions.collect { sessions -> notificationRepository.ingest(uid,
                     sessions.map(com.volleyballlab.player.domain.model.NotificationEvents::session) + com.volleyballlab.player.domain.model.NotificationEvents.milestones(sessions)) } }
+                launch { notificationRepository.connectionEvents(uid).collect { events -> notificationRepository.ingest(uid, events) } }
                 launch { coachRepository.notesForMe.collect { notes -> notificationRepository.ingest(uid, notes.map(com.volleyballlab.player.domain.model.NotificationEvents::feedback)) } }
                 launch { coachRepository.assignmentsForMe.collect { assignments -> notificationRepository.ingest(uid, assignments.map(com.volleyballlab.player.domain.model.NotificationEvents::assignment)) } }
                 launch { combine(coachRepository.coachProfile, coachRepository.submissions, ::Pair).collect { (profile, submissions) ->
                     notificationRepository.ingest(uid, submissions.map(com.volleyballlab.player.domain.model.NotificationEvents::submission), profile.notifySubmissions) } }
                 launch { runCatching { kotlinx.coroutines.withTimeout(25_000) { notificationRepository.refresh() } } }
+                launch { runCatching { pushTokenRegistrar.registerCurrentUser() } }
             }
         }
     }
@@ -179,6 +184,11 @@ class AppContainer(private val context: Context) {
 
     val assessmentRepository: AssessmentRepository by lazy {
         DataStoreAssessmentRepository(context, authRepository)
+    }
+
+    /** The install-level welcome, before any account exists. */
+    val welcomeRepository: com.volleyballlab.player.domain.repository.WelcomeRepository by lazy {
+        com.volleyballlab.player.data.welcome.DataStoreWelcomeRepository(context)
     }
 
     /**

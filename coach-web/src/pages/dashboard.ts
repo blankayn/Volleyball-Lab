@@ -1,4 +1,5 @@
 import { auth } from "../lib/firebase";
+import { icon } from "../lib/icons";
 import {
   deleteAssignment,
   getAssignments,
@@ -24,9 +25,9 @@ import {
   type TrainingSession,
 } from "../lib/cloud";
 import { cueLabel, cuesFor, formatMeasured, formatTarget, SKILL_LABEL } from "../lib/cues";
-import { dueLabel, esc, fullDate, timeAgo } from "../lib/format";
+import { dueLabel, esc, fullDate, initials, timeAgo } from "../lib/format";
 import { appPath, go } from "../lib/router";
-import { avatar, emptyState, errorCard, footer, iconChip, scoreBar, spinner, topbar } from "../lib/ui";
+import { avatar, emptyState, errorCard, iconChip, scoreBar, spinner } from "../lib/ui";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
@@ -40,11 +41,14 @@ interface DashData {
 
 let unsubscribers: (() => void)[] = [];
 let expandedSession: string | null = null;
+let disposeSidebar: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
   dashboardVersion++;
   stopLive();
+  disposeSidebar?.();
+  disposeSidebar = null;
   expandedSession = null;
 }
 
@@ -129,41 +133,99 @@ const PAGE_LABELS: Record<Tab, string> = {
 };
 
 function navIcon(paths: string): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="ui-icon" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
 }
 
-function sidebarLinks(tab: Tab, playerUid: string | null): string {
-  const link = (id: Tab, label: string, icon: string, href = appPath(id)) =>
-    `<a class="dash-nav-link${tab === id ? " active" : ""}" href="${href}"${tab === id ? ' aria-current="page"' : ""}>${navIcon(icon)}<span>${esc(label)}</span></a>`;
+function sidebarLinks(
+  tab: Tab,
+  playerUid: string | null,
+  pending = 0,
+  requests = 0,
+): string {
+  const link = (id: Tab, label: string, icon: string, href = appPath(id), badge = 0) =>
+    `<a class="sidebar-link${tab === id ? " active" : ""}" href="${href}"${tab === id ? ' aria-current="page"' : ""} data-label="${esc(label)}" title="${esc(label)}">${navIcon(icon)}<span class="sidebar-label">${esc(label)}</span>${badge > 0 ? `<span class="sidebar-badge">${badge > 99 ? "99+" : badge}</span>` : ""}</a>`;
   return `${link("overview", PAGE_LABELS.overview, '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>')}
-    ${link("queue", PAGE_LABELS.queue, '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>')}
-    ${link("roster", PAGE_LABELS.roster, '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>')}
+    ${link("queue", PAGE_LABELS.queue, '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>', appPath("queue"), pending)}
+    ${link("roster", PAGE_LABELS.roster, '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>', appPath("roster"), requests)}
     ${link("assignments", PAGE_LABELS.assignments, '<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M9 12h6M9 16h4"/>')}
     ${link("account", PAGE_LABELS.account, '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>')}
-    ${playerUid ? `<div class="dash-nav-context"><p class="dash-nav-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
+    ${playerUid ? `<div class="sidebar-context"><p class="sidebar-label sidebar-context-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
 }
 
 function wireSidebar(root: HTMLElement): void {
-  const toggle = root.querySelector<HTMLButtonElement>("#dash-menu-toggle");
+  const shell = root.querySelector<HTMLElement>("#app-shell");
   const sidebar = root.querySelector<HTMLElement>("#dashboard-sidebar");
-  if (!toggle || !sidebar) return;
-  const setOpen = (open: boolean) => {
-    toggle.setAttribute("aria-expanded", String(open));
-    sidebar.classList.toggle("is-open", open);
-    if (!open && sidebar.contains(document.activeElement)) toggle.focus();
-  };
-  toggle.addEventListener("click", () => setOpen(toggle.getAttribute("aria-expanded") !== "true"));
-  const closeOnEscape = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
-      setOpen(false);
-      toggle.focus();
+  const scrim = root.querySelector<HTMLElement>("#sidebar-scrim");
+  const topToggle = root.querySelector<HTMLButtonElement>("#sidebar-toggle");
+  const collapseToggle = root.querySelector<HTMLButtonElement>("#sidebar-collapse");
+  if (!shell || !sidebar || !topToggle) return;
+
+  const mobile = window.matchMedia("(max-width: 960px)");
+  const storageKey = "vl.coach.sidebar.collapsed";
+  const isMobile = () => mobile.matches;
+  const savedCollapsed = () => {
+    try {
+      return localStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
     }
   };
-  toggle.addEventListener("keydown", closeOnEscape);
-  sidebar.addEventListener("keydown", closeOnEscape);
-  sidebar.addEventListener("click", (event) => {
-    if ((event.target as Element).closest("a")) setOpen(false);
+
+  const setCollapsed = (collapsed: boolean, persist = true) => {
+    shell.classList.toggle("is-collapsed", collapsed);
+    topToggle.setAttribute("aria-expanded", String(!collapsed));
+    if (collapseToggle) {
+      const action = collapsed ? "Expand sidebar" : "Collapse sidebar";
+      collapseToggle.setAttribute("aria-label", action);
+      collapseToggle.title = action;
+      collapseToggle.innerHTML = navIcon(collapsed ? '<path d="m10 7 5 5-5 5"/>' : '<path d="m14 7-5 5 5 5"/>');
+    }
+    if (persist) {
+      try {
+        localStorage.setItem(storageKey, collapsed ? "1" : "0");
+      } catch {
+        /* storage unavailable — the toggle still works this session */
+      }
+    }
+  };
+
+  const setDrawer = (open: boolean) => {
+    shell.classList.toggle("is-mobile-open", open);
+    if (scrim) scrim.hidden = !open;
+    topToggle.setAttribute("aria-expanded", String(open));
+    document.body.style.overflow = open ? "hidden" : "";
+    if (!open && sidebar.contains(document.activeElement)) topToggle.focus();
+  };
+
+  if (isMobile()) topToggle.setAttribute("aria-expanded", "false");
+  else setCollapsed(savedCollapsed(), false);
+
+  topToggle.addEventListener("click", () => {
+    if (isMobile()) setDrawer(!shell.classList.contains("is-mobile-open"));
+    else setCollapsed(!shell.classList.contains("is-collapsed"));
   });
+  collapseToggle?.addEventListener("click", () => setCollapsed(!shell.classList.contains("is-collapsed")));
+  scrim?.addEventListener("click", () => setDrawer(false));
+  sidebar.addEventListener("click", (event) => {
+    if ((event.target as Element).closest("a")) setDrawer(false);
+  });
+
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && isMobile() && shell.classList.contains("is-mobile-open")) setDrawer(false);
+  };
+  const onBreakpoint = () => {
+    setDrawer(false);
+    shell.classList.remove("is-collapsed");
+    if (!isMobile()) setCollapsed(savedCollapsed(), false);
+  };
+  document.addEventListener("keydown", onKeydown);
+  mobile.addEventListener("change", onBreakpoint);
+
+  disposeSidebar = () => {
+    document.removeEventListener("keydown", onKeydown);
+    mobile.removeEventListener("change", onBreakpoint);
+    document.body.style.overflow = "";
+  };
 }
 
 let nameCache = new Map<string, string>();
@@ -179,31 +241,53 @@ export async function renderDashboard(
 ): Promise<void> {
   stopLive();
   const version = ++dashboardVersion;
-  document.title = "Dashboard — Volleyball Lab Coach Portal";
   const activeTab = (["overview", "queue", "roster", "assignments", "account", "player"] as Tab[]).includes(tab as Tab)
     ? (tab as Tab)
     : "overview";
 
-  root.innerHTML = `${topbar(true, "portal")}<div class="wrap dash-shell">
-    <div class="dash-mobile-nav">
-      <button class="btn btn-ghost btn-sm" id="dash-menu-toggle" aria-controls="dashboard-sidebar" aria-expanded="false">${navIcon('<path d="M4 6h16M4 12h16M4 18h16"/>')}Pages</button>
-      <span>${PAGE_LABELS[activeTab]}</span>
-    </div>
-    <aside class="dash-sidebar" id="dashboard-sidebar" aria-label="Dashboard sidebar">
-      <div class="dash-sidebar-heading"><span class="dash-workspace-mark">${navIcon('<path d="M12 3 3 8v8l9 5 9-5V8l-9-5ZM3 8l9 5 9-5M12 13v8"/>')}</span><div><strong>Coach workspace</strong><span>Your team, together</span></div></div>
-      <p class="dash-nav-label">Workspace</p>
-      <nav class="dash-nav" aria-label="Coach dashboard pages">${sidebarLinks(activeTab, playerUid)}</nav>
-      <div class="dash-sidebar-footer"><button class="dash-sign-out" data-action="sign-out">${navIcon('<path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 8l4 4-4 4M8 12h13"/>')}<span>Sign out</span></button></div>
-    </aside>
-    <main class="dash-main" id="dashboard-content">
-      <div class="dash-head">
-        <div><p class="eyebrow" style="margin:0">Coach dashboard</p>
-        <h1>${PAGE_LABELS[activeTab]}</h1><p class="dash-team-name">Your team</p></div>
+  root.innerHTML = `<div class="app-shell" id="app-shell">
+    <aside class="app-sidebar" id="dashboard-sidebar" aria-label="Dashboard sidebar">
+      <div class="sidebar-brand">
+        <a class="sidebar-logo" href="${appPath("overview")}" aria-label="Volleyball Lab dashboard">
+          <img src="/assets/volleyball-lab-logo.png" alt="" />
+          <span class="sidebar-label"><strong>Volleyball Lab</strong><small>Coach portal</small></span>
+        </a>
+        <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">${navIcon('<path d="m14 7-5 5 5 5"/>')}</button>
       </div>
-      <div id="action-status" role="status" aria-live="polite"></div>
-      <div id="dash-body">${spinner("Loading your team")}</div>
-    </main>
-  </div>${footer()}`;
+      <div class="sidebar-workspace">
+        <span class="workspace-avatar" id="workspace-avatar">VL</span>
+        <span class="sidebar-label"><strong id="workspace-name">Coach workspace</strong><small>Team dashboard</small></span>
+      </div>
+      <p class="sidebar-label sidebar-nav-label">Menu</p>
+      <nav class="sidebar-nav" aria-label="Coach dashboard pages">${sidebarLinks(activeTab, playerUid)}</nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <span class="workspace-avatar" id="sidebar-user-avatar">C</span>
+          <span class="sidebar-label"><strong id="sidebar-user-name">Coach</strong><small>Signed in</small></span>
+        </div>
+        <button class="sidebar-signout" type="button" data-action="sign-out" data-label="Sign out" title="Sign out" aria-label="Sign out">${navIcon('<path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 8l4 4-4 4M8 12h13"/>')}<span class="sidebar-label">Sign out</span></button>
+      </div>
+    </aside>
+    <div class="sidebar-scrim" id="sidebar-scrim" hidden></div>
+    <div class="app-main">
+      <header class="app-topbar">
+        <button class="icon-btn" id="sidebar-toggle" type="button" aria-controls="dashboard-sidebar" aria-expanded="true" aria-label="Toggle navigation">${navIcon('<path d="M4 6h16M4 12h16M4 18h16"/>')}</button>
+        <div class="app-topbar-title">
+          <span class="app-crumb">Dashboard</span>
+          <div class="app-title-line"><h1 id="page-heading">${PAGE_LABELS[activeTab]}</h1><span class="dash-team-name" id="team-name">Your team</span></div>
+        </div>
+        <div class="app-topbar-actions">
+          <span class="sync-pill"><i></i>Live</span>
+          <a class="btn btn-primary btn-sm topbar-cta" href="${appPath("assignments")}" aria-label="Set a new drill">${navIcon('<path d="M12 5v14M5 12h14"/>')}<span>New drill</span></a>
+        </div>
+      </header>
+      <main class="app-content" id="dashboard-content">
+        <div id="action-status" role="status" aria-live="polite"></div>
+        <div id="dash-body">${spinner("Loading your team")}</div>
+      </main>
+    </div>
+  </div>`;
+  document.title = `${PAGE_LABELS[activeTab]} — Volleyball Lab Coach Portal`;
   wireSidebar(root);
   wireSignOut(root);
 
@@ -221,17 +305,34 @@ export async function renderDashboard(
       const data = await loadData(coachUid);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
       nameCache = new Map(data.roster.map((m) => [m.playerUid, m.playerName || "Player"]));
-      // Update the selected player's label without replacing the sidebar shell.
-      const nav = root.querySelector(".dash-nav");
-      if (nav) nav.innerHTML = sidebarLinks(activeTab, playerUid);
+      // Refresh badges and the selected-player link without replacing the shell.
+      const nav = root.querySelector(".sidebar-nav");
+      if (nav) {
+        nav.innerHTML = sidebarLinks(
+          activeTab,
+          playerUid,
+          data.submissions.filter((s) => s.reviewedAt === null).length,
+          data.roster.filter((m) => m.status === "Pending").length,
+        );
+      }
       const html = await viewFor(activeTab, coachUid, data, playerUid);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
       body.innerHTML = html;
       dirty = false;
+      const coachName = data.profileName || "Coach";
       const teamName = root.querySelector(".dash-team-name");
       if (teamName) teamName.textContent = data.profileName ? `${data.profileName}’s team` : "Your team";
+      const sidebarUserName = root.querySelector("#sidebar-user-name");
+      if (sidebarUserName) sidebarUserName.textContent = coachName;
+      const workspaceName = root.querySelector("#workspace-name");
+      if (workspaceName) workspaceName.textContent = data.profileName ? `${data.profileName}’s workspace` : "Coach workspace";
+      const avatarText = initials(coachName);
+      const userAvatar = root.querySelector("#sidebar-user-avatar");
+      if (userAvatar) userAvatar.textContent = avatarText;
+      const workspaceAvatar = root.querySelector("#workspace-avatar");
+      if (workspaceAvatar) workspaceAvatar.textContent = avatarText;
       if (activeTab === "player" && playerUid) {
-        const heading = root.querySelector(".dash-head h1");
+        const heading = root.querySelector("#page-heading");
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
       wireActions(root, coachUid, () => void render());
@@ -278,60 +379,169 @@ async function viewFor(
 
 // ---- Overview ---------------------------------------------------------------
 
+function greeting(date = new Date()): string {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function statCard(
+  icon: string,
+  tone: "rust" | "indigo" | "green" | "violet",
+  value: string | number,
+  label: string,
+  note: string,
+  noteTone: "up" | "warn" | "flat" = "flat",
+): string {
+  return `<article class="stat-card">
+    <div class="stat-card-top"><span class="stat-icon icon-${tone}">${navIcon(icon)}</span><span class="stat-note${noteTone === "flat" ? "" : ` ${noteTone}`}">${esc(note)}</span></div>
+    <b>${value}</b><span class="stat-label">${esc(label)}</span>
+  </article>`;
+}
+
+function activityBars(sessions: TrainingSession[]): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(today);
+    day.setDate(today.getDate() - (6 - index));
+    const start = day.getTime();
+    return {
+      label: day.toLocaleDateString(undefined, { weekday: "short" }),
+      count: sessions.filter((s) => s.startedAt >= start && s.startedAt < start + 86_400_000).length,
+      today: index === 6,
+    };
+  });
+  const max = Math.max(1, ...days.map((d) => d.count));
+  return days.map((d) => `<div class="activity-col${d.today ? " is-today" : ""}" title="${d.count} session${d.count === 1 ? "" : "s"}">
+      <span class="activity-count">${d.count || ""}</span>
+      <span class="activity-track"><i style="height:${Math.max(4, Math.round((d.count / max) * 100))}%"></i></span>
+      <small>${d.label}</small>
+    </div>`).join("");
+}
+
+function skillForm(sessions: TrainingSession[]): { html: string; hasData: boolean } {
+  const skills = perSkillMeans(sessions);
+  return {
+    hasData: skills.some((s) => s.mean !== null),
+    html: skills.map((s) => `<div class="skill-row"><span>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</span>${scoreBar(s.mean)}</div>`).join(""),
+  };
+}
+
 function viewOverview(data: DashData): string {
   const active = activeRoster(data.roster);
   const pending = data.submissions.filter((s) => s.reviewedAt === null);
   const requests = data.roster.filter((m) => m.status === "Pending");
+  const allSessions = [...data.sessionsByPlayer.values()].flat();
   const weekAgo = Date.now() - 7 * 86_400_000;
-  const setsWeek = [...data.sessionsByPlayer.values()]
-    .flat()
-    .filter((s) => s.startedAt >= weekAgo).length;
+  const setsWeek = allSessions.filter((s) => s.startedAt >= weekAgo).length;
+  const setsPrevWeek = allSessions.filter((s) => s.startedAt >= weekAgo - 7 * 86_400_000 && s.startedAt < weekAgo).length;
+  const weekDelta = setsWeek - setsPrevWeek;
   const teamForms = active
     .map((m) => meanForm(data.sessionsByPlayer.get(m.playerUid) ?? []))
     .filter((f): f is number => f !== null);
   const teamForm = teamForms.length > 0
     ? Math.round(teamForms.reduce((a, b) => a + b, 0) / teamForms.length)
     : null;
+  const skills = skillForm(allSessions);
 
   const focus =
     requests.length > 0
-      ? { eyebrow: "Get started", title: `${requests.length} waiting to join`, body: "Review the requests on your roster. Nothing else needs you first.", href: appPath("roster"), cta: "Review requests" }
+      ? { eyebrow: "Get started", title: `${requests.length} player${requests.length === 1 ? "" : "s"} waiting to join`, body: "Review the requests on your roster. Nothing else needs you first.", href: appPath("roster"), cta: "Review requests" }
       : pending.length > 0
-        ? { eyebrow: "Review queue", title: `${pending.length} session${pending.length === 1 ? "" : "s"} waiting`, body: "Your players sent these for review. Open one to score it and write back.", href: appPath("queue"), cta: "Open queue" }
-        : { eyebrow: "All clear", title: "Nothing waiting", body: "Your queue is empty. New submissions from your roster land here.", href: appPath("roster"), cta: "View roster" };
+        ? { eyebrow: "Review queue", title: `${pending.length} session${pending.length === 1 ? "" : "s"} waiting for you`, body: "Your players sent these for review. Open one to score it and write back.", href: appPath("queue"), cta: "Open review queue" }
+        : { eyebrow: "All caught up", title: "Nothing waiting. Plan the next step.", body: "No submissions are queued. A good moment to set the next drill for your team.", href: appPath("assignments"), cta: "Set a drill" };
 
   const queuePreview = pending.slice(0, 4).map((s) => {
     const name = memberName(data.roster, s.playerUid);
     return `<a class="row-item" href="${appPath("player", s.playerUid)}">${avatar(name)}
       <span style="flex:1"><strong>${esc(name)}</strong><br /><span class="muted">${esc(sessionTitle(data, s.sessionId))} · ${timeAgo(s.submittedAt)}</span></span>
-      <span class="dot"></span></a>`;
+      <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
   }).join("");
 
-  return `<div class="card-dark" style="margin-top:14px">
-      <p class="eyebrow">${focus.eyebrow}</p>
-      <h2 style="font-size:26px;margin-bottom:8px">${esc(focus.title)}</h2>
-      <p style="margin:0 0 18px;max-width:60ch">${esc(focus.body)}</p>
-      <a class="btn btn-primary" href="${focus.href}">${esc(focus.cta)}</a>
-    </div>
-    <div class="stat-strip" style="margin-top:14px">
-      <div class="stat"><b>${active.length}</b><span>Players</span></div>
-      <div class="stat"><b>${pending.length}</b><span>To review</span></div>
-      <div class="stat"><b>${teamForm ?? "—"}</b><span>Team form</span></div>
-      <div class="stat"><b>${setsWeek}</b><span>Sets this week</span></div>
-    </div>
-    <div class="page-grid">
-      <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("▤", "indigo")}<h3>Review queue</h3></div>
+  const coachFirstName = data.profileName?.trim().split(/\s+/)[0] || "Coach";
+  const formNote = teamForm === null ? "No scores yet" : teamForm >= 75 ? "Looking strong" : teamForm >= 50 ? "Building up" : "Needs focus";
+  const formTone = teamForm === null ? "flat" : teamForm >= 75 ? "up" : "warn";
+  const weekNote = weekDelta === 0 ? "No change" : `${weekDelta > 0 ? "+" : ""}${weekDelta} vs last week`;
+
+  return `<section class="overview-head">
+      <div>
+        <p class="eyebrow">Coach dashboard</p>
+        <h2 class="overview-greeting">${greeting()}, ${esc(coachFirstName)}</h2>
+        <p class="muted">Here’s your team at a glance — review work, form and the next drill.</p>
+      </div>
+    </section>
+
+    <section class="hero-panel">
+      <div class="hero-panel-copy">
+        <span class="focus-pill"><i></i>${esc(focus.eyebrow)}</span>
+        <h2>${esc(focus.title)}</h2>
+        <p>${esc(focus.body)}</p>
+        <div class="hero-panel-actions">
+          <a class="btn btn-primary" href="${focus.href}">${esc(focus.cta)}</a>
+          <a class="btn btn-hero-ghost" href="${appPath("roster")}">View roster</a>
+        </div>
+      </div>
+      <div class="hero-panel-ring">
+        <div class="form-ring" style="--pct:${teamForm ?? 0}">
+          <div class="form-ring-inner"><strong>${teamForm ?? "—"}</strong><span>Team form</span></div>
+        </div>
+        <div class="hero-mini">
+          <span><b>${active.length}</b> players</span>
+          <span><b>${setsWeek}</b> sets this week</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="stat-grid">
+      ${statCard('<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>', "indigo", active.length, "Active players", requests.length > 0 ? `${requests.length} to approve` : "All approved", requests.length > 0 ? "warn" : "flat")}
+      ${statCard('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>', "rust", pending.length, "To review", pending.length > 0 ? "Needs you" : "All clear", pending.length > 0 ? "warn" : "flat")}
+      ${statCard('<path d="M3 12h4l2-7 4 14 2-7h6"/>', "green", teamForm ?? "—", "Team form", formNote, formTone)}
+      ${statCard('<path d="M4 19V5M4 15l6-6 4 4 6-8"/>', "violet", setsWeek, "Sets this week", weekNote, weekDelta >= 0 ? "up" : "warn")}
+    </section>
+
+    <div class="overview-grid">
+      <section class="panel">
+        <header class="panel-header">
+          <h3 class="panel-title">${navIcon('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>')}Review queue</h3>
+          <a class="panel-link" href="${appPath("queue")}">View all</a>
+        </header>
         ${pending.length === 0
-          ? emptyState("▤", "Nothing waiting", "Sessions your players submit for review land here. They choose what to send; nothing is shared automatically.")
-          : `<div class="row-list">${queuePreview}</div>`}
-      </div>
-      <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("○", "rust")}<h3>Roster</h3></div>
-        ${active.length === 0
-          ? emptyState("○", "No players yet", "Once a player asks to join and you approve them, their submitted sessions show up here.")
-          : `<div class="row-list">${active.slice(0, 4).map((m) => playerRow(data, m)).join("")}</div>`}
-      </div>
+          ? emptyState("review", "Nothing waiting", "Sessions your players send for review will land here.")
+          : `<div class="panel-list">${queuePreview}</div>`}
+      </section>
+      <section class="panel">
+        <header class="panel-header">
+          <h3 class="panel-title">${navIcon('<path d="M3 12h4l2-7 4 14 2-7h6"/>')}Form by skill</h3>
+          <span class="panel-hint">All sessions</span>
+        </header>
+        ${skills.hasData
+          ? `<div class="skill-list">${skills.html}</div>`
+          : emptyState("chart", "No scores yet", "Submitted sessions will show team form per skill here.")}
+      </section>
     </div>
-    <p class="muted" style="font-size:12.5px;margin-top:14px">Connected to the player app through the shared backend — requests, sessions and notes sync both ways. Pose analysis stays on athletes' phones; only scores travel.</p>`;
+
+    <div class="overview-grid">
+      <section class="panel">
+        <header class="panel-header">
+          <h3 class="panel-title">${navIcon('<path d="M4 19V5M4 15l6-6 4 4 6-8"/>')}Training activity</h3>
+          <span class="panel-hint">Last 7 days</span>
+        </header>
+        <div class="activity-chart">${activityBars(allSessions)}</div>
+      </section>
+      <section class="panel">
+        <header class="panel-header">
+          <h3 class="panel-title">${navIcon('<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>')}Roster</h3>
+          <a class="panel-link" href="${appPath("roster")}">Manage</a>
+        </header>
+        ${active.length === 0
+          ? emptyState("team", "No players yet", "Approve a request to start building your team.")
+          : `<div class="panel-list">${active.slice(0, 4).map((m) => playerRow(data, m)).join("")}</div>`}
+      </section>
+    </div>
+
+    <p class="overview-footnote">Connected to the player app through the shared backend — requests, sessions and notes sync both ways. Pose analysis stays on athletes’ phones; only scores travel.</p>`;
 }
 
 function sessionTitle(data: DashData, sessionId: string): string {
@@ -348,7 +558,7 @@ function playerRow(data: DashData, m: RosterMember): string {
   return `<a class="row-item" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player")}
     <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
     <span class="muted">${sessions.length} set${sessions.length === 1 ? "" : "s"}${form !== null ? ` · form ${form}` : ""}</span></span>
-    <span style="color:var(--ink-faint)">›</span></a>`;
+    <span class="row-arrow">${icon("chevronRight")}</span></a>`;
 }
 
 // ---- Queue ------------------------------------------------------------------
@@ -357,16 +567,16 @@ function viewQueue(data: DashData, highlight: string | null): string {
   void highlight;
   const pending = data.submissions.filter((s) => s.reviewedAt === null);
   if (pending.length === 0) {
-    return `<div class="card" style="margin-top:14px">${emptyState("▤", "Nothing waiting", "Sessions your players submit for review land here. They choose what to send; nothing is shared automatically.")}</div>`;
+    return `<div class="card" style="margin-top:14px">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here. They choose what to send; nothing is shared automatically.")}</div>`;
   }
   return `<div class="card" style="margin-top:14px">
-    <div class="chip-row" style="margin-bottom:8px">${iconChip("▤", "indigo")}<h3 class="section-title">Review queue</h3></div>
+    <div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Review queue</h3></div>
     <div class="row-list">${pending.map((s) => {
       const name = memberName(data.roster, s.playerUid);
       return `<a class="row-item" href="${appPath("player", s.playerUid)}">${avatar(name)}
         <span style="flex:1"><strong>${esc(name)}</strong><br />
         <span class="muted">${esc(sessionTitle(data, s.sessionId))} · sent ${timeAgo(s.submittedAt)}</span></span>
-        <span class="dot"></span><span style="color:var(--ink-faint)">›</span></a>`;
+        <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
     }).join("")}</div></div>`;
 }
 
@@ -377,9 +587,9 @@ function viewRoster(data: DashData): string {
   const active = activeRoster(data.roster);
   const past = data.roster.filter((m) => m.status === "Ended");
   return `<div class="page-grid">
-    <div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("＋", "rust")}<h3 class="section-title">Wants to join ${requests.length > 0 ? `(${requests.length})` : ""}</h3></div>
+    <div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("userPlus", "rust")}<h3 class="section-title">Wants to join ${requests.length > 0 ? `(${requests.length})` : ""}</h3></div>
       ${requests.length === 0
-        ? emptyState("＋", "No requests", "Players pick you from their app's Coach tab. Their requests land here for you to approve.")
+        ? emptyState("userPlus", "No requests", "Players pick you from their app's Coach tab. Their requests land here for you to approve.")
         : `<div class="row-list">${requests.map((m) => `
           <div class="row-item">${avatar(m.playerName || "Player")}
             <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
@@ -388,10 +598,10 @@ function viewRoster(data: DashData): string {
             <button class="btn btn-ghost btn-sm" data-action="decline" data-player="${esc(m.playerUid)}">Decline</button>
           </div>`).join("")}</div>`}
     </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("○", "rust")}<h3 class="section-title">On the team (${active.length})</h3></div>
-      ${active.length === 0 ? emptyState("○", "Nobody yet", "Approved players appear here.") : `<div class="row-list">${active.map((m) => playerRow(data, m)).join("")}</div>`}
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("team", "rust")}<h3 class="section-title">On the team (${active.length})</h3></div>
+      ${active.length === 0 ? emptyState("team", "Nobody yet", "Approved players appear here.") : `<div class="row-list">${active.map((m) => playerRow(data, m)).join("")}</div>`}
     </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("—", "indigo")}<h3 class="section-title">Past players</h3></div>
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("archive", "indigo")}<h3 class="section-title">Past players</h3></div>
       ${past.length === 0 ? `<p class="muted">Nobody here. Removed players stay listed so history is not rewritten.</p>` : `<div class="row-list">${past.map((m) => `
         <div class="row-item">${avatar(m.playerName || "Player")}
           <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong></span>
@@ -406,7 +616,7 @@ function viewRoster(data: DashData): string {
 async function viewPlayer(coachUid: string, data: DashData, playerUid: string): Promise<string> {
   const member = data.roster.find((m) => m.playerUid === playerUid);
   if (!member) {
-    return `<div class="card" style="margin-top:14px">${emptyState("○", "Not on your roster", "This player is not on your team, so there is nothing to show.")}</div>`;
+    return `<div class="card" style="margin-top:14px">${emptyState("team", "Not on your roster", "This player is not on your team, so there is nothing to show.")}</div>`;
   }
   const sessions = data.sessionsByPlayer.get(playerUid) ?? [];
   const form = meanForm(sessions);
@@ -418,10 +628,10 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
   ]);
 
   const sessionCards = sessions.length === 0
-    ? emptyState("▦", "No shared sessions", "This player has not submitted a session yet. Only sessions they choose to send appear here.")
+    ? emptyState("session", "No shared sessions", "This player has not submitted a session yet. Only sessions they choose to send appear here.")
     : sessions.map((s) => sessionCard(coachUid, playerUid, s, notes)).join("");
 
-  return `<div style="margin-top:14px"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">‹ Back to roster</a></div>
+  return `<div style="margin-top:14px"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">${icon("chevronLeft")} Back to roster</a></div>
   <div class="card" style="margin-top:10px"><div class="chip-row">${avatar(member.playerName || "Player")}
     <div style="flex:1"><h2 style="font-size:22px">${esc(member.playerName || "Unnamed player")}</h2>
     <p class="muted" style="margin:2px 0 0">${esc(member.position ?? "Position not set")} · <span class="pill${member.status === "Active" ? "-green" : ""}" style="margin-left:4px">${member.status}</span></p></div>
@@ -442,11 +652,11 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
   </div>` : ""}
 
   <div class="page-grid">
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("▆", "green")}<h3>By skill</h3></div>
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("chart", "green")}<h3>By skill</h3></div>
       ${skills.map((s) => `<div style="display:flex;align-items:center;gap:12px;padding:7px 0">
         <span style="flex:1;font-weight:600">${SKILL_LABEL[s.skill]}</span>${scoreBar(s.mean)}</div>`).join("")}
     </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("✚", "violet")}<h3>Drills set</h3></div>
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("clipboard", "violet")}<h3>Drills set</h3></div>
       ${assignments.length === 0 ? `<p class="muted">No drills set yet.</p>` : assignments.slice(0, 4).map((a) => `
         <div style="padding:8px 0;border-top:1px solid var(--line)"><strong>${esc(a.title)}</strong><br />
         <span class="muted">${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}${a.dueAt ? ` · ${dueLabel(a.dueAt)}` : ""}</span></div>`).join("")}
@@ -454,10 +664,10 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     </div>
   </div>
 
-  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("▦", "green")}<h3 class="section-title">Shared sessions</h3></div>
+  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("session", "green")}<h3 class="section-title">Shared sessions</h3></div>
     ${sessionCards}</div>
 
-  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("✎", "violet")}<h3>Your notes</h3></div>
+  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("note", "violet")}<h3>Your notes</h3></div>
     ${notes.length === 0 ? `<p class="muted">No notes yet. Open a session above to write the first one.</p>` : notes.slice(0, 5).map((n) => `
       <div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
   </div>`;
@@ -489,7 +699,7 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
         <span class="muted"> · ${s.repCount} reps · ${fullDate(s.startedAt)}</span></div>
       ${s.formScore !== null ? `<span class="score-num">${s.formScore}</span>` : ""}
       ${answered ? `<span class="pill-green pill">Answered</span>` : `<span class="dot"></span>`}
-      <span style="color:var(--ink-faint)">${open ? "▾" : "▸"}</span>
+      <span style="color:var(--ink-faint)">${icon(open ? "chevronDown" : "chevronRight")}</span>
     </div>
     ${open ? `<div style="margin-top:12px">
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
@@ -509,8 +719,8 @@ function viewAssignments(data: DashData, editing: string | null): string {
   const active = activeRoster(data.roster);
   const playerOptions = active.map((m) => `<option value="${esc(m.playerUid)}">${esc(m.playerName || "Player")}</option>`).join("");
   return `<div class="page-grid">
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("✚", "violet")}<h3 class="section-title">Set a drill</h3></div>
-      ${active.length === 0 ? emptyState("✚", "Approve a player first", "A drill needs someone to do it.") : `
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("clipboard", "violet")}<h3 class="section-title">Set a drill</h3></div>
+      ${active.length === 0 ? emptyState("clipboard", "Approve a player first", "A drill needs someone to do it.") : `
       <div id="assign-error"></div>
       <form id="assign-form">
         <div class="field"><label for="a-player">Player</label><select id="a-player">${playerOptions}</select></div>
@@ -530,8 +740,8 @@ function viewAssignments(data: DashData, editing: string | null): string {
         <button class="btn btn-primary" style="width:100%" type="submit">Assign it</button>
       </form>`}
     </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("▤", "indigo")}<h3 class="section-title">Assigned (${data.assignments.length})</h3></div>
-      ${data.assignments.length === 0 ? emptyState("▤", "No drills set", "Write a drill and hand it to one of your players. They see it in their Coach tab with your instructions attached.") : `
+    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Assigned (${data.assignments.length})</h3></div>
+      ${data.assignments.length === 0 ? emptyState("review", "No drills set", "Write a drill and hand it to one of your players. They see it in their Coach tab with your instructions attached.") : `
       <div class="row-list">${data.assignments.map((a) => `
         <div class="row-item"><div style="flex:1"><strong>${esc(a.title)}</strong><br />
           <span class="muted">${esc(memberName(data.roster, a.playerUid))} · ${esc(SKILL_LABEL[a.skill] ?? a.skill)} · ${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}</span></div>
@@ -549,7 +759,7 @@ async function viewAccount(coachUid: string): Promise<string> {
     .map((s) => `<option value="${s}"${(profile.specialisation ?? "AllAround") === s ? " selected" : ""}>${s === "AllAround" ? "All-around" : s}</option>`)
     .join("");
   return `<div class="page-grid"><div class="card">
-    <div class="chip-row" style="margin-bottom:12px">${iconChip("○", "rust")}<h3 class="section-title">Team &amp; credentials</h3></div>
+    <div class="chip-row" style="margin-bottom:12px">${iconChip("user", "rust")}<h3 class="section-title">Team &amp; credentials</h3></div>
     <div id="profile-saved"></div>
     <form id="profile-form">
       <div class="form-grid">
@@ -566,7 +776,7 @@ async function viewAccount(coachUid: string): Promise<string> {
       <button class="btn btn-primary" style="width:100%" type="submit">Save</button>
     </form>
   </div>
-  <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("◉", "green")}<h3>What players see</h3></div>
+  <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("eye", "green")}<h3>What players see</h3></div>
     <p class="muted">Your name, team, organisation, specialisation, experience and roster size appear in the app's coach directory. Your licence number and email never do.</p>
     <div style="margin-top:16px"><button class="btn btn-ghost" data-action="sign-out">Sign out</button></div>
   </div></div>`;

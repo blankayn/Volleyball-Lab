@@ -124,6 +124,20 @@ session re-queues it (`reviewedAt: null`), asking for a second look.
 Coach writes; player reads their own. Posting a session note and stamping the
 submission reviewed is one user action on both clients.
 
+### `pushTokens/{tokenId}` — Android push registration
+
+| Field | Type | Notes |
+|---|---|---|
+| `uid` | string | The signed-in account currently claiming this device token. |
+| `token` | string | Same value as the document id. |
+| `platform` | `"android"` | |
+| `updatedAt` | number | Refreshed whenever the app registers. |
+
+Written by the app after FCM registration and on token refresh; read only by
+trusted Cloud Functions. A signed-in account may claim the token for itself;
+the current owner may delete it. Logging out unregisters the token locally, and
+account deletion removes its rows.
+
 ### `sessions/{sessionId}` — shared training record
 
 Written by the **player app** on every save (measured summaries). Read by the **coach portal** for
@@ -154,8 +168,15 @@ continuing to read the same final scores. Explicitly submitted recordings and po
 The Android app derives an account-scoped local inbox from sessions, notes,
 assignments and submissions. Read status and the delivery preference persist
 on the device. Optional Android notifications honor runtime permission and
-coach alert preferences. WorkManager refreshes cloud events periodically;
-background delivery can be delayed by Android. There is no FCM server push.
+coach alert preferences. WorkManager refreshes cloud events periodically as a
+fallback, while Cloud Functions send FCM pushes for new notes, assignments and
+submissions and coach connection decisions to registered Firebase Installation
+IDs. Pushes are data-only: the Android inbox validates the recipient against the
+current account, preserves read/delivered state, and honors the alert preference
+before displaying anything. Approval and ended-connection events also derive
+from membership rows during live observation and periodic refresh, so the inbox
+continues working without deployed triggers. Background delivery can still be
+delayed by Android, and FCM triggers require the Firebase Blaze plan to deploy.
 
 `entitlements/{uid}` is readable by that account and writable only by trusted
 server administration/payment handling. Fields are `ownerUid`, `status`,
@@ -186,7 +207,11 @@ are account-scoped local app data. They are not a server API spending limit.
    `asia-southeast1`; deploy `firestore.rules`:
    `firebase deploy --only firestore:rules,firestore:indexes`.
    `firestore.indexes.json` includes the student membership collection-group lookup.
-4. Web: copy `coach-web/.env.example` → `coach-web/.env` with the project's web
+4. **Push (optional):** on the Blaze plan, deploy only the notification triggers:
+   `firebase deploy --only functions:notifyPlayerOnCoachNote,functions:notifyPlayerOnAssignment,functions:notifyCoachOnSubmission,functions:notifyPlayerOnCoachConnection`.
+   Without this, the inbox still updates from Firestore and periodic WorkManager
+   refresh. Deploy account and payment services separately under their setup guides.
+5. Web: copy `coach-web/.env.example` → `coach-web/.env` with the project's web
    config, then `npm install && npm run dev`.
-5. App: no extra step — the bundled `google-services.json` already configures
-   the same project; `firebase-firestore` ships in the app build.
+6. App: no extra step — the bundled `google-services.json` already configures
+   the same project; Firestore and Messaging ship in the app build.

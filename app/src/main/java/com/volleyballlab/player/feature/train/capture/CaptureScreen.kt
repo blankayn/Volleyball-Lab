@@ -242,7 +242,7 @@ private fun GrantedCaptureScreen(
         delay(6_000)
         viewModel.clearCoachingMessage(message.id.toString())
     }
-    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
+    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_FRONT) }
 
     LaunchedEffect(state) {
         (state as? CaptureUiState.Finished)?.let { onSessionComplete(it.sessionId) }

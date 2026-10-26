@@ -20,6 +20,8 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.data.UserScope
 import com.volleyballlab.player.data.cloud.CloudSchema
 import com.volleyballlab.player.data.cloud.awaitCloud
+import com.volleyballlab.player.data.cloud.snapshots
+import kotlinx.coroutines.flow.map
 import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.domain.repository.AuthRepository
 import kotlinx.coroutines.CancellationException
@@ -37,12 +39,20 @@ class TrainingNotificationRepository(private val context: Context, private val a
     private val data = context.notificationStore.data.catch { if (it is IOException) emit(emptyPreferences()) else throw it }
     val inbox = combine(auth.currentUser, data) { user, p -> UserScope.of(user?.uid)?.let { decode(p[it.string("inbox")]) } ?: emptyList() }
     val deliveryEnabled = combine(auth.currentUser, data) { user, p -> UserScope.of(user?.uid)?.let { p[it.string("delivery")] == "true" } ?: false }
+    fun connectionEvents(uid: String) = membershipQuery(uid).snapshots().map { snapshot ->
+        snapshot.documents.mapNotNull { doc ->
+            val coachUid = doc.reference.parent.parent?.id ?: return@mapNotNull null
+            doc.data?.let { NotificationEvents.connection(coachUid, CloudSchema.memberOf(it)) }
+        }
+    }
+    private fun membershipQuery(uid: String) = db.collectionGroup(CloudSchema.MEMBERS).whereEqualTo("playerUid", uid)
     suspend fun setDeliveryEnabled(enabled: Boolean) {
         val scope = UserScope.of(auth.currentUid) ?: return
         context.notificationStore.edit {
             it[scope.string("delivery")] = enabled.toString()
             if (enabled) it[scope.string("inbox")] = json.encodeToString(decode(it[scope.string("inbox")]).map { n -> n.copy(delivered = true) })
         }
+        if (!enabled) NotificationManagerCompat.from(context).cancelAll()
     }
     suspend fun markRead(id: String? = null) {
         val scope = UserScope.of(auth.currentUid) ?: return
@@ -54,6 +64,7 @@ class TrainingNotificationRepository(private val context: Context, private val a
         val scope = UserScope.of(uid) ?: return
         val deliver = mutableListOf<TrainingNotification>()
         context.notificationStore.edit { p ->
+            if (auth.currentUid != uid) return@edit
             val key = scope.string("inbox")
             val initialized = p[scope.string("initialized")] == "true"
             val enabled = p[scope.string("delivery")] == "true" && allowDelivery
@@ -67,12 +78,16 @@ class TrainingNotificationRepository(private val context: Context, private val a
             p[key] = json.encodeToString(merged)
             p[scope.string("initialized")] = "true"
         }
-        if (auth.currentUid == uid) deliver.take(3).forEach(::post)
+        if (auth.currentUid == uid && deliveryEnabled.first()) deliver.take(3).forEach(::post)
     }
     /** Fetches cloud events even when screens are closed; WorkManager controls background cadence. */
     suspend fun refresh() {
         val uid = auth.currentUid ?: return
         val events = mutableListOf<TrainingNotification>()
+        membershipQuery(uid).get().awaitCloud().documents.forEach { doc ->
+            val coachUid = doc.reference.parent.parent?.id ?: return@forEach
+            doc.data?.let { NotificationEvents.connection(coachUid, CloudSchema.memberOf(it)) }?.let(events::add)
+        }
         suspend fun records(collection: String, field: String) = db.collection(collection).whereEqualTo(field, uid).get().awaitCloud().documents.mapNotNull { it.data }
         records(CloudSchema.NOTES, "playerUid").map(CloudSchema::noteOf).forEach { events += NotificationEvents.feedback(it) }
         records(CloudSchema.ASSIGNMENTS, "playerUid").mapNotNull(CloudSchema::assignmentOf).forEach { events += NotificationEvents.assignment(it) }

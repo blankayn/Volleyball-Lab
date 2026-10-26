@@ -14,12 +14,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -125,6 +130,21 @@ class SessionResultViewModel(
             )
         }
 
+    fun deleteVideo() {
+        val ready = _uiState.value as? ResultUiState.Ready ?: return
+        if (ready.session.videoPath == null) return
+        viewModelScope.launch {
+            try {
+                sessionRepository.deleteVideo(sessionId)
+                _uiState.value = ready.copy(session = ready.session.copy(videoPath = null))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep the recording visible when local deletion fails.
+            }
+        }
+    }
+
     companion object {
         fun factory(sessionId: String): ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -169,6 +189,7 @@ fun SessionResultScreen(
         is ResultUiState.Ready -> ResultContent(
             state = current,
             onDone = onDone,
+            onDeleteVideo = viewModel::deleteVideo,
             contentPadding = contentPadding,
             modifier = modifier,
             assignmentId = assignmentId ?: current.session.assignmentId,
@@ -181,6 +202,7 @@ fun SessionResultScreen(
 private fun ResultContent(
     state: ResultUiState.Ready,
     onDone: () -> Unit,
+    onDeleteVideo: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     assignmentId: String? = null,
@@ -189,6 +211,7 @@ private fun ResultContent(
     val session = state.session
     val score = session.formScore()
     val playableVideo = session.videoPath?.takeIf { File(it).isFile }
+    var confirmDeleteVideo by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -245,7 +268,10 @@ private fun ResultContent(
                     )
                 }
             }
-            itemsIndexed(session.angleStages.sortedBy { it.stageIndex }) { _, stage ->
+            itemsIndexed(
+                session.angleStages.sortedBy { it.stageIndex },
+                key = { _, stage -> stage.stageIndex },
+            ) { _, stage ->
                 AngleStageCard(session, stage, Modifier.padding(horizontal = 20.dp))
             }
         }
@@ -261,6 +287,12 @@ private fun ResultContent(
                     )
                     Spacer(Modifier.height(8.dp))
                     AnnotatedSessionVideo(session, playableVideo)
+                    TextButton(onClick = { confirmDeleteVideo = true }) {
+                        Text(
+                            text = stringResource(R.string.session_delete_video),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         } else {
@@ -298,7 +330,7 @@ private fun ResultContent(
                 }
             }
 
-            itemsIndexed(state.summaries) { index, summary ->
+            itemsIndexed(state.summaries, key = { _, summary -> summary.cue.id }) { index, summary ->
                 EntranceAnimation(index = index + 3) {
                     CueRow(
                         summary = summary,
@@ -325,6 +357,32 @@ private fun ResultContent(
                 }
             }
         }
+    }
+
+    if (confirmDeleteVideo) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteVideo = false },
+            title = { Text(stringResource(R.string.session_delete_video_title)) },
+            text = { Text(stringResource(R.string.session_delete_video_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteVideo = false
+                        onDeleteVideo()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.session_delete_video_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteVideo = false }) {
+                    Text(stringResource(R.string.session_delete_video_cancel))
+                }
+            },
+        )
     }
 }
 
