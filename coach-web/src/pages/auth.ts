@@ -19,12 +19,16 @@ import { icon } from "../lib/icons";
 function authLayout(kind: "login" | "register", content: string): string {
   const registering = kind === "register";
   return `<div class="auth-page">${topbar(false, "auth")}
-    <main class="auth-layout${registering ? " auth-layout-register" : ""}">
+    <main class="auth-layout auth-layout-${kind}">
       <aside class="auth-story" aria-label="Coaching with Volleyball Lab">
-        <div class="auth-story-top"><span class="auth-edition">VOLLEYBALL LAB / COACH PORTAL</span>${icon("court")}</div>
-        <div class="auth-story-copy"><p class="eyebrow">Built for the work between match days</p><h2>${registering ? "A stronger team.<br />Starts with you." : "Back to the court.<br />Back to progress."}</h2><p>Turn your athletes’ training into a clear next step.</p></div>
-        <div class="auth-story-tools"><div>${icon("review")}<span>Review the session<small>See the details behind every rep.</small></span></div><div>${icon("clipboard")}<span>Set the next drill<small>Give each athlete a plan to work on.</small></span></div><div>${icon("message")}<span>Make feedback count<small>Focused cues that players can revisit.</small></span></div></div>
-        <div class="auth-story-bottom"><span>Train. Review. Improve.</span><span>01 — 03</span></div>
+        <div class="auth-story-top"><span class="auth-edition">THE COACH’S CORNER</span><span class="auth-court-mark">${icon("court")}</span></div>
+        <div class="auth-story-copy"><p class="eyebrow">${registering ? "Start something stronger" : "Make the next session count"}</p><h2>${registering ? "Build the team.<br /><em>Shape the game.</em>" : "Back to the court.<br /><em>Eyes on progress.</em>"}</h2></div>
+        <figure class="auth-story-visual">
+          <img src="/assets/${registering ? "auth-court-line.jpg" : "auth-sunset-net.jpg"}" alt="${registering ? "Volleyball resting on a court line in a softly lit indoor gym" : "Close view of a beach volleyball net in warm evening light"}" width="900" height="${registering ? "1350" : "1599"}" decoding="async" />
+          <span class="auth-photo-corner auth-photo-corner-top" aria-hidden="true"></span><span class="auth-photo-corner auth-photo-corner-bottom" aria-hidden="true"></span>
+          <figcaption><span>${registering ? "01 / The first point" : "02 / The next rep"}</span><strong>${registering ? "Great teams start here." : "Every detail matters."}</strong></figcaption>
+        </figure>
+        <div class="auth-story-bottom"><span>Train<span aria-hidden="true">/</span>Review<span aria-hidden="true">/</span>Improve</span>${icon("arrow")}</div>
       </aside>
       <section class="auth-form-panel" aria-label="${registering ? "Create coach account" : "Coach sign in"}">${content}</section>
     </main>${footer()}</div>`;
@@ -77,7 +81,6 @@ export function renderLogin(root: HTMLElement): void {
       <button class="btn btn-primary auth-submit" type="submit">Sign in ${icon("arrow")}</button>
     </form>
     <p class="auth-switch">New here? <a href="#/register">Register as a coach</a></p>
-    <p class="auth-privacy">${icon("shield")} Your workspace. Your team’s progress.</p>
   </div>`);
 
   wirePasswordVisibility(root);
@@ -155,8 +158,7 @@ export function renderRegister(root: HTMLElement): void {
         <div class="field"><label for="org">School or club</label>
           <input id="org" maxlength="48" placeholder="University of Cebu" /></div>
         <div class="field"><label for="licence">Certification / licence no.</label>
-          <input id="licence" maxlength="40" placeholder="Optional" />
-          <span class="hint">Private — stored on your profile, never shown to players.</span></div>
+          <input id="licence" maxlength="40" placeholder="Optional" /></div>
       </div>
       <div class="form-grid">
         <div class="field"><label for="spec">Specialisation</label>
@@ -165,12 +167,8 @@ export function renderRegister(root: HTMLElement): void {
           <input id="years" type="number" min="0" max="70" placeholder="e.g. 6" /></div>
       </div>
       <button class="btn btn-primary auth-submit" type="submit">Create coach account ${icon("arrow")}</button>
-      <p class="hint" style="font-size:12.5px;color:var(--ink-faint);margin-top:12px">
-        Players discover you by name, team and specialisation. Only sessions they
-        explicitly submit are ever shared — nothing uploads automatically.</p>
     </form>
     <p class="auth-switch">Already registered? <a href="#/login">Sign in</a></p>
-    <p class="auth-privacy">${icon("shield")} Your email, password, and licence number stay private.</p>
   </div>`);
 
   wirePasswordVisibility(root);
