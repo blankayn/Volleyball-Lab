@@ -1,0 +1,71 @@
+/* Volleyball Lab coach portal — design tokens.
+   The same anchors as the Android app (see app/.../ui/theme/Color.kt): rust
+   primary #CC5500, Alice Blue page #F0F8FF, ink #141C33.
+   Coach accents keep the app's fixed assignment: rust = people, indigo =
+   review/queues, green = sessions, violet = written material. */
+
+:root {
+  --rust: #bd4318;
+  --rust-deep: #9d3510;
+  --rust-tint: #ffefe2;
+  --page: #f5f7fb;
+  --card: #ffffff;
+  --ink: #122038;
+  --ink-soft: #4c5d75;
+  --ink-faint: #62738b;
+  --line: #d9e4f2;
+  --navy: #101c30;
+  --navy-soft: #23354f;
+
+  --accent-rust-bg: #ffefe2;
+  --accent-rust-fg: #993f00;
+  --accent-indigo-bg: #e4e9ff;
+  --accent-indigo-fg: #3b4a9e;
+  --accent-green-bg: #e2f5e9;
+  --accent-green-fg: #1c6b3c;
+  --accent-violet-bg: #efe6fb;
+  --accent-violet-fg: #6b3fb5;
+
+  --good: #1c6b3c;
+  --warn: #9a6200;
+  --bad: #b3132b;
+
+  --radius-card: 14px;
+  --radius-inner: 9px;
+  --shadow-card: 0 3px 16px rgb(20 28 51 / 0.045);
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+
+  --content: 1120px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--page);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--rust);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
