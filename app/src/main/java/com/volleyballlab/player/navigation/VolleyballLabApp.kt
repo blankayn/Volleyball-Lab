@@ -225,6 +225,8 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
         LoginRoute::class,
         SignUpRoute::class,
         AssessmentRoute::class,
+        CoachDirectoryRoute::class,
+        CoachProfileRoute::class,
     )
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
@@ -820,6 +822,7 @@ private fun VbNavHost(
                 onPractiseSkill = { skill -> navController.navigate(DrillSelectRoute(skill)) },
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
                 onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
+                onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 contentPadding = contentPadding,
             )
         }
@@ -839,12 +842,34 @@ private fun VbNavHost(
             )
         }
 
+        composable<CoachDirectoryRoute> {
+            com.volleyballlab.player.feature.coach.CoachDirectoryScreen(
+                onBack = { navController.popBackStack() },
+                onOpenCoach = { navController.navigate(CoachProfileRoute(it)) },
+                contentPadding = contentPadding,
+            )
+        }
+        composable<CoachProfileRoute> { entry ->
+            com.volleyballlab.player.feature.coach.CoachProfileScreen(
+                coachUid = entry.toRoute<CoachProfileRoute>().coachUid,
+                onBack = { navController.popBackStack() },
+                onRequestSent = {
+                    navController.navigate(CoachRoute) {
+                        popUpTo<CoachDirectoryRoute> { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                contentPadding = contentPadding,
+            )
+        }
+
         composable<EditAccountRoute> {
             com.volleyballlab.player.feature.profile.EditAccountScreen({ navController.popBackStack() }, contentPadding)
         }
         composable<ProfileRoute> {
             ProfileScreen(
                 onEditAccount = { navController.navigate(EditAccountRoute) },
+                onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.
                 onSignedOut = {

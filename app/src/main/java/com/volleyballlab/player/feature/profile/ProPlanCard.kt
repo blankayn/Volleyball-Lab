@@ -16,7 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProPlanCard(modifier: Modifier = Modifier) {
+fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = null) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val repository = graph.planRepository as FirestorePlanRepository
@@ -41,6 +41,11 @@ fun ProPlanCard(modifier: Modifier = Modifier) {
                 Text("Enter an access code to activate Pro. No payment is collected.", style = MaterialTheme.typography.bodySmall)
                 Button(enabled = account != null && !busy, onClick = { code = ""; message = null; showCodeDialog = true }) {
                     Text("Subscribe to Pro")
+                }
+            }
+            if (plan.isPro && onBrowseCoaches != null) {
+                OutlinedButton(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth()) {
+                    Text("Find a coach")
                 }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

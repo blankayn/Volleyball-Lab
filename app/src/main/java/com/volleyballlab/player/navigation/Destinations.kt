@@ -84,6 +84,12 @@ data object ProgressRoute
 data object CoachRoute
 
 @Serializable
+data object CoachDirectoryRoute
+
+@Serializable
+data class CoachProfileRoute(val coachUid: String)
+
+@Serializable
 data class PlayerAssignmentRoute(val assignmentId: String)
 
 @Serializable

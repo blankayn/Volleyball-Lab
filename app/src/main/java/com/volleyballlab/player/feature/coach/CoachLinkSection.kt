@@ -103,22 +103,6 @@ data class CoachLinkState(
         }
 }
 
-/**
- * Where the player is in the flow of Figures 17, 20, 21 and 22.
- *
- * A sealed type rather than a pile of nullable fields on [CoachLinkState], because
- * these are genuinely exclusive: a player is browsing, or reading one coach's
- * profile, or waiting, or connected. Booleans would let two of those be true at
- * once and the screen would have to pick.
- */
-sealed interface CoachJoinStep {
-    /** Figure 20: the directory, nobody chosen yet. */
-    data object Browse : CoachJoinStep
-
-    /** Figure 21: one coach chosen, showing who they are about to ask. */
-    data class Review(val preview: CoachPreview) : CoachJoinStep
-}
-
 class CoachLinkViewModel(
     private val coachRepository: CoachRepository,
     private val planRepository: PlanRepository,
@@ -148,21 +132,12 @@ class CoachLinkViewModel(
         initialValue = CoachLinkState(),
     )
 
-    private val _step = MutableStateFlow<CoachJoinStep>(CoachJoinStep.Browse)
-    val step: StateFlow<CoachJoinStep> = _step.asStateFlow()
-
     private val _error = MutableStateFlow<Int?>(null)
     val error: StateFlow<Int?> = _error.asStateFlow()
     val sending = MutableStateFlow(false)
 
     fun clearError() {
         _error.value = null
-    }
-
-    /** Step one: open one coach's profile. Writes nothing, so backing out is free. */
-    fun choose(preview: CoachPreview) {
-        _error.value = null
-        _step.value = CoachJoinStep.Review(preview)
     }
 
     /**
@@ -173,33 +148,30 @@ class CoachLinkViewModel(
      * server entitlement; this check also ensures a screen that forgets to
      * gate cannot silently create a membership.
      */
-    fun sendRequest(coachUid: String) {
-        viewModelScope.launch {
-            if (!planRepository.plan.first().isPro) {
-                _error.value = JoinFailure.NotPro.message
-                return@launch
-            }
-            when (val outcome = coachRepository.requestJoin(coachUid)) {
-                is JoinOutcome.Success -> {
-                    _error.value = null
-                    // Back to the directory, which is not what the player will see:
-                    // `myCoach` now emits a pending link and the card switches to the
-                    // waiting state. Resetting means that if they later cancel, they
-                    // land on the list rather than on a stale profile.
-                    _step.value = CoachJoinStep.Browse
-                }
-                is JoinOutcome.Failure -> {
-                    _error.value = outcome.reason.message
-                    _step.value = CoachJoinStep.Browse
-                }
-            }
-        }
-    }
+    private val _requesting = MutableStateFlow(false)
+    val requesting = _requesting.asStateFlow()
+    private val _requestedCoach = MutableStateFlow<String?>(null)
+    val requestedCoach = _requestedCoach.asStateFlow()
 
-    /** Back out of one coach's profile to the list. */
-    fun backToBrowse() {
-        _step.value = CoachJoinStep.Browse
+    fun sendRequest(coachUid: String) {
+        if (_requesting.value) return
+        _requesting.value = true
         _error.value = null
+        viewModelScope.launch {
+            try {
+                if (!planRepository.plan.first().isPro) {
+                    _error.value = JoinFailure.NotPro.message
+                    return@launch
+                }
+                when (val outcome = coachRepository.requestJoin(coachUid)) {
+                    is JoinOutcome.Success -> _requestedCoach.value = coachUid
+                    is JoinOutcome.Failure -> _error.value = outcome.reason.message
+                }
+            } catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                _error.value = R.string.coach_link_error_unavailable
+            } finally { _requesting.value = false }
+        }
     }
 
     fun leave() {
@@ -248,15 +220,13 @@ class CoachLinkViewModel(
 /**
  * The card at the top of the athlete's Coach tab. Figures 17 and 20 to 22.
  *
- * Five states, in the order the branch below tests them:
+ * Four states, in the order the branch below tests them:
  *
  * - **Waiting** - the request has gone and the coach has not answered. Figure 22.
  * - **On a team** - who the coach is, a way to send the last session for review,
  *   the drills they were set, the notes that came back, and the way out.
  * - **Free** - the upsell, because coach connection is what Pro buys. Figure 17.
- * - **Reading one coach's profile** - who they are about to ask, and the rules of
- *   the arrangement, before anything is written. Figure 21.
- * - **Browsing** - every coach who could be asked. Figure 20.
+ * - **Ready to browse** - opens the dedicated coach directory and profile pages.
  *
  * Review is asynchronous rather than a chat, and the copy says so in more than one
  * of these states deliberately: an athlete who thinks a coach is watching live will
@@ -274,11 +244,13 @@ class CoachLinkViewModel(
  * phone's recordings, the other is a person who wrote something.
  */
 @Composable
-fun CoachLinkSection(modifier: Modifier = Modifier, onOpenAssignment: (String) -> Unit = {}) {
+fun CoachLinkSection(
+    modifier: Modifier = Modifier,
+    onOpenAssignment: (String) -> Unit = {},
+    onBrowseCoaches: () -> Unit = {},
+) {
     val viewModel: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val step by viewModel.step.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
     val sending by viewModel.sending.collectAsStateWithLifecycle()
 
     if (!state.loaded) {
@@ -311,25 +283,29 @@ fun CoachLinkSection(modifier: Modifier = Modifier, onOpenAssignment: (String) -
             // Figure 17: the upsell. Everything below this branch is Pro-only.
             !state.plan.isPro -> ProUpsellCard(onOpenUpgrade = { showUpgrade = true })
 
-            step is CoachJoinStep.Review -> ReviewCard(
-                preview = (step as CoachJoinStep.Review).preview,
-                error = error,
-                onSend = viewModel::sendRequest,
-                onBack = viewModel::backToBrowse,
-            )
-
-            else -> DirectoryCard(
-                coaches = state.directory,
-                error = error,
-                onChoose = viewModel::choose,
-            )
+            else -> LinkSurface {
+                Text("Your next step: find a coach", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("Explore coaches, read their profiles, and choose who to train with.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth(), shape = VbButtonShape) {
+                    Text("Find a coach")
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                }
+            }
         }
     }
 
     if (showUpgrade) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { showUpgrade = false },
             title = { Text("Pro access") },
-            text = { com.volleyballlab.player.feature.profile.ProPlanCard() },
+            text = { com.volleyballlab.player.feature.profile.ProPlanCard(onBrowseCoaches = {
+                showUpgrade = false
+                onBrowseCoaches()
+            }) },
             confirmButton = { TextButton(onClick = { showUpgrade = false }) { Text("Close") } })
     }
 }
@@ -408,193 +384,6 @@ private fun LockedFeatureRow(feature: ProFeature) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
-}
-
-/** Figure 20: the coaches a player can ask. */
-@Composable
-private fun DirectoryCard(
-    coaches: List<CoachPreview>,
-    error: Int?,
-    onChoose: (CoachPreview) -> Unit,
-) {
-    LinkSurface {
-        Text(
-            text = stringResource(R.string.coach_link_none_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.coach_link_none_body),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (error != null) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = stringResource(error),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-        if (coaches.isEmpty()) {
-            Text(
-                text = stringResource(R.string.coach_link_directory_empty_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.coach_link_directory_empty_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // The one trap in a fresh install: the very first tap being the athlete
-            // fixture, which lands here on an empty list that looks like a broken
-            // feature rather than an unmet precondition. Says what to do about it.
-            if (BuildConfig.DEBUG) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.coach_link_directory_empty_debug),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@LinkSurface
-        }
-
-        // A plain Column rather than a LazyColumn: this card is already inside the
-        // Coach tab's scrolling list, and nesting a second scroller in the same
-        // direction is both a measurement crash and a thing nobody can use.
-        coaches.forEach { coach ->
-            CoachDirectoryRow(coach, onClick = { onChoose(coach) })
-        }
-    }
-}
-
-@Composable
-private fun CoachDirectoryRow(coach: CoachPreview, onClick: () -> Unit) {
-    val fallback = stringResource(R.string.coach_coach_default)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = coach.displayName(fallback),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = listOfNotNull(
-                    coach.profile.specialisation?.let { stringResource(it.displayName) },
-                    if (coach.rosterSize > 0) {
-                        stringResource(R.string.coach_link_roster_size, coach.rosterSize)
-                    } else {
-                        stringResource(R.string.coach_link_roster_empty)
-                    },
-                ).joinToString("  ·  "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * Figure 21: who you are about to ask, and what agreeing means.
- *
- * The rules line is not decoration. This is the moment the athlete decides to let
- * someone else read their training, and it is the only screen in the flow where
- * they can still walk away - so it says plainly that the coach approves the
- * request and that only submitted sessions are shared.
- */
-@Composable
-private fun ReviewCard(
-    preview: CoachPreview,
-    error: Int?,
-    onSend: (String) -> Unit,
-    onBack: () -> Unit,
-) {
-    LinkSurface {
-        Text(
-            text = stringResource(R.string.coach_link_preview_eyebrow).uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = preview.displayName(stringResource(R.string.coach_coach_default)),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        // Only the details the coach actually filled in. A row of "not set"
-        // placeholders would make a real coach look like an empty account.
-        val details = listOfNotNull(
-            preview.profile.teamName.takeIf { it.isNotBlank() },
-            preview.profile.specialisation?.let {
-                stringResource(R.string.coach_link_preview_specialisation, stringResource(it.displayName))
-            },
-            preview.profile.yearsExperience?.let {
-                stringResource(R.string.coach_link_preview_experience, it)
-            },
-        )
-        details.forEach { detail ->
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.coach_link_preview_rules),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        if (error != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(error),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = { onSend(preview.coachUid) },
-            shape = VbButtonShape,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.coach_link_send))
-        }
-        Spacer(Modifier.height(6.dp))
-        TextButton(onClick = onBack, shape = VbButtonShape) {
-            Text(stringResource(R.string.coach_link_back))
         }
     }
 }

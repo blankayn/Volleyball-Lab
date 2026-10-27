@@ -199,6 +199,7 @@ fun ProfileScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     onEditAccount: () -> Unit = {},
+    onBrowseCoaches: () -> Unit = {},
 ) {
     val viewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -257,7 +258,7 @@ fun ProfileScreen(
                         subtitle = "Manage your subscription, privacy, and security.",
                     )
                 }
-                item { ProPlanCard(Modifier.padding(horizontal = 20.dp)) }
+                item { ProPlanCard(Modifier.padding(horizontal = 20.dp), onBrowseCoaches) }
                 item { AccountSecurityCard(Modifier.padding(horizontal = 20.dp)) }
                 item { PrivacyCard(Modifier.padding(horizontal = 20.dp)) }
                 item { DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = 20.dp)) }
