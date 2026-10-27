@@ -15,6 +15,15 @@ export function wireCoachExperience(root: HTMLElement, enter: boolean): () => vo
     });
     animations.add(tween);
     disposers.push(() => { tween.kill(); gsap.set(targets, { clearProps: "transform,opacity" }); });
+    const arc = root.querySelector<SVGCircleElement>(".hero-form-arc");
+    if (arc) {
+      const ring = gsap.fromTo(arc, { strokeDasharray: "0 100" }, {
+        strokeDasharray: `${arc.dataset.score ?? 0} 100`, duration: .8, delay: .08,
+        ease: "power2.out", clearProps: "strokeDasharray",
+      });
+      animations.add(ring);
+      disposers.push(() => { ring.kill(); gsap.set(arc, { clearProps: "strokeDasharray" }); });
+    }
   }
 
   root.querySelectorAll<HTMLDetailsElement>("[data-session-details]").forEach(details => {

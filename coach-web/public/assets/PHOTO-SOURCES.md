@@ -16,3 +16,11 @@ These independently sourced photographs are used only in the authentication pane
 - `auth-sunset-net.jpg` — login: [Beach Volleyball Net at Sunset on Sandy Shore](https://www.pexels.com/photo/beach-volleyball-net-at-sunset-on-sandy-shore-34076496/) by **Rahime Gül**, 900 × 1599. [Pexels source image](https://images.pexels.com/photos/34076496/pexels-photo-34076496.jpeg?auto=compress&cs=tinysrgb&w=900).
 
 The source pages make these photos available under the [Pexels License](https://www.pexels.com/license/). CSS crops them to fit the responsive panels and adds a translucent caption gradient.
+
+## Coach dashboard focus card
+
+The focus card uses the existing bundled `volleyball-team-pavel-danilyuk.jpg`
+indoor practice photograph credited to [Pavel Danilyuk](https://www.pexels.com/@pavel-danilyuk/).
+The original asset is unchanged. The card applies CSS cropping, a slight blur,
+and dark overlays beneath its live text and score ring. No generated image is
+used for this card.

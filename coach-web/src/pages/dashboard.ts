@@ -587,7 +587,8 @@ function viewOverview(data: DashData): string {
       </div>
     </section>
 
-    <section class="hero-panel">
+    <section class="hero-panel" aria-label="Team coaching focus">
+      <img class="hero-panel-photo" src="/assets/volleyball-team-pavel-danilyuk.jpg" alt="" decoding="async" />
       <div class="hero-panel-copy">
         <span class="focus-pill"><i></i>${esc(focus.eyebrow)}</span>
         <h2>${esc(focus.title)}</h2>
@@ -598,7 +599,11 @@ function viewOverview(data: DashData): string {
         </div>
       </div>
       <div class="hero-panel-ring">
-        <div class="form-ring" style="--pct:${teamForm ?? 0}">
+        <div class="form-ring" role="img" aria-label="${teamForm === null ? "Team form: no scored sessions yet" : `Team form: ${teamForm} out of 100`}">
+          <svg class="hero-form-ring" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+            <circle class="hero-form-track" cx="100" cy="100" r="84" />
+            <circle class="hero-form-arc" cx="100" cy="100" r="84" pathLength="100" stroke-dasharray="${Math.max(0, Math.min(100, teamForm ?? 0))} 100" data-score="${Math.max(0, Math.min(100, teamForm ?? 0))}" />
+          </svg>
           <div class="form-ring-inner"><strong>${teamForm ?? "—"}</strong><span>Team form</span></div>
         </div>
         <div class="hero-mini">
