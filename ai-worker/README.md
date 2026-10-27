@@ -63,7 +63,9 @@ the actual rep array is also checked, so a forged smaller repCount cannot bypass
 the limits. Normal session saving and measured feedback keep their existing
 limits. Oversized AI requests return a clear shorter-practice-set suggestion.
 
-`npm test` exercises the protocol, Firestore authorization boundaries, output
-validation, cache invalidation, D1's actual SQLite statements, leases, quotas,
-deletion/revocation during inference, and scheduled expiry. It does not claim
-physical-device or hosted CPU validation.
+`npm test` exercises the protocol, Groq adapter, Firestore authorization boundaries,
+output validation, cache invalidation, D1's actual SQLite statements, leases,
+quotas, deletion/revocation during inference, and scheduled expiry. All 21 tests
+passed on 2026-10-27. Thirteen hosted checks with synthetic sessions also passed,
+including real Groq inference and a 100-rep session through the web Firebase SDK.
+This does not claim physical-device or dedicated CPU benchmark validation.

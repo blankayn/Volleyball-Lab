@@ -91,7 +91,15 @@ npx wrangler deploy --dry-run
 ```
 
 `functions/emulator-tests/session-ai-access.test.mjs` verifies the virtual gate.
-`SessionExplanationDecoderTest` verifies Android decoding. The 32
-Functions unit tests cover the shared policy and legacy adapter. Six new
-authorization rule tests passed on 2026-10-27. Hosted inference/CPU verification
-and physical-device validation are separate from these local checks.
+`SessionExplanationDecoderTest` verifies Android decoding. The shared-policy and
+legacy-adapter tests cover deterministic evidence and response validation.
+
+On 2026-10-27, all 21 Worker tests and the 16 session-policy/legacy-adapter tests
+passed. Thirteen live checks through the actual web Firebase SDK also passed:
+Groq generation, grounding validation, owner/shared-coach cache reads, a 100-rep
+session, rejection above the size limit, ended/deleting/signed-out access, and
+browser-origin handling. Only synthetic fixtures were used; their Firebase
+accounts/documents and D1 rows were removed afterward. The website and Android
+APK builds passed. Physical-device validation and a dedicated CPU benchmark
+remain separate checks; these results do not guarantee every session fits the
+Free Worker CPU allowance.
