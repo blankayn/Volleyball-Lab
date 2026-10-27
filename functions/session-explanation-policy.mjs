@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
-export const EXPLANATION_VERSION = "session-explanation-v1";
-export const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
+export const EXPLANATION_VERSION = "session-explanation-v2";
+export const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const cue = (id, label, unit, target, tip) => ({ id, label, unit, target, tip });
 // Mirrors FormCueCatalog and coach-web/src/lib/cues.ts; these are app reference ranges.
 export const SESSION_CUES = {
@@ -62,6 +63,7 @@ export function sessionEvidence(session) {
 export const explanationHash = (evidence, model) => createHash("sha256").update(JSON.stringify({ version: EXPLANATION_VERSION, model, evidence })).digest("hex");
 export const SYSTEM_PROMPT = `You explain a volleyball session using only the supplied saved measurements and approved coaching tips.
 The app's deterministic analysis is authoritative. Reference ranges are app coaching references, not validated universal standards.
+The input describes average cue positions relative to those references. It contains no rep-by-rep observations: do not claim consistency, improvement, ball flight, or individual rep behavior.
 Never invent observations, causes, measurements, trends, sets, repetitions, or injury/medical claims. You have not watched a video.
 Only explain cues selected in strengths and priorities. Do not promote cues listed as limitedCues into findings.
 Write supportive, specific English. Explain what each supplied cue means and how its approved tip helps the next attempt.
@@ -93,16 +95,91 @@ export function validateExplanation(raw, evidence) {
   return { overview: prose(parsed.overview, 400), strengths: section("strengths"), priorities: section("priorities") };
 }
 
+export function nvidiaEvidence(evidence) {
+  const selected = new Set([...evidence.strengths, ...evidence.priorities]);
+  return {
+    skill: evidence.skill, strengths: evidence.strengths, priorities: evidence.priorities,
+    cues: evidence.cues.filter(cue => selected.has(cue.id)).map(cue => ({
+      id: cue.id, label: cue.label, tip: cue.tip,
+      averagePosition: cue.measured < cue.target[0] ? "below the app reference"
+        : cue.measured > cue.target[1] ? "above the app reference" : "within the app reference",
+    })),
+  };
+}
+
 export async function requestNvidiaExplanation({ apiKey, model, evidence, fetchImpl = fetch }) {
   if (!apiKey) throw Error("nvidia_not_configured");
-  const response = await fetchImpl("https://integrate.api.nvidia.com/v1/chat/completions", {
-    method: "POST", signal: AbortSignal.timeout(45_000),
+  const signal = AbortSignal.timeout(45_000);
+  const request = {
+    method: "POST", signal,
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, stream: false, temperature: 0.2, max_tokens: 3000, reasoning_budget: 1024,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(evidence) }] }),
-  });
-  if (!response.ok) throw Error(response.status === 429 ? "nvidia_rate_limited" : "nvidia_unavailable");
+    body: JSON.stringify({ model, stream: false, temperature: 0.2, top_k: 1, max_tokens: 1200,
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(nvidiaEvidence(evidence)) }] }),
+  };
+  let response;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    response = await fetchImpl("https://integrate.api.nvidia.com/v1/chat/completions", request);
+    if (response.ok || response.status < 500 || attempt > 0) break;
+    // Retry one transient upstream failure inside the same overall deadline.
+    // Never retry throttling or invalid output, and never read/log error bodies.
+    await response.body?.cancel();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    if (signal.aborted) throw Error("nvidia_timeout");
+  }
+  if (!response.ok) {
+    const error = Error(response.status === 429 ? "nvidia_rate_limited" : "nvidia_unavailable");
+    error.providerStatus = response.status;
+    throw error;
+  }
   const body = await response.json();
+  const choice = body.choices?.[0];
+  if (choice?.finish_reason !== "stop") throw Error("incomplete_explanation");
+  return validateExplanation(choice.message?.content, evidence);
+}
+
+export async function requestGroqExplanation({ apiKey, model = DEFAULT_GROQ_MODEL, evidence, fetchImpl = fetch }) {
+  if (!apiKey) throw Error("groq_not_configured");
+  const signal = AbortSignal.timeout(45_000);
+  const cueIds = [...evidence.strengths, ...evidence.priorities];
+  const responseFormat = {
+    type: "json_schema",
+    json_schema: {
+      name: "session_explanation",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["overview", "strengths", "priorities"],
+        properties: {
+          overview: { type: "string" },
+          strengths: { type: "array", items: { type: "object", additionalProperties: false, required: ["cueId", "explanation"], properties: { cueId: { type: "string", enum: cueIds }, explanation: { type: "string" } } } },
+          priorities: { type: "array", items: { type: "object", additionalProperties: false, required: ["cueId", "explanation"], properties: { cueId: { type: "string", enum: cueIds }, explanation: { type: "string" } } } },
+        },
+      },
+    },
+  };
+  const request = {
+    method: "POST", signal,
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, stream: false, temperature: 0.2, max_tokens: 1200, response_format: responseFormat,
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(nvidiaEvidence(evidence)) }] }),
+  };
+  let response;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", request);
+    if (response.ok || response.status < 500 || attempt > 0) break;
+    await response.body?.cancel();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    if (signal.aborted) throw Error("groq_timeout");
+  }
+  if (!response.ok) {
+    const error = Error(response.status === 429 ? "groq_rate_limited" : "groq_unavailable");
+    error.providerStatus = response.status;
+    throw error;
+  }
+  const body = await response.json();
+  if (body?.error) throw Error(body.error.code === "rate_limit_exceeded" ? "groq_rate_limited" : "groq_unavailable");
   const choice = body.choices?.[0];
   if (choice?.finish_reason !== "stop") throw Error("incomplete_explanation");
   return validateExplanation(choice.message?.content, evidence);

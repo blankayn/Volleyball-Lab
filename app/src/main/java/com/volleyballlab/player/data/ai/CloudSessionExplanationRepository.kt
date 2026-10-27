@@ -1,9 +1,11 @@
 package com.volleyballlab.player.data.ai
 
 import com.google.firebase.functions.FirebaseFunctions
+import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.data.cloud.awaitCloud
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.TimeUnit
+import java.net.URI
 
 data class SessionExplanationPoint(val label: String, val explanation: String, val measuredReps: Int, val score: Int?, val tip: String)
 data class SessionExplanationResult(
@@ -49,7 +51,10 @@ internal object SessionExplanationDecoder {
 
 class CloudSessionExplanationRepository {
     suspend fun load(sessionId: String, generate: Boolean): SessionExplanationResult = withTimeout(65_000L) {
-        val callable = FirebaseFunctions.getInstance("asia-southeast1").getHttpsCallable("explainTrainingSession")
+        val functions = FirebaseFunctions.getInstance("asia-southeast1")
+        val callable = BuildConfig.SESSION_AI_URL.takeIf(String::isNotBlank)?.let { endpoint ->
+            functions.getHttpsCallableFromUrl(URI(endpoint).toURL())
+        } ?: functions.getHttpsCallable("explainTrainingSession")
         callable.setTimeout(65, TimeUnit.SECONDS)
         SessionExplanationDecoder.decode(callable.call(mapOf("sessionId" to sessionId, "generate" to generate)).awaitCloud().data)
     }

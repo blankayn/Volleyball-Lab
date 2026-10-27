@@ -382,6 +382,25 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Authorization-only probe for the external AI service. No document is
+    // stored here: an authorized GET returns not-found, while Firestore still
+    // verifies the caller's token and applies the stricter AI sharing policy.
+    // Historical session reads below deliberately retain their existing rules.
+    match /aiSessionAccess/{sessionId} {
+      function canExplainSession() {
+        let session = get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+        return session.ownerUid is string && notDeleting(session.ownerUid)
+          && (session.ownerUid == request.auth.uid
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COACH'
+              && request.auth.uid in session.sharedWith
+              && isActiveMember(request.auth.uid, session.ownerUid)));
+      }
+      allow get: if signedIn()
+        && exists(/databases/$(database)/documents/sessions/$(sessionId))
+        && canExplainSession();
+      allow list, create, update, delete: if false;
+    }
+
     match /recordings/{sessionId} {
       function sessionData() { return get(/databases/$(database)/documents/sessions/$(sessionId)).data; }
       allow get: if signedIn() && (!exists(/databases/$(database)/documents/recordings/$(sessionId))

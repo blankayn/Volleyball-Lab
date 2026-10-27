@@ -726,7 +726,7 @@
     </plurals>
     <string name="session_ai_title">Session explanation</string>
     <string name="session_ai_body">Get a clearer explanation of the saved measurements and a focus for the next practice.</string>
-    <string name="session_ai_consent">Generating sends anonymous session measurements to NVIDIA. Photos and videos stay out of this request.</string>
+    <string name="session_ai_consent">Generating sends anonymous session measurements to Groq for an AI explanation. Photos and videos stay out of this request.</string>
     <string name="session_ai_generate">Generate explanation</string>
     <string name="session_ai_loading">Preparing explanation…</string>
     <string name="session_ai_strengths">What went well</string>
@@ -736,4 +736,5 @@
     <string name="session_ai_unavailable">AI explanation is unavailable right now. Your measured feedback is still available.</string>
     <string name="session_ai_rate_limit">Please wait before trying again, or try tomorrow if your daily limit was reached.</string>
     <string name="session_ai_measured_reps">%1$d measured reps</string>
+    <string name="session_ai_unsupported">This session cannot be explained yet. Try a shorter practice set with measurable reps.</string>
 </resources>

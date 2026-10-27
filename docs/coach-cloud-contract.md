@@ -233,13 +233,17 @@ are account-scoped local app data. They are not a server API spending limit.
 
 ## Data retained on the phone
 
-`sessions/{id}/aiExplanations/{version}` and `aiUsage/{uid}` are admin-only
-AI explanation caches and request counters. Both clients use the authenticated
-`explainTrainingSession` callable; no direct client read/write grants are added.
-The server checks ownership or an active shared coach connection and sends only
-anonymous aggregate cue evidence to NVIDIA after an explicit generation request.
-See [session-ai-setup.md](session-ai-setup.md) for activation, limits, deletion,
-and validation. This feature is separate from locally retained AI report history.
+AI explanations use a Cloudflare Worker while Firebase stays on Spark. Both
+clients send their Firebase ID token using the direct-URL callable protocol.
+The virtual `aiSessionAccess/{id}` GET rule checks ownership or an Active,
+explicitly shared COACH connection and account-deletion fences. No gate documents
+are stored; clients cannot list or write this path. The Worker reads saved
+measurements through Firestore REST under the same caller's authorization.
+Validated explanations and quotas are private D1 rows with bounded retention.
+The optional legacy Functions adapter uses admin-only
+`sessions/{id}/aiExplanations/{version}` and `aiUsage/{uid}` documents instead.
+See [session-ai-setup.md](session-ai-setup.md) for configuration, limits, deletion,
+and validation. This feature is separate from local Android report history.
 
 - **Pose landmarks / video.** Analysis stays on-device. Explicit coach submission uploads the recorded video and saved pose feedback privately for the player and shared coach. See `account-and-recording-services.md` for activation status and account deletion.
 

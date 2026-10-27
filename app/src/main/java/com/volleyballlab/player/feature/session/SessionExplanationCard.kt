@@ -25,6 +25,7 @@ fun SessionExplanationCard(sessionId: String, modifier: Modifier = Modifier) {
     var busy by remember(sessionId) { mutableStateOf(false) }
     var error by remember(sessionId) { mutableStateOf(false) }
     var limited by remember(sessionId) { mutableStateOf(false) }
+    var unsupported by remember(sessionId) { mutableStateOf(false) }
     var revision by remember(sessionId) { mutableIntStateOf(0) }
     LaunchedEffect(sessionId) {
         val attempt = ++revision
@@ -53,20 +54,25 @@ fun SessionExplanationCard(sessionId: String, modifier: Modifier = Modifier) {
                     Text(stringResource(R.string.session_ai_consent), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(enabled = !busy, onClick = {
                         val attempt = ++revision
-                        busy = true; error = false; limited = false
+                        busy = true; error = false; limited = false; unsupported = false
                         scope.launch {
                             try { val loaded = repository.load(sessionId, true); if (attempt == revision) result = loaded }
                             catch (failure: Exception) {
                                 if (failure is CancellationException) throw failure
                                 error = true
                                 limited = failure is FirebaseFunctionsException && failure.code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED
+                                unsupported = failure is FirebaseFunctionsException && failure.code == FirebaseFunctionsException.Code.FAILED_PRECONDITION
                             } finally { if (attempt == revision) busy = false }
                         }
                     }) {
                         if (busy) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(9.dp)) }
                         Text(stringResource(if (busy) R.string.session_ai_loading else R.string.session_ai_generate))
                     }
-                    if (error) Text(stringResource(if (limited) R.string.session_ai_rate_limit else R.string.session_ai_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    if (error) Text(stringResource(when {
+                        limited -> R.string.session_ai_rate_limit
+                        unsupported -> R.string.session_ai_unsupported
+                        else -> R.string.session_ai_unavailable
+                    }), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         }

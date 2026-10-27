@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { getFunctions, httpsCallable, httpsCallableFromURL } from "firebase/functions";
 import { esc } from "./format";
 
 interface ExplanationCue { id: string; label: string; measuredReps: number; score: number | null; measured: number | null; unit: string; target: number[]; tip: string; }
@@ -11,12 +11,21 @@ export interface SessionExplanation {
 }
 
 export async function getSessionExplanation(sessionId: string, generate: boolean): Promise<SessionExplanation> {
-  const call = httpsCallable<{ sessionId: string; generate: boolean }, SessionExplanation>(getFunctions(undefined, "asia-southeast1"), "explainTrainingSession", { timeout: 65_000 });
+  const functions = getFunctions(undefined, "asia-southeast1");
+  const endpoint = (import.meta.env.VITE_SESSION_AI_URL as string | undefined)?.trim();
+  if (endpoint) {
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("Invalid AI endpoint configuration");
+  }
+  // The Firebase client supplies the signed-in account token to either transport.
+  const call = endpoint
+    ? httpsCallableFromURL<{ sessionId: string; generate: boolean }, SessionExplanation>(functions, endpoint, { timeout: 65_000 })
+    : httpsCallable<{ sessionId: string; generate: boolean }, SessionExplanation>(functions, "explainTrainingSession", { timeout: 65_000 });
   return (await call({ sessionId, generate })).data;
 }
 
 export function sessionExplanationPanel(sessionId: string): string {
-  return `<section class="session-explanation" data-explanation-panel="${esc(sessionId)}" aria-label="AI session explanation"><div class="explanation-heading"><span class="eyebrow">Session insight</span><span class="explanation-badge">AI explanation</span></div><div data-explanation-content><p>Turn the saved measurements into a clearer explanation and a next practice focus.</p></div><div class="explanation-actions"><button class="btn btn-ghost btn-sm" type="button" data-explanation-generate="${esc(sessionId)}">Generate explanation</button><span class="explanation-consent">Sends anonymous session measurements to NVIDIA.</span></div><p class="explanation-status" data-explanation-status role="status" aria-live="polite"></p></section>`;
+  return `<section class="session-explanation" data-explanation-panel="${esc(sessionId)}" aria-label="AI session explanation"><div class="explanation-heading"><span class="eyebrow">Session insight</span><span class="explanation-badge">AI explanation</span></div><div data-explanation-content><p>Turn the saved measurements into a clearer explanation and a next practice focus.</p></div><div class="explanation-actions"><button class="btn btn-ghost btn-sm" type="button" data-explanation-generate="${esc(sessionId)}">Generate explanation</button><span class="explanation-consent">Sends anonymous session measurements to Groq for an AI explanation.</span></div><p class="explanation-status" data-explanation-status role="status" aria-live="polite"></p></section>`;
 }
 
 function explanationHtml(result: SessionExplanation): string {
@@ -59,6 +68,7 @@ export function wireSessionExplanations(root: HTMLElement): () => void {
         const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
         status.textContent = code.includes("resource-exhausted") ? "Please wait before trying again, or try tomorrow if your daily limit was reached."
           : code.includes("permission-denied") ? "Your access to this session has changed."
+          : code.includes("failed-precondition") ? "This session cannot be explained yet. Try a shorter practice set with measurable reps."
           : "AI explanation is unavailable right now. Your session measurements and coach notes still work.";
         status.classList.add("is-error");
       } finally { busy = false; if (!disposed && panel.isConnected) button.disabled = false; }

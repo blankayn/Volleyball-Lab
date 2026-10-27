@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     // Brings Kotlin with it: AGP 9 has built-in Kotlin support, so
     // `org.jetbrains.kotlin.android` must NOT be applied alongside it.
@@ -14,6 +16,20 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+// This is a public backend address, never an API key. CI or a local build can
+// select the Cloudflare endpoint with -PsessionAiUrl=https://... or SESSION_AI_URL.
+val sessionAiUrl = providers.gradleProperty("sessionAiUrl")
+    .orElse(providers.environmentVariable("SESSION_AI_URL"))
+    .orElse("")
+    .get().trim()
+if (sessionAiUrl.isNotEmpty()) {
+    val endpoint = URI(sessionAiUrl)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
+        endpoint.userInfo == null && endpoint.query == null && endpoint.fragment == null) {
+        "sessionAiUrl must be a public HTTPS endpoint without credentials, query, or fragment."
+    }
+}
+
 android {
     namespace = "com.volleyballlab.player"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -24,6 +40,7 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -1,102 +1,97 @@
 # Saved session AI explanations
 
-Android session summaries and coach review, plus the web shared-session panel,
-can request a short explanation of saved cue measurements. Existing deterministic
-feedback, video access, session saving, and coach notes work independently.
+Android session summaries and coach review, plus web shared sessions, use a
+Cloudflare Worker for the Groq explanation service. Firebase Auth, Firestore,
+and Hosting remain on Spark. The original Firebase Functions adapter remains
+optional and requires Blaze; the Worker does not call it.
 
 ## Evidence and behavior
 
-- A user explicitly chooses **Generate explanation**. Opening a session checks
-  only for a cached result and never starts an inference.
-- `explainTrainingSession` reads the saved Firestore session itself. Clients send
-  only its ID and a generation flag; client-supplied scores are rejected.
-- A cue needs at least three reps with finite measurements and valid scores.
-  The server selects up to two strengths (score at least 75) and two priorities
-  (score below 70). Sparse cues are excluded. Reference ranges are the app's
-  coaching references, not universal or clinically validated standards.
-- NVIDIA receives the skill, aggregate measurements, app reference ranges, and
-  approved cue tips. It receives no names, account/session IDs, email addresses,
-  raw landmarks, recordings, or coach notes.
-- A fixed system prompt limits prose to that evidence and those approved tips.
-  Strict output checks reject unknown/moved cues, invented numeric prose,
-  invalid structure, and medical claims. These checks reduce unsupported output;
+- Opening a session checks only for an existing explanation. A user explicitly
+  chooses **Generate explanation** before a new Groq request is made.
+- Clients send only a saved session ID and a generation flag. The Worker reads
+  the source from the fixed `volleyball-lab` Firestore project. Client-supplied
+  scores are rejected.
+- A cue needs at least three measured reps. At most two strengths (score at least
+  75) and two priorities (score below 70) are selected deterministically. Sparse
+  cues are excluded. Reference ranges are app coaching references, not universal
+  or clinically validated standards.
+- Groq receives selected cue outcomes (average position below, within, or above
+  the app reference) and approved tips. Exact numeric values stay in the score UI.
+  It receives
+  no account/session IDs, names, emails, recordings, raw landmarks, or coach notes.
+- The fixed prompt and response validator restrict cue IDs, structure, lengths,
+  numerical prose, and medical claims. These checks reduce unsupported output;
   they do not prove every generated sentence is correct.
-- Coaches write and send their own notes. Generated text is never sent as a
-  coach note automatically.
+- Coaches manually write and send their notes. AI output is not automatically
+  sent to players as a coach note.
 
-## Server configuration
+## Hosting and credentials
 
-Firebase project: `volleyball-lab`; Functions region: `asia-southeast1`.
-The Firebase Blaze plan is required. Billing activation is an owner action.
+Source and deployment instructions are in [ai-worker](../ai-worker/README.md).
+The deployed endpoint is
+`https://volleyball-lab-session-ai.volleyball-lab-session-ai.workers.dev/explainTrainingSession`.
+The public HTTPS endpoint is selected with `VITE_SESSION_AI_URL` for web and
+`sessionAiUrl` (Gradle property) or `SESSION_AI_URL` (environment variable) for
+Android. Both Firebase callable SDKs support a direct URL and automatically send
+the Firebase ID token. A blank URL retains the original named Firebase callable.
 
-Set the secret with Firebase CLI using a hidden interactive prompt:
+Keep `GROQ_API_KEY` in a Cloudflare Worker secret. Do not put it in an APK,
+Vite variable, committed configuration, shell argument, or browser source. Use
+Wrangler's normal authorization flow; OS keyring storage is preferred on Windows.
+Only Workers, D1, account/user identity, and Worker tail permissions are needed.
+A Firebase service-account private key is not required.
+
+The default model is `openai/gpt-oss-20b`, with strict JSON-schema output, a
+45-second overall upstream timeout, one bounded retry for transient server
+errors, and local output validation. Groq's free limits are organization-wide;
+token limits can be reached before the published 1,000 requests/day cap. Check
+the current [model page](https://console.groq.com/docs/model/openai/gpt-oss-20b),
+[structured-output support](https://console.groq.com/docs/structured-outputs),
+and [rate limits](https://console.groq.com/docs/rate-limits).
+
+## Authorization and retention
+
+Firestore validates the bearer token on source reads and on the virtual
+`aiSessionAccess/{sessionId}` path. The latter stores no document: an authorized
+GET returns not-found. Its rules require an existing session, neither account
+being deleted, and either ownership or COACH role plus an Active roster connection
+and explicit sharing. Lists and writes are denied. Historical session-read
+behavior outside AI is preserved.
+
+Every cached read is reauthorized. Source and access are checked again after
+Groq responds. D1 stores validated prose, fingerprints, hashed identity
+references, leases, and counters; it stores no ID tokens or raw sessions.
+Cache validity is at most 24 hours, with hourly expired-row cleanup. Physical
+removal may lag expiry by up to the hourly interval under normal operation.
+Deletion immediately prevents future authorized cache reads through Firebase
+rules; Spark provides no Firestore deletion trigger to purge D1 instantly.
+Counters older than 48 hours are purged as well.
+
+Atomic D1 operations enforce one in-flight generation per session, 20 attempts
+per account per UTC day, and a 15-second cooldown. Failed attempts count; cached
+reads do not. These limits are separate from local Android report allowances.
+CORS allows the production web origins and local Vite. Android calls without an
+Origin header still require valid Firebase authorization.
+
+Workers Free has a 10 ms CPU allowance per request; network waiting does not count.
+AI requests are bounded to short sessions (at most 100 reps and a bounded source
+response) to keep parsing and validation small. Larger sessions retain normal
+measured feedback. Benchmark hosted cold/warm requests before claiming a workload
+fits this allowance. See [Cloudflare limits](https://developers.cloudflare.com/workers/platform/limits/).
+
+## Verification
 
 ```powershell
-firebase functions:secrets:set NVIDIA_API_KEY --project volleyball-lab
-```
-
-Do not put the key in Android resources, the web bundle, Vite variables, source
-control, or shell arguments. Rotate credentials exposed in chat before production.
-
-`NVIDIA_SESSION_MODEL` defaults to
-`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`. The text-only integration uses the
-NVIDIA hosted chat-completions endpoint, a fixed system prompt, a bounded output,
-and a 45-second provider timeout. Model availability and hosted free API terms can
-change; verify the [model catalog](https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning)
-and [API reference](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-nano-omni-30b-a3b-reasoning)
-before production use. A successful synthetic request verified this model and
-response decoding on 2026-10-26. No real athlete data was used in that probe.
-
-Deploy only the relevant functions, preserving unrelated services:
-
-```powershell
-firebase deploy --project volleyball-lab --only functions:billing:explainTrainingSession,functions:billing:removeSessionExplanation
-```
-
-Deploy the updated account-deletion callable as well when activating this feature,
-so deletion removes usage and explanation caches. Existing unrelated functions may
-require their own configuration during source discovery; do not invent payment or
-email credentials to bypass that requirement. Deploy web hosting after the callable
-is active. Android clients require a new app build.
-
-## Access, limits, and deletion
-
-Authentication is required. An owner can access their session; a coach also needs
-the COACH role, explicit `sharedWith` access, and an Active roster connection.
-Account-deletion fences are checked, including after a provider request. Revoked
-access prevents return of the newly generated explanation.
-
-Results live in admin-only
-`sessions/{sessionId}/aiExplanations/session-explanation-v1`. A fingerprint of the
-evidence, prompt version, and model invalidates stale results. The server uses a
-generation lease, a 15-second per-account cooldown, and 20 attempts per UTC day in
-admin-only `aiUsage/{uid}`. Failed attempts count toward the limit. Cached reads
-do not. These are separate from the existing Android local report allowance.
-The callable has at most two instances and eight concurrent requests per instance;
-these limits do not guarantee a spending cap. Web App Check is not configured, so
-this callable currently relies on Firebase Auth, access checks, and these limits.
-
-Deleting a session triggers cache removal. Account deletion removes its owned
-session caches and usage counter. No additional client Firestore grants are needed.
-
-## Validation
-
-```powershell
-cd functions
+cd ai-worker
+npm ci
 npm test
-# With the Firestore emulator running:
-node --test emulator-tests/account-cleanup.test.mjs
+npm run check
+npx wrangler deploy --dry-run
 ```
 
-Android decoder tests: `SessionExplanationDecoderTest`. The isolated web fixture
-can verify success/failure rendering without sending athlete data to NVIDIA.
-
-Verification on 2026-10-27: 31 backend unit tests, two Firestore emulator
-account-cleanup tests, and three Android decoder tests passed. Android compilation,
-debug APK packaging, and the coach web production build passed. The isolated web
-preview verified explanation rendering and draft preservation on success and
-provider failure. This does not constitute physical-device or live endpoint
-validation. Firebase Hosting was updated and its HTML and JavaScript returned
-HTTP 200. Firebase still reported billing disabled, so secret provisioning and
-Functions deployment remain pending Blaze. The web panel handles the unavailable
-endpoint without blocking measured feedback or coach notes.
+`functions/emulator-tests/session-ai-access.test.mjs` verifies the virtual gate.
+`SessionExplanationDecoderTest` verifies Android decoding. The 32
+Functions unit tests cover the shared policy and legacy adapter. Six new
+authorization rule tests passed on 2026-10-27. Hosted inference/CPU verification
+and physical-device validation are separate from these local checks.

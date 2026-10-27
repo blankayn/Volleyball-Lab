@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createSessionExplainer } from "../session-explanation.mjs";
-import { DEFAULT_NVIDIA_MODEL, explanationHash, requestNvidiaExplanation, sessionEvidence, validateExplanation } from "../session-explanation-policy.mjs";
+import { DEFAULT_NVIDIA_MODEL, EXPLANATION_VERSION, explanationHash, nvidiaEvidence, requestNvidiaExplanation, sessionEvidence, validateExplanation } from "../session-explanation-policy.mjs";
+const CACHE_PATH = `sessions/session/aiExplanations/${EXPLANATION_VERSION}`;
 
 function session() {
   return { id: "session", ownerUid: "athlete", sharedWith: ["coach"], skill: "Serving", repCount: 5, formScore: 66,
@@ -72,13 +73,24 @@ test("provider request uses server key and anonymous evidence, then validates re
   assert.equal(captured.headers.Authorization, "Bearer test-key");
   const payload = JSON.parse(captured.body);
   assert.equal(payload.messages[0].role, "system");
-  assert.deepEqual(JSON.parse(payload.messages[1].content), evidence);
+  assert.equal(payload.chat_template_kwargs.enable_thinking, false);
+  assert.deepEqual(JSON.parse(payload.messages[1].content), nvidiaEvidence(evidence));
+  assert.ok(!/\p{N}/u.test(payload.messages[1].content));
   assert.equal(output.priorities.length, 2);
 });
 test("provider throttling and truncated output never return a fabricated explanation", async () => {
   const args = { apiKey: "test", model: DEFAULT_NVIDIA_MODEL, evidence: sessionEvidence(session()) };
   await assert.rejects(requestNvidiaExplanation({ ...args, fetchImpl: async () => ({ ok: false, status: 429 }) }), /nvidia_rate_limited/);
   await assert.rejects(requestNvidiaExplanation({ ...args, fetchImpl: async () => ({ ok: true, json: async () => ({ choices: [{ finish_reason: "length", message: { content: "{}" } }] }) }) }), /incomplete_explanation/);
+});
+
+test("one transient NVIDIA failure is retried within the same overall timeout", async () => {
+  const evidence = sessionEvidence(session()); const signals = [];
+  const output = await requestNvidiaExplanation({ apiKey: "test", model: DEFAULT_NVIDIA_MODEL, evidence, fetchImpl: async (_url, init) => {
+    signals.push(init.signal);
+    return signals.length === 1 ? { ok: false, status: 503 } : { ok: true, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(valid(evidence)) } }] }) };
+  } });
+  assert.deepEqual(output, valid(evidence)); assert.equal(signals.length, 2); assert.equal(signals[0], signals[1]);
 });
 test("signed-out callers, forged fields and unrelated accounts are blocked before inference", async () => {
   const h = harness();
@@ -123,13 +135,13 @@ test("daily limit and in-flight leases prevent extra provider calls", async () =
   const h = harness(); h.rows.set("aiUsage/coach", { day: new Date(1_800_000_000_000).toISOString().slice(0, 10), count: 20 });
   await rejectsCode(h.run(request()), "resource-exhausted");
   assert.equal(h.calls(), 0);
-  const busy = harness(); busy.rows.set("sessions/session/aiExplanations/session-explanation-v1", { leaseUntil: 1_800_000_010_000 });
+  const busy = harness(); busy.rows.set(CACHE_PATH, { leaseUntil: 1_800_000_010_000 });
   await rejectsCode(busy.run(request()), "aborted"); assert.equal(busy.calls(), 0);
 });
 test("provider failure clears the lease and supports a later retry", async () => {
   const h = harness(); h.fail(true);
   await rejectsCode(h.run(request()), "unavailable");
-  assert.equal(h.rows.has("sessions/session/aiExplanations/session-explanation-v1"), false);
+  assert.equal(h.rows.has(CACHE_PATH), false);
   h.fail(false); h.advance(16_000);
   assert.equal((await h.run(request())).status, "ready");
 });
@@ -140,7 +152,7 @@ test("deletion starting before the lease transaction cannot recreate usage or ca
   await rejectsCode(h.run(request()), "permission-denied");
   assert.equal(h.calls(), 0);
   assert.equal(h.rows.has("aiUsage/coach"), false);
-  assert.equal(h.rows.has("sessions/session/aiExplanations/session-explanation-v1"), false);
+  assert.equal(h.rows.has(CACHE_PATH), false);
 });
 
 test("session deletion or revoked access during inference prevents a ready cache", async () => {
@@ -152,6 +164,6 @@ test("session deletion or revoked access during inference prevents a ready cache
   ]) {
     const h = harness(); h.afterGenerate(() => change(h));
     await assert.rejects(h.run(request()));
-    assert.equal(h.rows.has("sessions/session/aiExplanations/session-explanation-v1"), false);
+    assert.equal(h.rows.has(CACHE_PATH), false);
   }
 });
