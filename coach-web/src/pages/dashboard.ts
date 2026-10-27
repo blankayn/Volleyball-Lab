@@ -159,6 +159,14 @@ function navIcon(paths: string): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="ui-icon" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
 }
 
+function updateCoachAvatars(root: HTMLElement, name: string): void {
+  const photo = getPreferences().photo;
+  const content = photo ? `<img src="${esc(photo)}" alt="" />` : esc(initials(name));
+  root.querySelectorAll("#workspace-avatar, #sidebar-user-avatar").forEach((avatar) => {
+    avatar.innerHTML = content;
+  });
+}
+
 function sidebarLinks(
   tab: Tab,
   playerUid: string | null,
@@ -422,11 +430,7 @@ export async function renderDashboard(
       if (sidebarUserName) sidebarUserName.textContent = coachName;
       const workspaceName = root.querySelector("#workspace-name");
       if (workspaceName) workspaceName.textContent = data.profileTeam || (data.profileName ? `${data.profileName}’s workspace` : "Coach workspace");
-      const avatarText = initials(coachName);
-      const userAvatar = root.querySelector("#sidebar-user-avatar");
-      if (userAvatar) userAvatar.innerHTML = getPreferences().photo ? `<img src="${esc(getPreferences().photo)}" alt="" />` : esc(avatarText);
-      const workspaceAvatar = root.querySelector("#workspace-avatar");
-      if (workspaceAvatar) workspaceAvatar.textContent = avatarText;
+      updateCoachAvatars(root, coachName);
       if (activeTab === "player" && playerUid) {
         const heading = root.querySelector("#page-heading");
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
@@ -440,8 +444,7 @@ export async function renderDashboard(
           if (sidebarUserName) sidebarUserName.textContent = name;
           if (workspaceName) workspaceName.textContent = profile.teamName || `${name}’s workspace`;
           if (teamName) teamName.textContent = profile.teamName || `${name}’s team`;
-          if (workspaceAvatar) workspaceAvatar.textContent = initials(name);
-          if (userAvatar) userAvatar.innerHTML = getPreferences().photo ? `<img src="${esc(getPreferences().photo)}" alt="" />` : esc(initials(name));
+          updateCoachAvatars(root, name);
         }).catch(() => undefined);
       });
     } catch (e) {
