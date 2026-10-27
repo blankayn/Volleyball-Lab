@@ -12,7 +12,7 @@
 .coach-search { display: flex; align-items: center; gap: 11px; min-height: 48px; margin: 20px 0 6px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--portal-subtle); color: var(--ink-faint); }
 .coach-search:focus-within { border-color: var(--rust); outline: 2px solid var(--portal-accent-tint); outline-offset: 2px; }
 .coach-search > svg { width: 19px; height: 19px; }
-.coach-search input { width: 100%; min-width: 0; min-height: 46px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; }
+.coach-search input { width: 100%; min-width: 0; min-height: 46px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; font-size: calc(14px * var(--portal-scale)); }
 .coach-search input::placeholder { color: var(--ink-faint); opacity: 1; }
 .search-empty { padding: 24px 4px; color: var(--ink-soft); }
 .history-disclosure summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; min-height: 30px; font-weight: 500; }
@@ -22,9 +22,9 @@
 .coach-session > summary { list-style: none; display: flex; align-items: center; gap: 14px; min-height: 86px; padding: 16px 3px; cursor: pointer; border-radius: 8px; }
 .coach-session > summary:focus-visible, .mobile-coach-link:focus-visible { outline: 2px solid var(--rust); outline-offset: 3px; }
 .session-summary-copy { flex: 1; display: grid; gap: 5px; min-width: 0; }
-.session-summary-copy > strong { font-size: 15px; font-weight: 600; }
-.session-summary-copy .muted { font-size: 12px; line-height: 1.5; }
-.session-state { font-size: 10px; font-weight: 500; color: var(--rust); background: var(--portal-accent-tint); padding: 5px 8px; border-radius: 5px; white-space: nowrap; }
+.session-summary-copy > strong { font-size: calc(15px * var(--portal-scale)); font-weight: 600; }
+.session-summary-copy .muted { font-size: calc(12px * var(--portal-scale)); line-height: 1.5; }
+.session-state { font-size: calc(10px * var(--portal-scale)); font-weight: 500; color: var(--rust); background: var(--portal-accent-tint); padding: 5px 8px; border-radius: 5px; white-space: nowrap; }
 .session-state.answered { background: var(--portal-subtle); color: var(--ink-soft); }
 .session-chevron { display: flex; color: var(--ink-faint); transition: transform .2s ease; }
 .session-chevron svg { width: 18px; height: 18px; }
@@ -60,7 +60,7 @@
   .sidebar-mobile-close { display: grid; flex: none; }
   .app-content { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
   .mobile-coach-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--portal-surface); box-shadow: 0 -4px 24px #18283906; }
-  .mobile-coach-link { display: grid; justify-items: center; align-content: center; gap: 5px; min-height: 53px; border-radius: 10px; text-decoration: none; color: var(--ink-faint); font-size: 10px; font-weight: 500; line-height: 1.3; }
+  .mobile-coach-link { display: grid; justify-items: center; align-content: center; gap: 5px; min-height: 53px; border-radius: 10px; text-decoration: none; color: var(--ink-faint); font-size: calc(11px * var(--portal-scale)); font-weight: 500; line-height: 1.3; }
   .mobile-coach-link > span:first-child { position: relative; width: 38px; height: 25px; display: grid; place-items: center; border-radius: 8px; }
   .mobile-coach-link.active { color: var(--rust); }
   .mobile-coach-link.active > span:first-child { background: var(--portal-accent-tint); }
@@ -89,9 +89,9 @@
   .hero-panel-actions .btn { min-width: 0; font-size: 12px; padding: 12px 8px; }
   .app-content { padding-inline: 16px; }
   .app-content .card { padding: 18px; }
-  .coach-search input, .app-shell textarea[data-note-draft] { font-size: 16px; }
+  .coach-search input, .app-shell textarea[data-note-draft] { font-size: calc(16px * var(--portal-scale)); }
   .coach-session > summary { gap: 9px; }
-  .session-state { font-size: 9px; padding: 4px 6px; }
+  .session-state { padding: 4px 6px; }
   .coach-loading { grid-template-columns: 1fr; }
   .coach-loading > div { height: 150px; }
   .coach-page-intro { margin-bottom: 18px; }
