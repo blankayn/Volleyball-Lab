@@ -175,13 +175,6 @@ function sidebarLinks(
     ${playerUid ? `<div class="sidebar-context"><p class="sidebar-label sidebar-context-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
 }
 
-function mobileLinks(tab: Tab, pending = 0, requests = 0): string {
-  return ([
-    ["overview", "Home", "court", 0], ["queue", "Reviews", "review", pending],
-    ["roster", "Team", "team", requests], ["assignments", "Drills", "clipboard", 0], ["account", "Account", "user", 0],
-  ] as const).map(([id, label, symbol, count]) => `<a href="${appPath(id)}" class="mobile-coach-link${tab === id || (tab === "player" && id === "roster") ? " active" : ""}"${tab === id || (tab === "player" && id === "roster") ? ' aria-current="page"' : ""}><span>${icon(symbol)}${count ? `<b aria-label="${count} waiting">${count > 99 ? "99+" : count}</b>` : ""}</span><span>${label}</span></a>`).join("");
-}
-
 function wireSidebar(root: HTMLElement): void {
   const shell = root.querySelector<HTMLElement>("#app-shell");
   const sidebar = root.querySelector<HTMLElement>("#dashboard-sidebar");
@@ -228,9 +221,7 @@ function wireSidebar(root: HTMLElement): void {
     sidebar.inert = isMobile() && !open;
     sidebar.setAttribute("aria-hidden", String(isMobile() && !open));
     const main = shell.querySelector<HTMLElement>(".app-main");
-    const bottomNav = shell.querySelector<HTMLElement>(".mobile-coach-nav");
     if (main) main.inert = open;
-    if (bottomNav) bottomNav.inert = open;
     if (!open && sidebar.contains(document.activeElement)) topToggle.focus();
     if (open) sidebar.querySelector<HTMLAnchorElement>(".sidebar-nav a")?.focus();
   };
@@ -336,7 +327,6 @@ export async function renderDashboard(
         <div id="dash-body"><div class="coach-loading" role="status" aria-label="Loading your team"><div></div><div></div><div></div></div></div>
       </main>
     </div>
-    <nav class="mobile-coach-nav" aria-label="Coach navigation">${mobileLinks(activeTab)}</nav>
   </div>`;
   document.title = `${PAGE_LABELS[activeTab]} — Volleyball Lab Coach Portal`;
   wireSidebar(root);
@@ -402,8 +392,6 @@ export async function renderDashboard(
           data.roster.filter((m) => m.status === "Pending").length,
         );
       }
-      const mobileNav = root.querySelector(".mobile-coach-nav");
-      if (mobileNav) mobileNav.innerHTML = mobileLinks(activeTab, data.submissions.filter(s => s.reviewedAt === null).length, data.roster.filter(m => m.status === "Pending").length);
       if (live && editing()) return;
       const html = await viewFor(activeTab, coachUid, data, playerUid);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && editing())) return;
