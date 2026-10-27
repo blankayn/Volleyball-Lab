@@ -20,5 +20,6 @@ module.exports = {
     };
   },
   setDoc: optionalWrite, updateDoc: optionalWrite,
-  collection() {}, deleteDoc() {}, getDoc() {}, getDocs() {}, onSnapshot() {}, query() {}, serverTimestamp() {}, where() {},
+  async getDoc(ref) { return { ref, exists: () => Boolean(state().submission), data: () => state().submission }; },
+  collection() {}, deleteDoc() {}, getDocs() {}, onSnapshot() {}, query() {}, serverTimestamp() {}, where() {},
 };

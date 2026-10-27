@@ -28,11 +28,12 @@ import {
 import { cueLabel, cuesFor, formatMeasured, formatTarget, SKILL_LABEL } from "../lib/cues";
 import { dueLabel, esc, fullDate, initials, timeAgo } from "../lib/format";
 import { appPath, go } from "../lib/router";
-import { avatar, emptyState, errorCard, iconChip, scoreBar, spinner } from "../lib/ui";
+import { avatar, emptyState, errorCard, iconChip, scoreBar } from "../lib/ui";
 import { hydrateAccountPreferences, renderAccount, wireAccount } from "./account";
 import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
+import { wireCoachExperience } from "../lib/coach-experience";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
@@ -46,7 +47,11 @@ interface DashData {
 }
 
 let unsubscribers: (() => void)[] = [];
-let expandedSession: string | null = null;
+const expandedSessions = new Set<string>();
+const noteDrafts = new Map<string, string>();
+let draftAccount = "";
+let disposeExperience: (() => void) | null = null;
+let statusTimer: ReturnType<typeof setTimeout>;
 let disposeSidebar: (() => void) | null = null;
 let disposeAccount: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
@@ -55,6 +60,7 @@ let disposeExplanations: (() => void) | null = null;
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
   dashboardVersion++;
+  clearTimeout(statusTimer);
   stopLive();
   disposeAccount?.();
   disposeAccount = null;
@@ -64,7 +70,9 @@ export function disposeDashboard(): void {
   disposeExplanations = null;
   disposeSidebar?.();
   disposeSidebar = null;
-  expandedSession = null;
+  disposeExperience?.();
+  disposeExperience = null;
+  expandedSessions.clear();
 }
 
 function stopLive(): void {
@@ -167,12 +175,20 @@ function sidebarLinks(
     ${playerUid ? `<div class="sidebar-context"><p class="sidebar-label sidebar-context-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
 }
 
+function mobileLinks(tab: Tab, pending = 0, requests = 0): string {
+  return ([
+    ["overview", "Home", "court", 0], ["queue", "Reviews", "review", pending],
+    ["roster", "Team", "team", requests], ["assignments", "Drills", "clipboard", 0], ["account", "Account", "user", 0],
+  ] as const).map(([id, label, symbol, count]) => `<a href="${appPath(id)}" class="mobile-coach-link${tab === id || (tab === "player" && id === "roster") ? " active" : ""}"${tab === id || (tab === "player" && id === "roster") ? ' aria-current="page"' : ""}><span>${icon(symbol)}${count ? `<b aria-label="${count} waiting">${count > 99 ? "99+" : count}</b>` : ""}</span><span>${label}</span></a>`).join("");
+}
+
 function wireSidebar(root: HTMLElement): void {
   const shell = root.querySelector<HTMLElement>("#app-shell");
   const sidebar = root.querySelector<HTMLElement>("#dashboard-sidebar");
   const scrim = root.querySelector<HTMLElement>("#sidebar-scrim");
   const topToggle = root.querySelector<HTMLButtonElement>("#sidebar-toggle");
   const collapseToggle = root.querySelector<HTMLButtonElement>("#sidebar-collapse");
+  const closeToggle = root.querySelector<HTMLButtonElement>("#sidebar-close");
   if (!shell || !sidebar || !topToggle) return;
 
   const mobile = window.matchMedia("(max-width: 960px)");
@@ -209,10 +225,17 @@ function wireSidebar(root: HTMLElement): void {
     if (scrim) scrim.hidden = !open;
     topToggle.setAttribute("aria-expanded", String(open));
     document.body.style.overflow = open ? "hidden" : "";
+    sidebar.inert = isMobile() && !open;
+    sidebar.setAttribute("aria-hidden", String(isMobile() && !open));
+    const main = shell.querySelector<HTMLElement>(".app-main");
+    const bottomNav = shell.querySelector<HTMLElement>(".mobile-coach-nav");
+    if (main) main.inert = open;
+    if (bottomNav) bottomNav.inert = open;
     if (!open && sidebar.contains(document.activeElement)) topToggle.focus();
+    if (open) sidebar.querySelector<HTMLAnchorElement>(".sidebar-nav a")?.focus();
   };
 
-  if (isMobile()) topToggle.setAttribute("aria-expanded", "false");
+  if (isMobile()) setDrawer(false);
   else setCollapsed(savedCollapsed(), false);
 
   topToggle.addEventListener("click", () => {
@@ -220,6 +243,7 @@ function wireSidebar(root: HTMLElement): void {
     else setCollapsed(!shell.classList.contains("is-collapsed"));
   });
   collapseToggle?.addEventListener("click", () => setCollapsed(!shell.classList.contains("is-collapsed")));
+  closeToggle?.addEventListener("click", () => setDrawer(false));
   scrim?.addEventListener("click", () => setDrawer(false));
   sidebar.addEventListener("click", (event) => {
     if ((event.target as Element).closest("a")) setDrawer(false);
@@ -227,6 +251,12 @@ function wireSidebar(root: HTMLElement): void {
 
   const onKeydown = (event: KeyboardEvent) => {
     if (event.key === "Escape" && isMobile() && shell.classList.contains("is-mobile-open")) setDrawer(false);
+    if (event.key === "Tab" && isMobile() && shell.classList.contains("is-mobile-open")) {
+      const controls = Array.from(sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')).filter(element => element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
   };
   const onBreakpoint = () => {
     setDrawer(false);
@@ -253,8 +283,11 @@ export async function renderDashboard(
   coachUid: string,
   tab: string,
   playerUid: string | null,
+  sessionId: string | null = null,
 ): Promise<void> {
   stopLive();
+  if (coachUid !== draftAccount) { noteDrafts.clear(); draftAccount = coachUid; }
+  if (sessionId) expandedSessions.add(sessionId);
   const version = ++dashboardVersion;
   const activeTab = (["overview", "queue", "roster", "assignments", "account", "player"] as Tab[]).includes(tab as Tab)
     ? (tab as Tab)
@@ -268,6 +301,7 @@ export async function renderDashboard(
           <span class="sidebar-label"><strong>Volleyball Lab</strong><small>Coach portal</small></span>
         </a>
         <button class="sidebar-collapse" id="sidebar-collapse" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">${navIcon('<path d="m14 7-5 5 5 5"/>')}</button>
+        <button class="icon-btn sidebar-mobile-close" id="sidebar-close" type="button" aria-label="Close navigation">${navIcon('<path d="m6 6 12 12M18 6 6 18"/>')}</button>
       </div>
       <div class="sidebar-workspace">
         <span class="workspace-avatar" id="workspace-avatar">VL</span>
@@ -289,7 +323,7 @@ export async function renderDashboard(
         <button class="icon-btn" id="sidebar-toggle" type="button" aria-controls="dashboard-sidebar" aria-expanded="true" aria-label="Toggle navigation">${navIcon('<path d="M4 6h16M4 12h16M4 18h16"/>')}</button>
         <div class="app-topbar-title">
           <span class="app-crumb">Dashboard</span>
-          <div class="app-title-line"><h1 id="page-heading">${PAGE_LABELS[activeTab]}</h1><span class="dash-team-name" id="team-name">Your team</span></div>
+          <div class="app-title-line"><h1 id="page-heading" tabindex="-1">${PAGE_LABELS[activeTab]}</h1><span class="dash-team-name" id="team-name">Your team</span></div>
         </div>
         <div class="app-topbar-actions">
           <span class="sync-pill"><i></i>Live</span>
@@ -299,9 +333,10 @@ export async function renderDashboard(
       </header>
       <main class="app-content" id="dashboard-content">
         <div id="action-status" role="status" aria-live="polite"></div>
-        <div id="dash-body">${spinner("Loading your team")}</div>
+        <div id="dash-body"><div class="coach-loading" role="status" aria-label="Loading your team"><div></div><div></div><div></div></div></div>
       </main>
     </div>
+    <nav class="mobile-coach-nav" aria-label="Coach navigation">${mobileLinks(activeTab)}</nav>
   </div>`;
   document.title = `${PAGE_LABELS[activeTab]} — Volleyball Lab Coach Portal`;
   wireSidebar(root);
@@ -316,15 +351,46 @@ export async function renderDashboard(
 
   let request = 0;
   let dirty = false;
-  body.addEventListener("input", () => { dirty = true; });
-  body.addEventListener("change", () => { dirty = true; });
+  let hasRendered = false;
+  const filterQueries = new Map<string, string>();
+  const editing = () => dirty || (document.activeElement instanceof HTMLElement
+    && body.contains(document.activeElement) && document.activeElement.matches("input, textarea, select"));
+  const restoreDrafts = () => body.querySelectorAll<HTMLTextAreaElement>("[data-note-draft]").forEach(field => {
+    if (field.dataset.draftRestored) return;
+    field.dataset.draftRestored = "true";
+    field.value = noteDrafts.get(field.dataset.noteDraft!) ?? "";
+    const counter = body.querySelector(`[data-note-count="${CSS.escape(field.dataset.noteDraft!)}"]`);
+    if (counter) counter.textContent = `${field.value.length}/800`;
+    const send = body.querySelector<HTMLButtonElement>(`[data-action="send-note"][data-session="${CSS.escape(field.dataset.noteDraft!)}"]`);
+    if (send) send.disabled = !field.value.trim();
+  });
+  body.addEventListener("input", (event) => {
+    const target = event.target as HTMLInputElement | HTMLTextAreaElement;
+    if (target.matches("[data-coach-search]")) { filterQueries.set(target.getAttribute("aria-label") ?? "", target.value); return; }
+    dirty = true;
+    if (target.dataset.noteDraft) {
+      noteDrafts.set(target.dataset.noteDraft, target.value);
+      const count = body.querySelector(`[data-note-count="${CSS.escape(target.dataset.noteDraft)}"]`);
+      if (count) count.textContent = `${target.value.length}/800`;
+      const send = body.querySelector<HTMLButtonElement>(`[data-action="send-note"][data-session="${CSS.escape(target.dataset.noteDraft)}"]`);
+      if (send) send.disabled = !target.value.trim();
+    }
+  });
+  body.addEventListener("change", (event) => { if (!(event.target as Element).matches("[data-coach-search]")) dirty = true; });
+  body.addEventListener("toggle", (event) => {
+    const details = event.target;
+    if (details instanceof HTMLDetailsElement && details.dataset.sessionDetails) {
+      restoreDrafts();
+      if (details.open) expandedSessions.add(details.dataset.sessionDetails);
+      else expandedSessions.delete(details.dataset.sessionDetails);
+    }
+  }, true);
   const render = async (live = false) => {
     const attempt = ++request;
     try {
       const data = await loadData(coachUid);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
       notifications.update(data);
-      if (live && dirty) return;
       nameCache = new Map(data.roster.map((m) => [m.playerUid, m.playerName || "Player"]));
       // Refresh badges and the selected-player link without replacing the shell.
       const nav = root.querySelector(".sidebar-nav");
@@ -336,13 +402,30 @@ export async function renderDashboard(
           data.roster.filter((m) => m.status === "Pending").length,
         );
       }
+      const mobileNav = root.querySelector(".mobile-coach-nav");
+      if (mobileNav) mobileNav.innerHTML = mobileLinks(activeTab, data.submissions.filter(s => s.reviewedAt === null).length, data.roster.filter(m => m.status === "Pending").length);
+      if (live && editing()) return;
       const html = await viewFor(activeTab, coachUid, data, playerUid);
-      if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && dirty)) return;
+      if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && editing())) return;
       disposeAccount?.();
       disposeAccount = null;
       disposeExplanations?.();
       disposeExplanations = null;
+      disposeExperience?.();
       body.innerHTML = html;
+      body.querySelectorAll<HTMLInputElement>("[data-coach-search]").forEach(field => {
+        field.value = filterQueries.get(field.getAttribute("aria-label") ?? "") ?? "";
+      });
+      const firstRender = !hasRendered;
+      disposeExperience = wireCoachExperience(body, firstRender);
+      restoreDrafts();
+      hasRendered = true;
+      if (firstRender && sessionId) requestAnimationFrame(() => {
+        if (version !== dashboardVersion || !body.isConnected) return;
+        const selected = body.querySelector<HTMLDetailsElement>(`[data-session-details="${CSS.escape(sessionId)}"]`);
+        selected?.scrollIntoView({ block: "start", behavior: "auto" });
+        selected?.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+      });
       dirty = false;
       const coachName = data.profileName || "Coach";
       const teamName = root.querySelector(".dash-team-name");
@@ -376,8 +459,9 @@ export async function renderDashboard(
     } catch (e) {
       console.error(e);
       if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
+      if (hasRendered) return;
       body.innerHTML = errorCard(
-        "Could not load your team. Check your connection and that Firestore rules are deployed.",
+        "Could not load your team. Check your connection and try again.",
         "reload",
       );
       body.querySelector("[data-retry]")?.addEventListener("click", () => void render());
@@ -385,11 +469,14 @@ export async function renderDashboard(
   };
 
   // Live queue + roster counts; the body re-renders on change.
+  let liveRefresh: ReturnType<typeof setTimeout>;
+  const scheduleRefresh = () => { clearTimeout(liveRefresh); liveRefresh = setTimeout(() => void render(true), 160); };
   unsubscribers = [
-    subscribe(queueQuery(coachUid), () => void render(true), () => undefined),
-    subscribe(rosterQuery(coachUid), () => void render(true), () => undefined),
-    subscribe(assignmentsQuery(coachUid), () => void render(true), () => undefined),
-    subscribe(sharedSessionsQuery(coachUid), () => void render(true), () => undefined),
+    subscribe(queueQuery(coachUid), scheduleRefresh, () => undefined),
+    subscribe(rosterQuery(coachUid), scheduleRefresh, () => undefined),
+    subscribe(assignmentsQuery(coachUid), scheduleRefresh, () => undefined),
+    subscribe(sharedSessionsQuery(coachUid), scheduleRefresh, () => undefined),
+    () => clearTimeout(liveRefresh),
   ];
   await render();
 }
@@ -487,14 +574,14 @@ function viewOverview(data: DashData): string {
 
   const focus =
     requests.length > 0
-      ? { eyebrow: "Get started", title: `${requests.length} player${requests.length === 1 ? "" : "s"} waiting to join`, body: "Review the requests on your roster. Nothing else needs you first.", href: appPath("roster"), cta: "Review requests" }
+      ? { eyebrow: "Get started", title: `${requests.length} player${requests.length === 1 ? "" : "s"} waiting to join`, body: "Approve the players who are ready to join your team and share their sessions.", href: appPath("roster"), cta: "Review requests" }
       : pending.length > 0
         ? { eyebrow: "Review queue", title: `${pending.length} session${pending.length === 1 ? "" : "s"} waiting for you`, body: "Your players sent these for review. Open one to score it and write back.", href: appPath("queue"), cta: "Open review queue" }
         : { eyebrow: "All caught up", title: "Nothing waiting. Plan the next step.", body: "No submissions are queued. A good moment to set the next drill for your team.", href: appPath("assignments"), cta: "Set a drill" };
 
   const queuePreview = pending.slice(0, 4).map((s) => {
     const name = memberName(data.roster, s.playerUid);
-    return `<a class="row-item" href="${appPath("player", s.playerUid)}">${avatar(name)}
+    return `<a class="row-item" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name)}
       <span style="flex:1"><strong>${esc(name)}</strong><br /><span class="muted">${esc(sessionTitle(data, s.sessionId))} · ${timeAgo(s.submittedAt)}</span></span>
       <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
   }).join("");
@@ -508,7 +595,7 @@ function viewOverview(data: DashData): string {
       <div>
         <p class="eyebrow">Coach dashboard</p>
         <h2 class="overview-greeting">${greeting()}, ${esc(coachFirstName)}</h2>
-        <p class="muted">Here’s your team at a glance — review work, form and the next drill.</p>
+        <p class="muted">Review new sessions, approve players, and plan the next drill.</p>
       </div>
     </section>
 
@@ -519,7 +606,7 @@ function viewOverview(data: DashData): string {
         <p>${esc(focus.body)}</p>
         <div class="hero-panel-actions">
           <a class="btn btn-primary" href="${focus.href}">${esc(focus.cta)}</a>
-          <a class="btn btn-hero-ghost" href="${appPath("roster")}">View roster</a>
+          <a class="btn btn-hero-ghost" href="${appPath(requests.length ? "queue" : "roster")}">${requests.length ? "Review sessions" : "View roster"}</a>
         </div>
       </div>
       <div class="hero-panel-ring">
@@ -592,7 +679,7 @@ function sessionTitle(data: DashData, sessionId: string): string {
 function playerRow(data: DashData, m: RosterMember): string {
   const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
   const form = meanForm(sessions);
-  return `<a class="row-item" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player")}
+  return `<a class="row-item" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player")}
     <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
     <span class="muted">${sessions.length} set${sessions.length === 1 ? "" : "s"}${form !== null ? ` · form ${form}` : ""}</span></span>
     <span class="row-arrow">${icon("chevronRight")}</span></a>`;
@@ -606,11 +693,14 @@ function viewQueue(data: DashData, highlight: string | null): string {
   if (pending.length === 0) {
     return `<div class="card" style="margin-top:14px">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here.")}</div>`;
   }
-  return `<div class="card" style="margin-top:14px">
+  return `<div class="card" data-search-region style="margin-top:14px">
     <div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Review queue</h3></div>
+    <p class="muted">${pending.length} session${pending.length === 1 ? "" : "s"} ready for your feedback. Select one to open its measurements.</p>
+    <label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search review queue" placeholder="Find a player or skill" /></label>
+    <p class="search-empty" role="status" data-search-empty hidden>No matching sessions. Try another name or skill.</p>
     <div class="row-list">${pending.map((s) => {
       const name = memberName(data.roster, s.playerUid);
-      return `<a class="row-item" href="${appPath("player", s.playerUid)}">${avatar(name)}
+      return `<a class="row-item" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name)}
         <span style="flex:1"><strong>${esc(name)}</strong><br />
         <span class="muted">${esc(sessionTitle(data, s.sessionId))} · sent ${timeAgo(s.submittedAt)}</span></span>
         <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
@@ -623,28 +713,27 @@ function viewRoster(data: DashData): string {
   const requests = data.roster.filter((m) => m.status === "Pending");
   const active = activeRoster(data.roster);
   const past = data.roster.filter((m) => m.status === "Ended");
-  return `<div class="page-grid">
-    <div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("userPlus", "rust")}<h3 class="section-title">Wants to join ${requests.length > 0 ? `(${requests.length})` : ""}</h3></div>
-      ${requests.length === 0
-        ? emptyState("userPlus", "No requests", "Players pick you from their app's Coach tab. Their requests land here for you to approve.")
-        : `<div class="row-list">${requests.map((m) => `
+  return `<div class="coach-page-intro"><p class="eyebrow">Your team</p><h2>Your players</h2><p class="muted">Find a player, review their sessions, and send feedback.</p></div><div class="page-grid">
+    ${requests.length ? `<div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("userPlus", "rust")}<h3 class="section-title">Join requests (${requests.length})</h3></div>
+      <div class="row-list">${requests.map((m) => `
           <div class="row-item">${avatar(m.playerName || "Player")}
             <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
             <span class="muted">${esc(m.position ?? "Position not set")} · asked ${timeAgo(m.requestedAt)}</span></span>
             <button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(m.playerUid)}">Approve</button>
             <button class="btn btn-ghost btn-sm" data-action="decline" data-player="${esc(m.playerUid)}">Decline</button>
-          </div>`).join("")}</div>`}
-    </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("team", "rust")}<h3 class="section-title">On the team (${active.length})</h3></div>
+          </div>`).join("")}</div>
+    </div>` : ""}
+    <div class="card span-2" data-search-region><div class="chip-row" style="margin-bottom:8px">${iconChip("team", "rust")}<h3 class="section-title">On the team</h3><span class="muted" role="status" data-search-count>${active.length} players</span></div>
+      ${active.length ? `<label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search team" placeholder="Search by name or position" /></label><p class="search-empty" data-search-empty hidden>No matching players. Try another name or position.</p>` : ""}
       ${active.length === 0 ? emptyState("team", "Nobody yet", "Approved players appear here.") : `<div class="row-list">${active.map((m) => playerRow(data, m)).join("")}</div>`}
     </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("archive", "indigo")}<h3 class="section-title">Past players</h3></div>
-      ${past.length === 0 ? `<p class="muted">Nobody here. Removed players stay listed so history is not rewritten.</p>` : `<div class="row-list">${past.map((m) => `
+    ${past.length ? `<details class="card span-2 history-disclosure"><summary>Past players <span class="muted">${past.length}</span>${icon("chevronDown")}</summary>
+      <div class="row-list">${past.map((m) => `
         <div class="row-item">${avatar(m.playerName || "Player")}
           <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong></span>
-          <button class="btn btn-ghost btn-sm" data-action="remove" data-player="${esc(m.playerUid)}">Remove</button>
-        </div>`).join("")}</div>`}
-    </div>
+          <span class="muted">Connection ended</span>
+        </div>`).join("")}</div>
+    </details>` : ""}
   </div>`;
 }
 
@@ -712,40 +801,40 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
 function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, notes: CoachNote[]): string {
   void coachUid;
   void playerUid;
-  const open = expandedSession === s.id;
+  const open = expandedSessions.has(s.id);
   const answered = notes.some((n) => n.sessionId === s.id);
   const cues = cuesFor(s.skill);
   const cueRows = cues.map((cue) => {
     const measured = s.reps.flatMap((r) => r.cueScores).filter((c) => c.cueId === cue.id && c.score !== null);
     if (measured.length === 0) {
-      return `<tr><td>${esc(cue.label)}</td><td class="muted">Not measurable from this camera angle</td><td>—</td><td class="muted">${esc(formatTarget(cue.target, cue.unit))}</td></tr>`;
+      return `<tr><td>${esc(cue.label)}</td><td class="muted" data-cue-label="Athlete">Not measured</td><td data-cue-label="Score">—</td><td class="muted" data-cue-label="Reference">${esc(formatTarget(cue.target, cue.unit))}</td></tr>`;
     }
     const meanScore = Math.round((measured.reduce((a, c) => a + (c.score ?? 0), 0) / measured.length) * 100);
     const meanMeas = measured.reduce((a, c) => a + (c.measured ?? 0), 0) / measured.length;
     const hasMeas = measured.some((c) => c.measured !== null);
     return `<tr><td><strong>${esc(cue.label)}</strong><br /><span class="muted" style="font-size:12px">${measured.length} reps</span></td>
-      <td>${hasMeas ? esc(formatMeasured(meanMeas, cue.unit)) : "—"}</td>
-      <td>${scoreBar(meanScore)}</td>
-      <td class="muted">${esc(formatTarget(cue.target, cue.unit))}</td></tr>`;
+      <td data-cue-label="Athlete">${hasMeas ? esc(formatMeasured(meanMeas, cue.unit)) : "—"}</td>
+      <td data-cue-label="Score">${scoreBar(meanScore)}</td>
+      <td class="muted" data-cue-label="Reference">${esc(formatTarget(cue.target, cue.unit))}</td></tr>`;
   }).join("");
 
-  return `<div style="border-top:1px solid var(--line);padding:14px 0">
-    <div class="chip-row" style="cursor:pointer" role="button" tabindex="0" aria-expanded="${open}" data-action="toggle-session" data-session="${esc(s.id)}">
-      <div style="flex:1"><strong>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</strong>
-        <span class="muted"> · ${s.repCount} reps · ${fullDate(s.startedAt)}</span></div>
+  return `<details class="coach-session" data-session-details="${esc(s.id)}"${open ? " open" : ""}>
+    <summary>
+      <span class="session-summary-copy"><strong>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</strong>
+        <span class="muted">${s.repCount} reps · ${fullDate(s.startedAt)}</span></span>
       ${s.formScore !== null ? `<span class="score-num">${s.formScore}</span>` : ""}
-      ${answered ? `<span class="pill-green pill">Answered</span>` : `<span class="dot"></span>`}
-      <span style="color:var(--ink-faint)">${icon(open ? "chevronDown" : "chevronRight")}</span>
-    </div>
-    ${open ? `<div style="margin-top:12px">
+      <span class="session-state${answered ? " answered" : ""}">${answered ? "Feedback sent" : "To review"}</span>
+      <span class="session-chevron">${icon("chevronDown")}</span>
+    </summary>
+    <div class="session-detail"><template data-session-template><div class="session-detail-inner">
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
-      <table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table>
+      <div class="cue-table-scroll" role="region" aria-label="Session cue measurements" tabindex="0"><table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table></div>
       ${sessionExplanationPanel(s.id)}
       <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">Your note to this player</label>
-        <textarea id="note-${esc(s.id)}" maxlength="800" placeholder="What should they change before the next set?"></textarea></div>
-      <button class="btn btn-primary btn-sm" data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">Send note</button>
-    </div>` : ""}
-  </div>`;
+        <textarea id="note-${esc(s.id)}" data-note-draft="${esc(s.id)}" maxlength="800" rows="4" placeholder="One thing they did well, then a clear focus for the next set."></textarea></div>
+      <div class="note-composer-footer"><span class="muted" data-note-count="${esc(s.id)}">0/800</span><button class="btn btn-primary" disabled data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">${icon("message")} Send feedback</button></div>
+    </div></template></div>
+  </details>`;
 }
 
 // ---- Assignments ------------------------------------------------------------
@@ -797,6 +886,7 @@ function wireSignOut(root: HTMLElement): void {
   root.querySelectorAll<HTMLButtonElement>("[data-action='sign-out']").forEach((b) =>
     b.onclick = async () => {
       stopLive();
+      noteDrafts.clear();
       await auth.signOut();
       go("/");
     },
@@ -805,10 +895,18 @@ function wireSignOut(root: HTMLElement): void {
 
 function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): void {
   wireSignOut(root);
+  const showStatus = (message: string, error = false) => {
+    const status = root.querySelector<HTMLElement>("#action-status");
+    if (!status) return;
+    clearTimeout(statusTimer);
+    status.innerHTML = `<div class="coach-toast${error ? " is-error" : ""}"${error ? ' role="alert"' : ""}>${icon(error ? "message" : "check")}<span>${esc(message)}</span><button type="button" aria-label="Dismiss message">×</button></div>`;
+    status.querySelector("button")?.addEventListener("click", () => { status.replaceChildren(); });
+    if (!error) statusTimer = setTimeout(() => status.replaceChildren(), 6000);
+  };
 
   const act = async (action: string, el: HTMLElement) => {
     const player = el.dataset["player"] ?? "";
-    const original = el.textContent;
+    const original = el.innerHTML;
     if (el instanceof HTMLButtonElement) {
       if (el.disabled) return;
       el.disabled = true;
@@ -816,8 +914,6 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
     try {
       if (action === "approve" || action === "decline" || action === "remove") {
         await setMemberStatus(coachUid, player, action === "approve" ? "Active" : "Ended");
-      } else if (action === "toggle-session") {
-        expandedSession = expandedSession === el.dataset["session"] ? null : (el.dataset["session"] ?? null);
       } else if (action === "send-note") {
         const sessionId = el.dataset["session"] ?? "";
         const text = val(root, `note-${CSS.escape(sessionId)}`);
@@ -825,33 +921,26 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
         el.textContent = "Sending…";
         (el as HTMLButtonElement).disabled = true;
         await postNote({ id: newId(), coachUid, playerUid: player, sessionId, text: text.slice(0, 800), createdAt: Date.now() });
-        expandedSession = null;
+        noteDrafts.delete(sessionId);
+        showStatus("Feedback sent to the player.");
       } else if (action === "delete-assignment") {
         await deleteAssignment(el.dataset["id"] ?? "");
       }
     } catch (e) {
       console.error(e);
-      const status = root.querySelector("#action-status");
-      if (status) status.innerHTML = `<div class="form-error" role="alert">Could not save this change. Check your connection and try again. Your text is still here.</div>`;
-      el.textContent = original;
+      showStatus("Could not save this change. Check your connection and try again. Your text is still here.", true);
+      el.innerHTML = original;
       if (el instanceof HTMLButtonElement) el.disabled = false;
       return;
     }
     refresh();
   };
 
-  root.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => {
-    if (el.dataset["action"] === "sign-out") return;
-    if (el.dataset["action"] === "toggle-session") {
-      el.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          el.click();
-        }
-      });
-    }
-    el.addEventListener("click", () => void act(el.dataset["action"] ?? "", el));
-  });
+  const actionArea = root.querySelector<HTMLElement>("#dash-body");
+  if (actionArea) actionArea.onclick = (event) => {
+    const element = (event.target as Element).closest<HTMLElement>("[data-action]");
+    if (element && actionArea.contains(element) && element.dataset.action !== "sign-out") void act(element.dataset.action ?? "", element);
+  };
 
   const assignForm = root.querySelector<HTMLFormElement>("#assign-form");
   assignForm?.addEventListener("submit", async (e) => {

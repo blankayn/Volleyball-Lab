@@ -16,13 +16,21 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -46,6 +54,7 @@ import com.volleyballlab.player.ui.component.GhostLayout
 import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbTween
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -117,8 +126,11 @@ fun CoachRosterScreen(
         return
     }
 
-    val active = state.snapshots.filter { it.member.isActive }
-    val requests = state.pendingRequests
+    var search by rememberSaveable { mutableStateOf("") }
+    val query = search.trim()
+    val active = state.snapshots.filter { it.member.isActive && it.member.playerName.contains(query, ignoreCase = true) }
+    val requests = state.pendingRequests.filter { it.playerName.contains(query, ignoreCase = true) }
+    val past = state.pastMembers.filter { it.playerName.contains(query, ignoreCase = true) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -131,6 +143,36 @@ fun CoachRosterScreen(
                     title = stringResource(R.string.coach_roster_title),
                     subtitle = state.profile.teamName.takeIf { it.isNotBlank() },
                 )
+            }
+        }
+
+        item(key = "player-search") {
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it },
+                placeholder = { Text(stringResource(R.string.coach_search_players)) },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (search.isNotEmpty()) IconButton(onClick = { search = "" }) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.coach_search_clear))
+                    }
+                },
+                supportingText = {
+                    if (query.isNotEmpty()) Text(stringResource(R.string.coach_search_count, active.size + requests.size + past.size))
+                },
+                singleLine = true,
+                shape = CoachInnerShape,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter),
+            )
+        }
+        if (query.isNotEmpty() && active.isEmpty() && requests.isEmpty() && past.isEmpty()) {
+            item(key = "search-empty") {
+                CoachCard(Modifier.padding(horizontal = CoachGutter)) {
+                    Text(stringResource(R.string.coach_search_empty_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.coach_search_empty_body), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { search = "" }) { Text(stringResource(R.string.coach_search_clear)) }
+                }
             }
         }
 
@@ -148,7 +190,7 @@ fun CoachRosterScreen(
                 items = requests,
                 key = { _, member -> "request-" + member.playerUid },
             ) { index, member ->
-                EntranceAnimation(index = index + 2) {
+                EntranceAnimation(index = index + 2, modifier = Modifier.animateItem(fadeInSpec = vbTween(), placementSpec = vbTween(), fadeOutSpec = vbTween())) {
                     RequestRow(
                         member = member,
                         now = now,
@@ -160,7 +202,7 @@ fun CoachRosterScreen(
             }
         }
 
-        if (active.isEmpty()) {
+        if (active.isEmpty() && query.isEmpty()) {
             item {
                 EntranceAnimation(index = 2) {
                     CoachFeatureCard(
@@ -186,7 +228,7 @@ fun CoachRosterScreen(
                     )
                 }
             }
-        } else {
+        } else if (active.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 2) {
                     CoachSectionTitle(text = stringResource(R.string.coach_roster_active))
@@ -197,7 +239,7 @@ fun CoachRosterScreen(
                 items = active,
                 key = { _, snapshot -> snapshot.member.playerUid },
             ) { index, snapshot ->
-                EntranceAnimation(index = index + 3) {
+                EntranceAnimation(index = index + 3, modifier = Modifier.animateItem(fadeInSpec = vbTween(), placementSpec = vbTween(), fadeOutSpec = vbTween())) {
                     PlayerRow(
                         snapshot = snapshot,
                         onClick = { onOpenPlayer(snapshot.member.playerUid) },
@@ -207,7 +249,7 @@ fun CoachRosterScreen(
             }
         }
 
-        if (state.pastMembers.isNotEmpty()) {
+        if (past.isNotEmpty()) {
             item {
                 CoachSectionTitle(
                     text = stringResource(R.string.coach_roster_past),
@@ -215,7 +257,7 @@ fun CoachRosterScreen(
                 )
             }
             items(
-                items = state.pastMembers,
+                items = past,
                 key = { member -> "past-" + member.playerUid },
             ) { member ->
                 PastRow(member)

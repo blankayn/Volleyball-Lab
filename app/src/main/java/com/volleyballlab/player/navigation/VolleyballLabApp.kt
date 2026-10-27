@@ -5,6 +5,8 @@ import androidx.core.view.WindowCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -432,12 +434,13 @@ private fun CoachNavHost(
     val reduceMotion = LocalReduceMotion.current
     val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
+    val travel = VbMotion.tween<IntOffset>(VbMotion.Navigation, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = CoachDashboardRoute,
         modifier = modifier,
-        enterTransition = { fadeIn(page) },
+        enterTransition = { fadeIn(page) + slideInVertically(travel) { it / 70 } },
         exitTransition = { fadeOut(quick) },
         popEnterTransition = { fadeIn(quick) },
         popExitTransition = { fadeOut(quick) },

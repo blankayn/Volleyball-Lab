@@ -43,7 +43,11 @@ function explanationHtml(result: SessionExplanation): string {
 
 export function wireSessionExplanations(root: HTMLElement): () => void {
   let disposed = false;
-  root.querySelectorAll<HTMLElement>("[data-explanation-panel]").forEach(panel => {
+  const disposers: (() => void)[] = [];
+  const initialized = new WeakSet<HTMLElement>();
+  const initialize = () => root.querySelectorAll<HTMLElement>("[data-explanation-panel]").forEach(panel => {
+    if (initialized.has(panel)) return;
+    initialized.add(panel);
     const sessionId = panel.dataset.explanationPanel!;
     const button = panel.querySelector<HTMLButtonElement>("[data-explanation-generate]")!;
     const content = panel.querySelector<HTMLElement>("[data-explanation-content]")!;
@@ -74,7 +78,22 @@ export function wireSessionExplanations(root: HTMLElement): () => void {
       } finally { busy = false; if (!disposed && panel.isConnected) button.disabled = false; }
     };
     button.addEventListener("click", () => void load(true));
-    void load(false);
+    const details = panel.closest("details");
+    let checked = false;
+    const checkWhenOpen = () => {
+      if (checked || (details && !details.open)) return;
+      checked = true;
+      void load(false);
+    };
+    details?.addEventListener("toggle", checkWhenOpen);
+    disposers.push(() => details?.removeEventListener("toggle", checkWhenOpen));
+    checkWhenOpen();
   });
-  return () => { disposed = true; };
+  const onToggle = (event: Event) => {
+    if (event.target instanceof HTMLDetailsElement && event.target.open) initialize();
+  };
+  root.addEventListener("toggle", onToggle, true);
+  disposers.push(() => root.removeEventListener("toggle", onToggle, true));
+  initialize();
+  return () => { disposed = true; disposers.forEach(dispose => dispose()); };
 }

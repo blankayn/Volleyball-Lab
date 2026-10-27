@@ -1,5 +1,6 @@
 package com.volleyballlab.player.feature.coachmode
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.ui.component.pressScale
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbTween
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -238,6 +240,7 @@ fun CoachCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = vbTween())
             .tappable(onClick),
         shape = CoachCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,

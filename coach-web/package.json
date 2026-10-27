@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test:profile": "node --test checks/profile-save.test.mjs",
+    "test:coach": "node --test checks/*.test.mjs",
     "preview": "vite preview --port 4173"
   },
   "dependencies": {

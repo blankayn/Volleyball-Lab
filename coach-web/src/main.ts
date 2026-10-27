@@ -6,6 +6,7 @@ import "./styles/tokens.css";
 import "./styles/main.css";
 import "./styles/portal.css";
 import "./styles/preferences.css";
+import "./styles/coach-experience.css";
 import { setPreferenceAccount, watchSystemPreferences } from "./lib/preferences";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
@@ -96,7 +97,7 @@ async function render(): Promise<void> {
     if (version !== renderVersion) return;
     const { renderDashboard } = dashboard;
     disposeDashboard = dashboard.disposeDashboard;
-    await renderDashboard(root, user.uid, route.tab, route.playerUid);
+    await renderDashboard(root, user.uid, route.tab, route.playerUid, route.sessionId);
     return;
   }
 

@@ -23,10 +23,14 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -50,6 +54,7 @@ import com.volleyballlab.player.ui.component.GhostLayout
 import com.volleyballlab.player.ui.component.GhostLoadingScreen
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbTween
 import java.time.LocalTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -142,6 +147,7 @@ fun CoachDashboardScreen(
     // from "afternoon" to "evening" while the coach is mid-scroll.
     val now = remember { System.currentTimeMillis() }
     val greeting = remember { greetingRes() }
+    var showAllReviews by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.publishListing() }
 
@@ -188,6 +194,7 @@ fun CoachDashboardScreen(
                 DashboardFocusCard(
                     state = state,
                     onOpenRoster = onOpenRoster,
+                    onOpenReview = onOpenReview,
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 )
             }
@@ -203,9 +210,8 @@ fun CoachDashboardScreen(
         // the list lazy; the cost is that the heading has no icon chip.
         item(key = "queue-title") {
             EntranceAnimation(index = 3) {
-                // No trailing "view all" pill: this list *is* the whole queue, and
-                // a chip that takes you to where you already are is a dead control
-                // dressed as a live one.
+                // Preview the first few reviews; the control below expands the
+                // same keyed list without leaving the dashboard.
                 CoachSectionTitle(text = stringResource(R.string.coach_dash_queue))
             }
         }
@@ -241,10 +247,10 @@ fun CoachDashboardScreen(
             }
         } else {
             itemsIndexed(
-                items = state.pendingQueue,
+                items = if (showAllReviews) state.pendingQueue else state.pendingQueue.take(3),
                 key = { _, entry -> entry.submission.playerUid + entry.submission.sessionId },
             ) { index, entry ->
-                EntranceAnimation(index = index + 4) {
+                EntranceAnimation(index = index + 4, modifier = Modifier.animateItem(fadeInSpec = vbTween(), placementSpec = vbTween(), fadeOutSpec = vbTween())) {
                     QueueRow(
                         now = now,
                         entry = entry,
@@ -258,6 +264,17 @@ fun CoachDashboardScreen(
                         },
                         modifier = Modifier.padding(horizontal = CoachGutter),
                     )
+                }
+            }
+            if (state.pendingQueue.size > 3) {
+                item(key = "more-reviews") {
+                    TextButton(
+                        onClick = { showAllReviews = !showAllReviews },
+                        modifier = Modifier.padding(horizontal = CoachGutter),
+                    ) {
+                        Text(if (showAllReviews) stringResource(R.string.coach_reviews_show_less)
+                            else stringResource(R.string.coach_reviews_show_all, state.pendingQueue.size))
+                    }
                 }
             }
         }
@@ -401,10 +418,7 @@ private fun TeamStats(
  *    separate warning banner the screen used to draw above the queue - same count,
  *    same wording, same refusal to name a risk, but it now competes for the one
  *    slot instead of stacking a second alarm on top of the first.
- * 3. **A non-empty queue** is last of the actionable three, and it is the one case
- *    that gets *no* button: the queue is the very next thing on the page, so a
- *    control here would scroll the coach four hundred pixels to something already
- *    in view.
+ * 3. **A non-empty queue** opens the first available session directly.
  * 4. **All clear** still draws the card rather than dropping it. A page whose
  *    shape changes depending on whether there is bad news teaches the coach to
  *    read the layout instead of the words, and "nothing waiting" is a genuinely
@@ -414,6 +428,7 @@ private fun TeamStats(
 private fun DashboardFocusCard(
     state: CoachTeamState,
     onOpenRoster: () -> Unit,
+    onOpenReview: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val safety = state.summary.safetyWatchCount
@@ -428,6 +443,15 @@ private fun DashboardFocusCard(
             eyebrow = stringResource(R.string.coach_focus_setup_eyebrow),
             title = stringResource(R.string.coach_focus_setup_title),
             body = stringResource(R.string.coach_focus_setup_body),
+            modifier = modifier,
+            actionLabel = stringResource(R.string.coach_dash_requests_action),
+            onAction = onOpenRoster,
+        )
+
+        state.pendingRequests.isNotEmpty() -> CoachFeatureCard(
+            eyebrow = stringResource(R.string.coach_roster_requests),
+            title = stringResource(R.string.coach_dash_requests, state.pendingRequests.size),
+            body = stringResource(R.string.coach_requests_focus_body),
             modifier = modifier,
             actionLabel = stringResource(R.string.coach_dash_requests_action),
             onAction = onOpenRoster,
@@ -460,6 +484,10 @@ private fun DashboardFocusCard(
             },
             body = stringResource(R.string.coach_focus_review_body),
             modifier = modifier,
+            actionLabel = state.pendingQueue.firstOrNull { it.session != null }?.let { stringResource(R.string.coach_review_first) },
+            onAction = state.pendingQueue.firstOrNull { it.session != null }?.let { entry ->
+                { onOpenReview(entry.submission.playerUid, entry.session!!.id) }
+            },
         )
 
         else -> CoachFeatureCard(

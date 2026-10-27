@@ -471,10 +471,10 @@ export async function postNote(note: CoachNote): Promise<void> {
   const batch = writeBatch(db);
   batch.set(doc(db, "notes", note.id), { ...note });
   if (note.sessionId) {
-    batch.update(
-      doc(db, "submissions", `${note.coachUid}_${note.sessionId}`),
-      { reviewedAt: Date.now() },
-    );
+    const submission = await getDoc(doc(db, "submissions", `${note.coachUid}_${note.sessionId}`));
+    if (submission.exists() && submission.data().reviewedAt === null) {
+      batch.update(submission.ref, { reviewedAt: Date.now() });
+    }
   }
   await batch.commit();
 }

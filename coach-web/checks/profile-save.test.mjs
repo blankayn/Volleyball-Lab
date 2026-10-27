@@ -23,6 +23,28 @@ const state = () => globalThis.__volleyballProfileSaveCheck;
 const profile = () => ({ ...cloud.emptyProfile(), name: "Updated coach", teamName: "Updated team", organisation: "Updated school", licenceNumber: "CERT-01" });
 const preferences = () => ({ theme: "light", accent: "rust", density: "comfortable", textSize: "normal", highContrast: false, reduceMotion: false, enhancedFocus: true, submissionAlerts: true, deadlineReminders: true, trainingNotifications: true, emailNotifications: false, photo: "data:image/jpeg;base64,/9j/AAAA", certifications: "Level 1" });
 
+const note = () => ({ id: "feedback", coachUid: "coach", playerUid: "player", sessionId: "session", text: "Reach high at contact.", createdAt: 100 });
+test("feedback and a pending queue acknowledgement commit together", async () => {
+  state().submission = { reviewedAt: null };
+  await cloud.postNote(note());
+  assert.deepEqual(state().writes.map(write => write.path), ["notes/feedback", "submissions/coach_session"]);
+  assert.equal(typeof state().writes[1].data.reviewedAt, "number");
+});
+test("feedback works for shared sessions without a submission and preserves prior review time", async () => {
+  await cloud.postNote(note());
+  assert.deepEqual(state().writes.map(write => write.path), ["notes/feedback"]);
+  state().writes = [];
+  state().submission = { reviewedAt: 42 };
+  await cloud.postNote(note());
+  assert.deepEqual(state().writes.map(write => write.path), ["notes/feedback"]);
+});
+test("failed feedback commit propagates without acknowledging the queue", async () => {
+  state().submission = { reviewedAt: null };
+  state().denyProfile = true;
+  await assert.rejects(cloud.postNote(note()), /permissions/);
+  assert.deepEqual(state().writes, []);
+});
+
 test("profile fields save when older rules deny the newly added settings path", async () => {
   state().denySettings = true;
   const result = await cloud.saveProfile("coach", profile(), 4, preferences());
