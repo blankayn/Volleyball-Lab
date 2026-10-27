@@ -1,13 +1,12 @@
 package com.volleyballlab.player.feature.profile
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.volleyballlab.player.VolleyballLabApplication
@@ -19,16 +18,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProPlanCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val locale = LocalConfiguration.current.locales[0]
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val repository = graph.planRepository as FirestorePlanRepository
     val plan by repository.plan.collectAsStateWithLifecycle(UserPlan.Free)
-    val config by repository.checkoutConfiguration.collectAsStateWithLifecycle(ProCheckoutConfiguration())
     val reports by graph.trainingWorkspaceRepository.reports.collectAsStateWithLifecycle(emptyList())
     val account by graph.authRepository.currentUser.collectAsStateWithLifecycle(null)
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var showCodeDialog by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf("") }
     val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
     val today by dayFlow.collectAsStateWithLifecycle(java.time.LocalDate.now())
     val usage = ReportAllowance.usage(reports, plan, today)
@@ -39,22 +38,43 @@ fun ProPlanCard(modifier: Modifier = Modifier) {
             Text(if (usage.unlimited) "Unlimited detailed reports" else "${usage.remaining}/${usage.limit} detailed reports left this week")
             Text("Pro includes all 15 drills, unlimited detailed reports, and coach connection. Free includes five starter drills.", style = MaterialTheme.typography.bodySmall)
             if (!plan.isPro) {
-                if (config.ready) {
-                    val price = String.format(locale, "₱%.2f", config.priceCentavos / 100.0)
-                    Text("$price · ${if (config.durationDays == 0) "Permanent access" else "${config.durationDays} days of access"}")
-                    Text("GCash checkout opens securely in your browser. Return here after payment to view your plan.", style = MaterialTheme.typography.bodySmall)
-                } else Text("GCash purchase setup is pending. Purchases will open when the merchant account and price are configured.", style = MaterialTheme.typography.bodySmall)
-                Button(enabled = config.ready && account?.emailVerified == true && !busy, onClick = {
-                    busy = true
-                    scope.launch {
-                        try { val url = repository.createGcashCheckout(); context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                        catch (failure: Exception) { if (failure is CancellationException) throw failure; message = failure.message ?: "Checkout is unavailable." }
-                        finally { busy = false }
-                    }
-                }) { Text(if (busy) "Opening checkout…" else "Purchase Pro with GCash") }
-                if (config.ready && account?.emailVerified != true) Text("Verify your email in Account security to purchase Pro.", style = MaterialTheme.typography.bodySmall)
+                Text("Enter an access code to activate Pro. No payment is collected.", style = MaterialTheme.typography.bodySmall)
+                Button(enabled = account != null && !busy, onClick = { code = ""; message = null; showCodeDialog = true }) {
+                    Text("Subscribe to Pro")
+                }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
+    }
+    if (showCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) showCodeDialog = false },
+            title = { Text("Subscribe to Pro") },
+            text = {
+                Column {
+                    Text("Enter your temporary access code. No payment is collected.")
+                    OutlinedTextField(value = code, onValueChange = { code = it.filter(Char::isDigit).take(6); message = null },
+                        label = { Text("Access code") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), enabled = !busy)
+                    message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = code.length == 6 && !busy, onClick = {
+                    busy = true
+                    scope.launch {
+                        try {
+                            repository.activateProWithCode(code)
+                            showCodeDialog = false
+                            message = "Pro activated."
+                        } catch (failure: Exception) {
+                            if (failure is CancellationException) throw failure
+                            message = failure.message ?: "Could not activate Pro. Please try again."
+                        } finally { busy = false }
+                    }
+                }) { Text(if (busy) "Activating…" else "Activate Pro") }
+            },
+            dismissButton = { TextButton(enabled = !busy, onClick = { showCodeDialog = false; message = null }) { Text("Cancel") } },
+        )
     }
 }

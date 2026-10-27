@@ -36,6 +36,34 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
     override suspend fun upgradeToPro() = Unit
     override suspend fun downgradeToFree() = Unit
 
+    suspend fun activateProWithCode(code: String) {
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in before subscribing to Pro.")
+        val token = user.getIdToken(false).awaitCloud().token ?: error("Sign in again to continue.")
+        withContext(Dispatchers.IO) {
+            val connection = URL(ACTIVATION_ENDPOINT).openConnection() as HttpsURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.doOutput = true
+            try {
+                val body = buildJsonObject { put("code", code) }.toString()
+                connection.outputStream.use { it.write(body.toByteArray()) }
+                when (connection.responseCode) {
+                    200 -> Unit
+                    403 -> {
+                        val response = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        if (response.contains("invalid_code")) error("Incorrect code. Please try again.")
+                        else error("Pro activation is unavailable for this account.")
+                    }
+                    else -> error("Could not activate Pro. Please try again.")
+                }
+            } finally { connection.disconnect() }
+        }
+        require(auth.currentUid == user.uid) { "Your account changed. Please try again." }
+    }
+
     suspend fun createGcashCheckout(): String {
         val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in before purchasing Pro.")
         require(user.isEmailVerified) { "Verify your email before purchasing Pro." }
@@ -58,5 +86,8 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
         require(auth.currentUid == user.uid) { "Your account changed. Please start checkout again." }
         return url
     }
-    private companion object { const val CHECKOUT_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/createGcashCheckout" }
+    private companion object {
+        const val ACTIVATION_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/activateProWithCode"
+        const val CHECKOUT_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/createGcashCheckout"
+    }
 }

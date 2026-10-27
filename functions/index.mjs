@@ -15,6 +15,30 @@ const secretKey = defineSecret("PAYMONGO_SECRET_KEY");
 const webhookSecret = defineSecret("PAYMONGO_WEBHOOK_SECRET");
 const region = "asia-southeast1";
 
+// Temporary access until a payment method is introduced.
+export const activateProWithCode = onRequest({ region, maxInstances: 3, timeoutSeconds: 30 }, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
+  const token = req.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
+  if (!token) return res.status(401).json({ error: "sign_in_required" });
+  let user;
+  try { user = await getAuth().verifyIdToken(token, true); }
+  catch { return res.status(401).json({ error: "invalid_session" }); }
+  if (req.body?.code !== "123456") return res.status(403).json({ error: "invalid_code" });
+  try {
+    const activated = await db.runTransaction(async tx => {
+      if ((await tx.get(db.doc(`accountDeletions/${user.uid}`))).exists) return false;
+      const entitlement = db.doc(`entitlements/${user.uid}`);
+      const existing = (await tx.get(entitlement)).data();
+      if (existing?.status !== "active" || (existing.expiresAtEpochMs !== 0 && !(existing.expiresAtEpochMs > Date.now()))) {
+        tx.set(entitlement, { ownerUid: user.uid, status: "active", source: "temporary_code",
+          expiresAtEpochMs: 0, updatedAt: Date.now() });
+      }
+      return true;
+    });
+    return activated ? res.json({ activated: true }) : res.status(403).json({ error: "account_deleting" });
+  } catch { return res.status(500).json({ error: "activation_unavailable" }); }
+});
+
 export const createGcashCheckout = onRequest({ region, secrets: [secretKey], maxInstances: 3, timeoutSeconds: 30 }, async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
   const token = req.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
