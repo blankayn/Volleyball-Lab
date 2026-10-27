@@ -1,6 +1,10 @@
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  setPersistence,
   updateProfile,
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
@@ -18,8 +22,16 @@ import { icon } from "../lib/icons";
 
 function authLayout(kind: "login" | "register", content: string): string {
   const registering = kind === "register";
-  return `<div class="auth-page">${topbar(false, "auth")}
+  const header = registering ? topbar(false, "auth") : `<header class="topbar"><div class="topbar-inner">
+    <a class="brand" href="#/" aria-label="Volleyball Lab home"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="" /><span>Volleyball Lab <small>Coach</small></span></a>
+    <nav aria-label="Coach account"><a class="auth-header-link" href="#/register">Become a coach</a></nav>
+  </div></header>`;
+  const pageFooter = registering ? footer() : `<footer class="footer auth-login-footer"><div class="wrap">
+    <span>© 2026 Volleyball Lab</span><nav aria-label="Portal footer"><a href="#/">Home</a><a href="#/register">Create account</a></nav>
+  </div></footer>`;
+  return `<div class="auth-page">${header}
     <main class="auth-layout auth-layout-${kind}">
+      ${registering ? `
       <aside class="auth-story" aria-label="Coaching with Volleyball Lab">
         <div class="auth-story-top"><span class="auth-edition">THE COACH’S CORNER</span><span class="auth-court-mark">${icon("court")}</span></div>
         <div class="auth-story-copy"><p class="eyebrow">${registering ? "Start something stronger" : "Make the next session count"}</p><h2>${registering ? "Build the team.<br /><em>Shape the game.</em>" : "Back to the court.<br /><em>Eyes on progress.</em>"}</h2></div>
@@ -29,9 +41,9 @@ function authLayout(kind: "login" | "register", content: string): string {
           <figcaption><span>${registering ? "01 / The first point" : "02 / The next rep"}</span><strong>${registering ? "Great teams start here." : "Every detail matters."}</strong></figcaption>
         </figure>
         <div class="auth-story-bottom"><span>Train<span aria-hidden="true">/</span>Review<span aria-hidden="true">/</span>Improve</span>${icon("arrow")}</div>
-      </aside>
+      </aside>` : ""}
       <section class="auth-form-panel" aria-label="${registering ? "Create coach account" : "Coach sign in"}">${content}</section>
-    </main>${footer()}</div>`;
+    </main>${pageFooter}</div>`;
 }
 
 function wirePasswordVisibility(root: HTMLElement): void {
@@ -69,16 +81,20 @@ function friendly(code: string): string {
 export function renderLogin(root: HTMLElement): void {
   document.title = "Sign in — Volleyball Lab Coach Portal";
   root.innerHTML = authLayout("login", `<div class="auth-card">
+    <img class="login-card-logo" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab" width="48" height="48" />
     <p class="eyebrow">Your coaching workspace</p>
     <h1>Welcome back</h1>
     <p class="muted">Your queue, roster and assignments are where you left them.</p>
-    <div id="form-error"></div>
-    <form id="login-form">
+    <div id="form-error" aria-live="assertive"></div>
+    <form id="login-form" novalidate>
       <div class="field"><label for="email">Email</label>
-        <div class="input-affix">${icon("mail")}<input id="email" type="email" autocomplete="email" required placeholder="you@school.edu" /></div></div>
+        <div class="input-affix">${icon("mail")}<input id="email" type="email" autocomplete="email" required autofocus placeholder="you@school.edu" aria-describedby="email-error" /></div>
+        <span class="field-error" id="email-error" hidden>${icon("shield")}<span></span></span></div>
       <div class="field"><label for="password">Password</label>
-        <div class="password-input"><input id="password" type="password" autocomplete="current-password" required placeholder="Your password" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div></div>
-      <button class="btn btn-primary auth-submit" type="submit">Sign in ${icon("arrow")}</button>
+        <div class="password-input"><span class="password-leading-icon">${icon("lock")}</span><input id="password" type="password" autocomplete="current-password" required minlength="6" placeholder="Your password" aria-describedby="password-error" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div>
+        <span class="field-error" id="password-error" hidden>${icon("shield")}<span></span></span></div>
+      <div class="login-options"><label><input id="remember-me" type="checkbox" checked />Remember me</label><a href="#/forgot-password" id="forgot-password">Forgot password?</a></div>
+      <button class="btn btn-primary auth-submit" type="submit"><span class="auth-submit-label">Sign in</span><span class="auth-submit-icon">${icon("arrow")}</span></button>
     </form>
     <p class="auth-switch">New here? <a href="#/register">Register as a coach</a></p>
   </div>`);
@@ -86,14 +102,60 @@ export function renderLogin(root: HTMLElement): void {
   wirePasswordVisibility(root);
   const form = root.querySelector<HTMLFormElement>("#login-form");
   const err = root.querySelector<HTMLElement>("#form-error");
+  const emailField = root.querySelector<HTMLInputElement>("#email");
+  const passwordField = root.querySelector<HTMLInputElement>("#password");
+  const validate = (field: HTMLInputElement | null): boolean => {
+    if (!field) return false;
+    const message = field.id === "email"
+      ? (!field.value.trim() ? "Enter your email address." : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value.trim()) ? "Enter a valid email address." : "")
+      : (!field.value ? "Enter your password." : field.value.length < 6 ? "Password must be at least 6 characters." : "");
+    const fieldError = root.querySelector<HTMLElement>(`#${field.id}-error`);
+    if (fieldError) {
+      fieldError.hidden = !message;
+      const text = fieldError.querySelector("span");
+      if (text) text.textContent = message;
+    }
+    field.setAttribute("aria-invalid", String(Boolean(message)));
+    return !message;
+  };
+  emailField?.addEventListener("blur", () => validate(emailField));
+  passwordField?.addEventListener("blur", () => validate(passwordField));
+  root.querySelector<HTMLAnchorElement>("#forgot-password")?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    if (!validate(emailField)) { emailField?.focus(); return; }
+    const link = event.currentTarget as HTMLAnchorElement;
+    link.setAttribute("aria-disabled", "true");
+    if (err) err.innerHTML = '<div class="login-status" role="status">Sending a password reset link…</div>';
+    try {
+      await sendPasswordResetEmail(auth, emailField!.value.trim());
+      if (err) err.innerHTML = '<div class="login-status" role="status">If an account exists for this email, a password reset link is on its way.</div>';
+    } catch {
+      if (err) err.innerHTML = '<div class="login-status" role="status">If an account exists for this email, a password reset link is on its way.</div>';
+    } finally { link.removeAttribute("aria-disabled"); }
+  });
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const validEmail = validate(emailField);
+    const validPassword = validate(passwordField);
+    if (!validEmail || !validPassword) {
+      (validEmail ? passwordField : emailField)?.focus();
+      return;
+    }
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    if (button) button.disabled = true;
+    const label = button?.querySelector<HTMLElement>(".auth-submit-label");
+    const arrow = button?.querySelector<HTMLElement>(".auth-submit-icon");
+    if (button) {
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      if (label) label.textContent = "Signing in…";
+      if (arrow) arrow.innerHTML = '<span class="auth-spinner" aria-hidden="true"></span>';
+    }
     if (err) err.innerHTML = "";
     try {
-      const email = (form.querySelector("#email") as HTMLInputElement).value.trim();
-      const password = (form.querySelector("#password") as HTMLInputElement).value;
+      const email = emailField!.value.trim();
+      const password = passwordField!.value;
+      const remember = root.querySelector<HTMLInputElement>("#remember-me")?.checked ?? true;
+      await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
       const cred = await signInWithEmailAndPassword(auth, email, password);
       let role = await getUserRole(cred.user.uid);
       if (role === "PLAYER") {
@@ -115,13 +177,20 @@ export function renderLogin(root: HTMLElement): void {
     } catch (failure) {
       const code = failure instanceof Error ? failure.message : String((failure as { code?: string }).code ?? failure);
       if (err) {
-        err.innerHTML = `<div class="form-error" role="alert">${esc(
-          code === "portal/player-account"
-            ? "That account is a player account. The portal is for coaches — players train in the Android app."
-            : friendly(code),
-        )}</div>`;
+        const message = code === "portal/player-account"
+          ? "That account is a player account. The portal is for coaches — players train in the Android app."
+          : code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")
+            ? "Incorrect email or password."
+            : friendly(code);
+        err.innerHTML = `<div class="form-error login-error-banner" role="alert"><span>${esc(message)}</span><button type="button" aria-label="Dismiss error">×</button></div>`;
+        err.querySelector("button")?.addEventListener("click", () => { err.innerHTML = ""; });
       }
-      if (button) button.disabled = false;
+      if (button) {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        if (label) label.textContent = "Sign in";
+        if (arrow) arrow.innerHTML = icon("arrow");
+      }
     }
   });
 }
