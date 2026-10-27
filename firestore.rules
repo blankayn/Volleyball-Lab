@@ -207,9 +207,19 @@ service cloud.firestore {
         && validSharedWith(data.sharedWith);
     }
 
-    // Billing records are written only by verified server payment handlers.
+    // Temporary demonstration access. Remove this path when real payments launch.
+    match /demoProAccess/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['code'])
+        && request.resource.data.code == '123456';
+      allow delete: if isUser(uid);
+    }
+
+    // Paid entitlements remain server-managed; demo access uses its own collection.
     function hasPro() {
       return signedIn() && (request.auth.uid == '4j06UlYqbrbLzujmfi8VW5yEIOq2'
+        || exists(/databases/$(database)/documents/demoProAccess/$(request.auth.uid))
         || (exists(/databases/$(database)/documents/entitlements/$(request.auth.uid))
           && get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.status == 'active'
           && (get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.expiresAtEpochMs == 0

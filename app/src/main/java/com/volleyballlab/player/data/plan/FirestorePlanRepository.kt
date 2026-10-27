@@ -26,10 +26,12 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
     override val plan: Flow<UserPlan> = auth.currentUser.flatMapLatest { user ->
         if (user == null) flowOf(UserPlan.Free)
         else if (user.uid == ProEntitlement.OWNER_UID) flowOf(UserPlan.Pro)
-        else combine(db.collection("entitlements").document(user.uid).snapshots(), flow {
+        else combine(db.collection("entitlements").document(user.uid).snapshots(),
+            db.collection("demoProAccess").document(user.uid).snapshots(), flow {
             while (true) { emit(System.currentTimeMillis()); delay(60_000) }
-        }) { document, now ->
-            ProEntitlement.plan(user.uid, document?.getString("status"), (document?.get("expiresAtEpochMs") as? Number)?.toLong(), now)
+        }) { document, demo, now ->
+            if (demo?.exists() == true) UserPlan.Pro
+            else ProEntitlement.plan(user.uid, document?.getString("status"), (document?.get("expiresAtEpochMs") as? Number)?.toLong(), now)
         }.distinctUntilChanged()
     }
     /** Legacy callers cannot grant or revoke a server entitlement. */
@@ -37,31 +39,12 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
     override suspend fun downgradeToFree() = Unit
 
     suspend fun activateProWithCode(code: String) {
-        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in before subscribing to Pro.")
-        val token = user.getIdToken(false).awaitCloud().token ?: error("Sign in again to continue.")
-        withContext(Dispatchers.IO) {
-            val connection = URL(ACTIVATION_ENDPOINT).openConnection() as HttpsURLConnection
-            connection.requestMethod = "POST"
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.setRequestProperty("Authorization", "Bearer $token")
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.doOutput = true
-            try {
-                val body = buildJsonObject { put("code", code) }.toString()
-                connection.outputStream.use { it.write(body.toByteArray()) }
-                when (connection.responseCode) {
-                    200 -> Unit
-                    403 -> {
-                        val response = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                        if (response.contains("invalid_code")) error("Incorrect code. Please try again.")
-                        else error("Pro activation is unavailable for this account.")
-                    }
-                    else -> error("Could not activate Pro. Please try again.")
-                }
-            } finally { connection.disconnect() }
-        }
-        require(auth.currentUid == user.uid) { "Your account changed. Please try again." }
+        require(code == "123456") { "Incorrect code. Please try again." }
+        val uid = auth.currentUid ?: error("Sign in before activating Pro.")
+        // Demo access is checked by Firestore rules and works with real coach requests.
+        // This avoids a Cloud Function or payment account for the prototype.
+        db.collection("demoProAccess").document(uid).set(mapOf("code" to code)).awaitCloud()
+        require(auth.currentUid == uid) { "Your account changed. Please try again." }
     }
 
     suspend fun createGcashCheckout(): String {
@@ -87,7 +70,6 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
         return url
     }
     private companion object {
-        const val ACTIVATION_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/activateProWithCode"
         const val CHECKOUT_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/createGcashCheckout"
     }
 }

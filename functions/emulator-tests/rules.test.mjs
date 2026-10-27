@@ -119,6 +119,19 @@ test("a client cannot self-grant, modify expiry, revoke, or delete entitlement",
   await assertFails(updateDoc(ref, { status: "active", ownerUid: "other" }));
   await assertFails(deleteDoc(ref));
 });
+
+test("temporary demo code unlocks Pro coach requests only for the signed-in account", async () => {
+  const db = client("demo-player");
+  const access = doc(db, "demoProAccess/demo-player");
+  await assertFails(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
+  await assertFails(setDoc(access, { code: "000000" }));
+  await assertFails(setDoc(doc(db, "demoProAccess/other"), { code: "123456" }));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "demoProAccess/demo-player"), { code: "123456" }));
+  await assertSucceeds(setDoc(access, { code: "123456" }));
+  await assertSucceeds(getDoc(access));
+  await assertSucceeds(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
+  await assertFails(getDoc(doc(client("other"), "demoProAccess/demo-player")));
+});
 test("billing configuration is signed-in read only and internal billing data stays private", async () => {
   await seed("billingConfig/pro", { enabled: false, priceCentavos: 0 });
   await assertSucceeds(getDoc(doc(client("u"), "billingConfig/pro")));
