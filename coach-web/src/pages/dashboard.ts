@@ -784,7 +784,7 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("clipboard", "violet")}<h3>Drills set</h3></div>
       ${assignments.length === 0 ? `<p class="muted">No drills set yet.</p>` : assignments.slice(0, 4).map((a) => `
         <div style="padding:8px 0;border-top:1px solid var(--line)"><strong>${esc(a.title)}</strong><br />
-        <span class="muted">${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}${a.dueAt ? ` · ${dueLabel(a.dueAt)}` : ""}</span></div>`).join("")}
+        <span class="muted">${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}${a.dueAt && a.status !== "Completed" ? ` · ${dueLabel(a.dueAt)}` : ""}</span></div>`).join("")}
       <div style="margin-top:10px"><a class="btn btn-ghost btn-sm" href="${appPath("assignments")}">Set a drill</a></div>
     </div>
   </div>
