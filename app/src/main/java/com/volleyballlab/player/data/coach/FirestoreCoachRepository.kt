@@ -229,23 +229,25 @@ class FirestoreCoachRepository(
         }
 
     override suspend fun postNote(note: CoachNote) {
-        val uid = authRepository.currentUid ?: return
+        val uid = requireNotNull(authRepository.currentUid) { "Sign in before sending feedback." }
+        require(note.coachUid == uid)
         runCatching {
-            db.collection(CloudSchema.NOTES).document(note.id)
-                .set(CloudSchema.noteDoc(note)).awaitCloud()
-            // Stamp the queue row reviewed, same pairing the local store keeps in
-            // one edit. Only pending rows move: re-answering an already-reviewed
-            // row must not rewrite its history.
-            val sessionId = note.sessionId ?: return@runCatching
-            val submission = db.collection(CloudSchema.SUBMISSIONS)
-                .document(CloudSchema.submissionId(note.coachUid, sessionId))
-                .get().awaitCloud()
-            val pending = submission.data?.let { CloudSchema.submissionOf(it).isPending } ?: false
-            if (pending && authRepository.currentUid == uid) {
-                submission.reference.update("reviewedAt", now()).awaitCloud()
+            val submission = note.sessionId?.let { sessionId ->
+                db.collection(CloudSchema.SUBMISSIONS)
+                    .document(CloudSchema.submissionId(note.coachUid, sessionId)).get().awaitCloud()
             }
+            check(authRepository.currentUid == uid) { "The signed-in account changed." }
+            // Commit the note and queue acknowledgement together. A failed write
+            // must reach the composer so it preserves the draft and offers retry.
+            val batch = db.batch()
+            batch.set(db.collection(CloudSchema.NOTES).document(note.id), CloudSchema.noteDoc(note))
+            if (submission?.data?.let { CloudSchema.submissionOf(it).isPending } == true) {
+                batch.update(submission.reference, "reviewedAt", now())
+            }
+            batch.commit().awaitCloud()
         }.onSuccess { clearFailure(issueKey("coach feedback", uid)) }
             .onFailure { reportFailure(issueKey("coach feedback", uid), it, saving = true) }
+            .getOrThrow()
     }
 
     // ------------------------------------------------------------------

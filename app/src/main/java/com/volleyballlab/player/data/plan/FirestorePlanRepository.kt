@@ -26,15 +26,26 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
     override val plan: Flow<UserPlan> = auth.currentUser.flatMapLatest { user ->
         if (user == null) flowOf(UserPlan.Free)
         else if (user.uid == ProEntitlement.OWNER_UID) flowOf(UserPlan.Pro)
-        else combine(db.collection("entitlements").document(user.uid).snapshots(), flow {
+        else combine(db.collection("entitlements").document(user.uid).snapshots(),
+            db.collection("demoProAccess").document(user.uid).snapshots(), flow {
             while (true) { emit(System.currentTimeMillis()); delay(60_000) }
-        }) { document, now ->
-            ProEntitlement.plan(user.uid, document?.getString("status"), (document?.get("expiresAtEpochMs") as? Number)?.toLong(), now)
+        }) { document, demo, now ->
+            if (demo?.exists() == true) UserPlan.Pro
+            else ProEntitlement.plan(user.uid, document?.getString("status"), (document?.get("expiresAtEpochMs") as? Number)?.toLong(), now)
         }.distinctUntilChanged()
     }
     /** Legacy callers cannot grant or revoke a server entitlement. */
     override suspend fun upgradeToPro() = Unit
     override suspend fun downgradeToFree() = Unit
+
+    suspend fun activateProWithCode(code: String) {
+        require(code == "123456") { "Incorrect code. Please try again." }
+        val uid = auth.currentUid ?: error("Sign in before activating Pro.")
+        // Demo access is checked by Firestore rules and works with real coach requests.
+        // This avoids a Cloud Function or payment account for the prototype.
+        db.collection("demoProAccess").document(uid).set(mapOf("code" to code)).awaitCloud()
+        require(auth.currentUid == uid) { "Your account changed. Please try again." }
+    }
 
     suspend fun createGcashCheckout(): String {
         val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in before purchasing Pro.")
@@ -58,5 +69,7 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
         require(auth.currentUid == user.uid) { "Your account changed. Please start checkout again." }
         return url
     }
-    private companion object { const val CHECKOUT_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/createGcashCheckout" }
+    private companion object {
+        const val CHECKOUT_ENDPOINT = "https://asia-southeast1-volleyball-lab.cloudfunctions.net/createGcashCheckout"
+    }
 }

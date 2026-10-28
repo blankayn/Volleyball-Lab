@@ -1,6 +1,7 @@
 /* Small shared view helpers: shell, cards, empty states, score bars. */
 
 import { esc, initials, scoreTone } from "./format";
+import { icon, type IconName } from "./icons";
 
 export function topbar(signedIn: boolean, active: string): string {
   const links = signedIn
@@ -9,24 +10,24 @@ export function topbar(signedIn: boolean, active: string): string {
        <a class="btn btn-primary btn-sm" href="#/register">Become a coach</a>`;
   return `<header class="topbar"><div class="topbar-inner">
     <a class="brand" href="#/"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab logo" /><span>Volleyball Lab <small>Coach${active === "portal" ? " portal" : ""}</small></span></a>
-    ${!signedIn ? `<nav class="site-nav" aria-label="Primary"><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#about">About</a></nav>` : ""}
-    <nav>${links}</nav>
+    ${!signedIn && active === "portal" ? `<nav class="site-nav" aria-label="Primary"><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#about">About</a></nav>` : ""}
+    <nav aria-label="Coach account">${links}</nav>
   </div></header>`;
 }
 
 export function footer(): string {
   return `<footer class="footer"><div class="wrap">
-    <span><strong>Volleyball Lab</strong> — coach portal, connected to the player app.</span>
-    <nav><a href="#/">Home</a><a href="#/login">Sign in</a><a href="#/register">Register</a></nav>
+    <span class="portal-footer-brand">${icon("court")}<strong>Volleyball Lab</strong><span>© ${new Date().getFullYear()}</span></span>
+    <nav aria-label="Portal footer"><a href="#/">Home</a><a href="#/login">Sign in</a><a href="#/register">Create account</a></nav>
   </div></footer>`;
 }
 
-export function iconChip(icon: string, tone: "rust" | "indigo" | "green" | "violet"): string {
-  return `<span class="icon-chip icon-${tone}">${icon}</span>`;
+export function iconChip(name: IconName, tone: "rust" | "indigo" | "green" | "violet"): string {
+  return `<span class="icon-chip icon-${tone}">${icon(name)}</span>`;
 }
 
-export function emptyState(icon: string, title: string, body: string, action = ""): string {
-  return `<div class="empty">${iconChip(icon, "indigo")}
+export function emptyState(name: IconName, title: string, body: string, action = ""): string {
+  return `<div class="empty">${iconChip(name, "indigo")}
     <p style="font-weight:800;color:var(--ink);margin:0 0 6px">${esc(title)}</p>
     <p style="margin:0 0 4px">${esc(body)}</p>${action}</div>`;
 }
@@ -36,8 +37,8 @@ export function scoreBar(score: number | null): string {
   const tone = scoreTone(score);
   const color =
     tone === "good" ? "var(--good)" : tone === "warn" ? "var(--warn)" : "var(--bad)";
-  return `<span style="display:flex;align-items:center;gap:10px;min-width:150px">
-    <span class="scorebar" style="flex:1"><i style="width:${score}%;background:${color}"></i></span>
+  return `<span class="score-wrap">
+    <span class="scorebar"><i style="width:${score}%;background:${color}"></i></span>
     <span class="score-num" style="color:${color}">${score}</span></span>`;
 }
 

@@ -69,6 +69,43 @@ figure. Written by the coach client (app `publishListing`, web profile save).
 | `rosterSize` | number | Active members, maintained by the coach client. |
 | `updatedAt` | number | |
 
+### `coaches/{coachUid}/webSettings/preferences` — private web workspace settings
+
+This separate owner-only document leaves the shared Android `coaches` profile
+shape intact. The web portal caches it under an account-specific browser key
+for immediate appearance changes and offline use; Firestore is the cloud copy.
+The existing coach `notifySubmissions` flag is updated in the same batch as
+these preferences so Android submission delivery keeps honoring that switch.
+
+| Field | Type |
+|---|---|
+| `theme` | `light` / `dark` / `system` |
+| `accent` | `rust` / `forest` / `plum` |
+| `density` | `comfortable` / `compact` |
+| `textSize` | `normal` / `large` / `larger` |
+| `highContrast`, `reduceMotion`, `enhancedFocus` | boolean |
+| `submissionAlerts`, `deadlineReminders`, `trainingNotifications`, `emailNotifications` | boolean |
+| `photo` | empty string or JPEG data URL, at most 120,000 characters |
+| `certifications` | string, at most 1,200 characters |
+| `updatedAt` | epoch milliseconds |
+
+Profile pictures are cropped to a 256-pixel square JPEG before saving. They
+remain in the private web settings document and are not added to the player
+directory. Account deletion recursively removes the web settings and clears
+the account's email delivery receipts.
+
+The web notification bell derives enabled alerts from unreviewed submissions,
+incomplete assignments due in the next 24 hours (plus recent overdue drills),
+and shared training sessions from the past seven days. Read status is stored
+per coach in the current browser. Live queries update the bell while profile
+edits are protected from being replaced.
+
+Resend email delivery is an additional optional channel, off by default. It
+requires a verified account email, explicit opt-in, a verified Resend sender,
+and deployed server functions. See [web settings setup](coach-web-settings.md).
+Email delivery receipts under `coachEmailDeliveries` are server-only; no API
+key or recipient override is accepted from the web client.
+
 ### `roster/{coachUid}/members/{playerUid}` — membership (Table 15)
 
 | Field | Type | Notes |
@@ -124,6 +161,20 @@ session re-queues it (`reviewedAt: null`), asking for a second look.
 Coach writes; player reads their own. Posting a session note and stamping the
 submission reviewed is one user action on both clients.
 
+### `pushTokens/{tokenId}` — Android push registration
+
+| Field | Type | Notes |
+|---|---|---|
+| `uid` | string | The signed-in account currently claiming this device token. |
+| `token` | string | Same value as the document id. |
+| `platform` | `"android"` | |
+| `updatedAt` | number | Refreshed whenever the app registers. |
+
+Written by the app after FCM registration and on token refresh; read only by
+trusted Cloud Functions. A signed-in account may claim the token for itself;
+the current owner may delete it. Logging out unregisters the token locally, and
+account deletion removes its rows.
+
 ### `sessions/{sessionId}` — shared training record
 
 Written by the **player app** on every save (measured summaries). Read by the **coach portal** for
@@ -154,8 +205,15 @@ continuing to read the same final scores. Explicitly submitted recordings and po
 The Android app derives an account-scoped local inbox from sessions, notes,
 assignments and submissions. Read status and the delivery preference persist
 on the device. Optional Android notifications honor runtime permission and
-coach alert preferences. WorkManager refreshes cloud events periodically;
-background delivery can be delayed by Android. There is no FCM server push.
+coach alert preferences. WorkManager refreshes cloud events periodically as a
+fallback, while Cloud Functions send FCM pushes for new notes, assignments and
+submissions and coach connection decisions to registered Firebase Installation
+IDs. Pushes are data-only: the Android inbox validates the recipient against the
+current account, preserves read/delivered state, and honors the alert preference
+before displaying anything. Approval and ended-connection events also derive
+from membership rows during live observation and periodic refresh, so the inbox
+continues working without deployed triggers. Background delivery can still be
+delayed by Android, and FCM triggers require the Firebase Blaze plan to deploy.
 
 `entitlements/{uid}` is readable by that account and writable only by trusted
 server administration/payment handling. Fields are `ownerUid`, `status`,
@@ -175,7 +233,64 @@ are account-scoped local app data. They are not a server API spending limit.
 
 ## Data retained on the phone
 
+AI explanations use a Cloudflare Worker while Firebase stays on Spark. Both
+clients send their Firebase ID token using the direct-URL callable protocol.
+The virtual `aiSessionAccess/{id}` GET rule checks ownership or an Active,
+explicitly shared COACH connection and account-deletion fences. No gate documents
+are stored; clients cannot list or write this path. The Worker reads saved
+measurements through Firestore REST under the same caller's authorization.
+Validated explanations and quotas are private D1 rows with bounded retention.
+The optional legacy Functions adapter uses admin-only
+`sessions/{id}/aiExplanations/{version}` and `aiUsage/{uid}` documents instead.
+See [session-ai-setup.md](session-ai-setup.md) for configuration, limits, deletion,
+and validation. This feature is separate from local Android report history.
+
 - **Pose landmarks / video.** Analysis stays on-device. Explicit coach submission uploads the recorded video and saved pose feedback privately for the player and shared coach. See `account-and-recording-services.md` for activation status and account deletion.
+
+## Coach workspace, training Q&A and verified reviews
+
+After approval, Android's **My coach** page contains assignments, feedback history,
+ratings, and contextual coaching questions. Players keep read access to their own
+question history after a connection ends; new questions and answers require an
+Active roster membership. The Coach tab is the entry card, not the full workspace.
+
+- `coachingQuestions/{coachUid}_{playerUid}_{sessionId|intro}` is participant-private.
+  A new player may ask one introductory question without a recording. Other questions
+  require that coach's reviewed submission. Topics are fixed, text is limited to
+  300 characters, and the coach has one response of up to 1,000 characters. URLs,
+  attachments, follow-up messages, changing question text, and a second response
+  are rejected by rules. All new timestamps use Firestore server timestamps.
+- `coachResponseTimes/{questionId}` contains only coach UID and question/answer
+  timestamps. It must be committed atomically with the genuine first answer.
+  Signed-in users may read it. Profiles display the median of the latest 20
+  answered questions after at least three samples; missing history is never an
+  invented estimate or a promised service level.
+- `coachReviews/{coachUid}_{playerUid}_{sessionId}` is visible to signed-in users.
+  One integer rating from 1 to 5 and an optional 500-character review are allowed
+  only after the coach has reviewed that player's submitted session. The player
+  sees the public-review disclosure before saving and may edit their own review;
+  the coach cannot alter ratings. No account email or player display name is copied.
+- `coachPresence/{connectionId}` holds a separate automatic activity lease for
+  each app connection or browser tab: `coachUid`, `status` (Online, Busy, Offline),
+  server `updatedAt`, and bounded `expiresAt`. Only the listed coach with the COACH
+  role may write their own lease. No route, device identity, email or typed text
+  is copied into presence. Signed-in users may read these coarse statuses.
+  Foreground clients renew at most once per minute while active. Reviewing training
+  or preparing guidance means Busy; other active coaching use means Online.
+  Background/hidden clients and five minutes without interaction mean Offline.
+  An acknowledged lease expires after two minutes, re-evaluated every 15 seconds,
+  so a crash or disconnect cannot leave someone indefinitely online. Rules reject
+  expired queued writes and leases over 150 seconds into the future. Across devices,
+  a live Busy lease wins, then Online, otherwise Offline. Read errors show status
+  unavailable. Presence is separate from booking capacity and typical response time.
+  Normal disconnect/sign-out removes only that connection; expired records are
+  pruned on the owner's next connection and removed during account cleanup.
+  Legacy `coachAvailability/{coachUid}` records are ignored and client read-only.
+- Android coach mode and the website's **Player questions** queue can reply and
+  show automatic presence without a manual selector. Firestore listeners drive in-app question/answer alerts.
+  No new Cloud Functions or paid billing plan are required for these interactions.
+  Account cleanup also removes questions, matching response records, availability,
+  and reviews belonging to either participant.
 
 ## Bring-up (both clients)
 
@@ -186,7 +301,24 @@ are account-scoped local app data. They are not a server API spending limit.
    `asia-southeast1`; deploy `firestore.rules`:
    `firebase deploy --only firestore:rules,firestore:indexes`.
    `firestore.indexes.json` includes the student membership collection-group lookup.
-4. Web: copy `coach-web/.env.example` → `coach-web/.env` with the project's web
+4. **Push (optional):** on the Blaze plan, deploy only the notification triggers:
+   `firebase deploy --only functions:notifyPlayerOnCoachNote,functions:notifyPlayerOnAssignment,functions:notifyCoachOnSubmission,functions:notifyPlayerOnCoachConnection`.
+   Without this, the inbox still updates from Firestore and periodic WorkManager
+   refresh. Deploy account and payment services separately under their setup guides.
+5. Web: copy `coach-web/.env.example` → `coach-web/.env` with the project's web
    config, then `npm install && npm run dev`.
-5. App: no extra step — the bundled `google-services.json` already configures
-   the same project; `firebase-firestore` ships in the app build.
+6. App: no extra step — the bundled `google-services.json` already configures
+   the same project; Firestore and Messaging ship in the app build.
+## Coach portraits
+
+`coachPhotos/{coachUid}` contains only `photo` (an empty string or a JPEG data URI,
+at most 120,000 characters) and `updatedAt` (epoch milliseconds). The coach owns
+writes; signed-in users can read a portrait while the directory listing exists.
+Private account preferences, licence numbers and addresses are not included.
+Deleting a directory listing also makes any orphaned portrait unreadable. Account
+cleanup removes the portrait document.
+
+Android and the coach portal publish newly chosen pictures here. Opening an
+account or saving unrelated profile edits does not publish an older private
+picture. A published empty picture marks removal. Importing an existing private
+portrait requires explicit approval from its owner.

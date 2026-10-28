@@ -10,6 +10,7 @@ import com.volleyballlab.player.domain.model.UserRole
 import com.volleyballlab.player.domain.repository.AssessmentRepository
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.RoleRepository
+import com.volleyballlab.player.domain.repository.WelcomeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,9 @@ import kotlinx.coroutines.launch
 
 /** Where the app should open, once startup has worked out which it is. */
 enum class StartDestination {
+    /** First launch on this install: explain the product before asking to sign in. */
+    Welcome,
+
     /** No session, or one the athlete asked not to be remembered. */
     Login,
 
@@ -66,6 +70,7 @@ class StartupViewModel(
     private val authRepository: AuthRepository,
     private val assessmentRepository: AssessmentRepository,
     private val roleRepository: RoleRepository,
+    private val welcomeRepository: WelcomeRepository,
 ) : ViewModel() {
 
     private val _startDestination = MutableStateFlow<StartDestination?>(null)
@@ -127,7 +132,13 @@ class StartupViewModel(
     }
 
     private suspend fun resolve(): StartDestination {
-        authRepository.restoreSession() ?: return StartDestination.Login
+        if (authRepository.restoreSession() == null) {
+            return if (welcomeRepository.hasSeenWelcome.first()) {
+                StartDestination.Login
+            } else {
+                StartDestination.Welcome
+            }
+        }
         // Read after the session is restored, not before: the role is scoped per
         // uid, and asking for it while `currentUser` is still null would get the
         // default for nobody rather than the answer for this account.
@@ -146,6 +157,7 @@ class StartupViewModel(
                     authRepository = appContainer.authRepository,
                     assessmentRepository = appContainer.assessmentRepository,
                     roleRepository = appContainer.roleRepository,
+                    welcomeRepository = appContainer.welcomeRepository,
                 )
             }
         }

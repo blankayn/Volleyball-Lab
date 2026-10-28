@@ -104,6 +104,24 @@ service cloud.firestore {
         && data.notifySubmissions is bool && data.notifyWeeklyDigest is bool
         && data.notifySafetyAlerts is bool && validDate(data.updatedAt);
     }
+    function isValidWebSettings(data) {
+      return data.keys().hasAll(['theme', 'accent', 'density', 'textSize', 'highContrast',
+          'reduceMotion', 'enhancedFocus', 'submissionAlerts', 'deadlineReminders',
+          'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
+        && data.keys().hasOnly(['theme', 'accent', 'density', 'textSize', 'highContrast',
+          'reduceMotion', 'enhancedFocus', 'submissionAlerts', 'deadlineReminders',
+          'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
+        && data.theme in ['light', 'dark', 'system']
+        && data.accent in ['rust', 'forest', 'plum']
+        && data.density in ['comfortable', 'compact']
+        && data.textSize in ['normal', 'large', 'larger']
+        && data.highContrast is bool && data.reduceMotion is bool && data.enhancedFocus is bool
+        && data.submissionAlerts is bool && data.deadlineReminders is bool
+        && data.trainingNotifications is bool && data.emailNotifications is bool
+        && boundedString(data.photo, 120000)
+        && (data.photo == '' || data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))
+        && boundedString(data.certifications, 1200) && validDate(data.updatedAt);
+    }
     function isValidDirectory(data) {
       // Optional legacy fields were published by the original web projection.
       return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
@@ -189,9 +207,19 @@ service cloud.firestore {
         && validSharedWith(data.sharedWith);
     }
 
-    // Billing records are written only by verified server payment handlers.
+    // Temporary demonstration access. Remove this path when real payments launch.
+    match /demoProAccess/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['code'])
+        && request.resource.data.code == '123456';
+      allow delete: if isUser(uid);
+    }
+
+    // Paid entitlements remain server-managed; demo access uses its own collection.
     function hasPro() {
       return signedIn() && (request.auth.uid == '4j06UlYqbrbLzujmfi8VW5yEIOq2'
+        || exists(/databases/$(database)/documents/demoProAccess/$(request.auth.uid))
         || (exists(/databases/$(database)/documents/entitlements/$(request.auth.uid))
           && get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.status == 'active'
           && (get(/databases/$(database)/documents/entitlements/$(request.auth.uid)).data.expiresAtEpochMs == 0
@@ -232,11 +260,45 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Device tokens for training push. Keyed by token; a signed-in account may
+    // claim the token for its own UID, and only that UID may remove it.
+    match /pushTokens/{tokenId} {
+      allow read: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasAll(['uid', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'platform', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.token == tokenId
+        && boundedString(tokenId, 4096)
+        && request.resource.data.platform == 'android'
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // ---- Coach profile (private) and directory (public to signed-in) -------
     match /coaches/{coachUid} {
       allow read: if isUser(coachUid);
       allow create, update: if isUser(coachUid) && isValidCoach(request.resource.data);
       allow delete: if false;
+      match /webSettings/{settingsId} {
+        allow read: if isUser(coachUid) && settingsId == 'preferences';
+        allow create, update: if isUser(coachUid) && settingsId == 'preferences'
+          && isValidWebSettings(request.resource.data);
+        allow delete: if false;
+      }
+    }
+
+    match /coachPhotos/{coachUid} {
+      allow read: if signedIn() && exists(/databases/$(database)/documents/coachDirectory/$(coachUid));
+      allow create, update: if isUser(coachUid)
+        && notDeleting(coachUid)
+        && exists(/databases/$(database)/documents/coaches/$(coachUid))
+        && request.resource.data.keys().hasAll(['photo', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['photo', 'updatedAt'])
+        && boundedString(request.resource.data.photo, 120000)
+        && (request.resource.data.photo == '' || request.resource.data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if isUser(coachUid);
     }
 
     match /coachDirectory/{coachUid} {
@@ -301,6 +363,103 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/roster/$(coachUid)/members/$(playerUid)).data.status == 'Active';
     }
 
+    // A single question/answer per training context, never an unrestricted inbox.
+    function coachingText(value, maximum) {
+      return boundedString(value, maximum) && value.size() > 0
+        && !value.lower().matches('(?s).*(https?://|www[.]).*');
+    }
+    function validQuestion(data, id) {
+      return data.keys().hasAll(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
+        && data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
+        && validUid(data.coachUid) && validUid(data.playerUid)
+        && (data.sessionId == null || validUid(data.sessionId))
+        && data.id == id && id == data.coachUid + '_' + data.playerUid + '_' + (data.sessionId == null ? 'intro' : data.sessionId)
+        && coachingText(data.text, 300)
+        && data.createdAt is timestamp
+        && ((data.sessionId == null && data.topic in ['FirstDrill', 'TrainingFocus', 'RecordingHelp'])
+          || (data.sessionId != null && data.topic in ['Technique', 'DrillInstructions', 'FeedbackClarification']))
+        && ((data.answer == null && data.answeredAt == null)
+          || (coachingText(data.answer, 1000) && data.answeredAt is timestamp));
+    }
+    function reviewedSession(coachUid, playerUid, sessionId) {
+      let receipt = get(/databases/$(database)/documents/submissions/$(coachUid + '_' + sessionId)).data;
+      return receipt.coachUid == coachUid && receipt.playerUid == playerUid && receipt.sessionId == sessionId
+        && receipt.reviewedAt != null;
+    }
+    match /coachingQuestions/{questionId} {
+      allow read: if signedIn() && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.playerUid == request.auth.uid
+        && validQuestion(request.resource.data, questionId)
+        && isActiveMember(request.resource.data.coachUid, request.auth.uid)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.answer == null && request.resource.data.answeredAt == null
+        && (request.resource.data.sessionId == null || reviewedSession(request.resource.data.coachUid, request.auth.uid, request.resource.data.sessionId));
+      allow update: if signedIn() && resource.data.coachUid == request.auth.uid
+        && isActiveMember(request.auth.uid, resource.data.playerUid)
+        && validQuestion(request.resource.data, questionId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'answeredAt'])
+        && resource.data.answer == null && request.resource.data.answer != null
+        && request.resource.data.answeredAt == request.time
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.coachUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.askedAt == resource.data.createdAt
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.answeredAt == request.time;
+      allow delete: if false;
+    }
+    match /coachResponseTimes/{questionId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['coachUid', 'askedAt', 'answeredAt'])
+        && request.resource.data.coachUid == request.auth.uid
+        && request.resource.data.answeredAt == request.time
+        && request.resource.data.askedAt == getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.createdAt
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.coachUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.answer != null
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.answeredAt == request.time;
+      allow update, delete: if false;
+    }
+    match /coachAvailability/{coachUid} {
+      allow read: if signedIn();
+      // Retained for cleanup of legacy data; new clients ignore manual statuses.
+      allow write: if false;
+    }
+    function validCoachPresence(data) {
+      return data.keys().hasAll(['coachUid', 'status', 'updatedAt', 'expiresAt'])
+        && data.keys().hasOnly(['coachUid', 'status', 'updatedAt', 'expiresAt'])
+        && data.coachUid == request.auth.uid
+        && exists(/databases/$(database)/documents/coachDirectory/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['COACH', 'Coach']
+        && data.status in ['Online', 'Busy', 'Offline']
+        && data.updatedAt is timestamp && data.updatedAt == request.time
+        && data.expiresAt is timestamp && data.expiresAt > request.time
+        && data.expiresAt <= request.time + duration.value(150, 's');
+    }
+    match /coachPresence/{sessionId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validCoachPresence(request.resource.data);
+      allow update: if signedIn() && resource.data.coachUid == request.auth.uid
+        && validCoachPresence(request.resource.data);
+      allow delete: if signedIn() && resource.data.coachUid == request.auth.uid;
+    }
+    match /coachReviews/{reviewId} {
+      allow read: if signedIn();
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/coachReviews/$(reviewId));
+      allow create, update: if signedIn() && request.resource.data.playerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['id', 'coachUid', 'playerUid', 'sessionId', 'rating', 'text', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'rating', 'text', 'createdAt', 'updatedAt'])
+        && validUid(request.resource.data.coachUid) && validUid(request.resource.data.sessionId)
+        && request.resource.data.id == reviewId
+        && reviewId == request.resource.data.coachUid + '_' + request.auth.uid + '_' + request.resource.data.sessionId
+        && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && boundedString(request.resource.data.text, 500)
+        && reviewedSession(request.resource.data.coachUid, request.auth.uid, request.resource.data.sessionId)
+        && request.resource.data.updatedAt == request.time
+        && ((!exists(/databases/$(database)/documents/coachReviews/$(reviewId))
+              && isActiveMember(request.resource.data.coachUid, request.auth.uid) && request.resource.data.createdAt == request.time)
+          || (exists(/databases/$(database)/documents/coachReviews/$(reviewId))
+              && unchanged(['id', 'coachUid', 'playerUid', 'sessionId', 'createdAt'])));
+      allow delete: if false;
+    }
+
     match /submissions/{submissionId} {
       // Transactions must be able to check for a receipt before creating it.
       // This grants no access to existing submissions or collection lists.
@@ -341,6 +500,25 @@ service cloud.firestore {
     match /accountDeletions/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+
+    // Authorization-only probe for the external AI service. No document is
+    // stored here: an authorized GET returns not-found, while Firestore still
+    // verifies the caller's token and applies the stricter AI sharing policy.
+    // Historical session reads below deliberately retain their existing rules.
+    match /aiSessionAccess/{sessionId} {
+      function canExplainSession() {
+        let session = get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+        return session.ownerUid is string && notDeleting(session.ownerUid)
+          && (session.ownerUid == request.auth.uid
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COACH'
+              && request.auth.uid in session.sharedWith
+              && isActiveMember(request.auth.uid, session.ownerUid)));
+      }
+      allow get: if signedIn()
+        && exists(/databases/$(database)/documents/sessions/$(sessionId))
+        && canExplainSession();
+      allow list, create, update, delete: if false;
     }
 
     match /recordings/{sessionId} {

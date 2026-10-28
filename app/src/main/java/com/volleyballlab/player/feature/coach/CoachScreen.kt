@@ -249,6 +249,8 @@ fun CoachScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     onOpenAssignment: (String) -> Unit = {},
+    onBrowseCoaches: () -> Unit = {},
+    onMyCoach: () -> Unit = {},
 ) {
     val viewModel: CoachViewModel = viewModel(factory = CoachViewModel.Factory)
     val advice by viewModel.advice.collectAsStateWithLifecycle()
@@ -284,7 +286,7 @@ fun CoachScreen(
                         modifier = Modifier.padding(horizontal = 20.dp),
                     )
                     Spacer(Modifier.height(10.dp))
-                    CoachLinkSection(Modifier.padding(horizontal = 20.dp), onOpenAssignment)
+                    CoachLinkSection(Modifier.padding(horizontal = 20.dp), onOpenAssignment, onBrowseCoaches, onMyCoach)
                 }
             }
         }

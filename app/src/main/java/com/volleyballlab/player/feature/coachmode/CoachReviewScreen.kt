@@ -1,5 +1,9 @@
 package com.volleyballlab.player.feature.coachmode
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,11 +40,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -65,17 +76,29 @@ import com.volleyballlab.player.ui.component.ScoreArc
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import com.volleyballlab.player.ui.theme.vbColors
+import com.volleyballlab.player.ui.theme.vbTween
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class NoteDeliveryState(val sending: Boolean = false, val failed: Boolean = false)
+
 class CoachReviewViewModel(
     private val coachRepository: CoachRepository,
     private val authRepository: AuthRepository,
     sessionDirectory: SessionDirectory,
 ) : ViewModel() {
+    private val delivery = MutableStateFlow(NoteDeliveryState())
+    val noteDelivery = delivery.asStateFlow()
+
+    fun clearSendError() {
+        if (!delivery.value.sending) delivery.value = NoteDeliveryState()
+    }
 
     val state: StateFlow<CoachTeamState> =
         coachTeamState(coachRepository, sessionDirectory).stateIn(
@@ -92,21 +115,34 @@ class CoachReviewViewModel(
      */
     fun postNote(playerUid: String, sessionId: String, text: String, onSent: () -> Unit) {
         val trimmed = text.trim().take(CoachNote.MAX_LENGTH)
-        if (trimmed.isEmpty()) return
-        val coachUid = authRepository.currentUid ?: return
+        if (trimmed.isEmpty() || delivery.value.sending) return
+        val coachUid = authRepository.currentUid ?: run {
+            delivery.value = NoteDeliveryState(failed = true)
+            return
+        }
+        delivery.value = NoteDeliveryState(sending = true)
 
         viewModelScope.launch {
-            coachRepository.postNote(
-                CoachNote(
-                    id = DataStoreCoachRepository.newId(),
-                    coachUid = coachUid,
-                    playerUid = playerUid,
-                    sessionId = sessionId,
-                    text = trimmed,
-                    createdAtEpochMs = System.currentTimeMillis(),
-                ),
-            )
-            onSent()
+            try {
+                coachRepository.postNote(
+                    CoachNote(
+                        id = DataStoreCoachRepository.newId(),
+                        coachUid = coachUid,
+                        playerUid = playerUid,
+                        sessionId = sessionId,
+                        text = trimmed,
+                        createdAtEpochMs = System.currentTimeMillis(),
+                    ),
+                )
+                delivery.value = NoteDeliveryState()
+                onSent()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                delivery.value = NoteDeliveryState(failed = true)
+            } finally {
+                delivery.value = delivery.value.copy(sending = false)
+            }
         }
     }
 
@@ -157,6 +193,8 @@ fun CoachReviewScreen(
 ) {
     val viewModel: CoachReviewViewModel = viewModel(factory = CoachReviewViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val presenceReporter = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.coachPresenceReporter
+    val delivery by viewModel.noteDelivery.collectAsStateWithLifecycle()
 
     if (!state.loaded) {
         GhostLoadingScreen(GhostLayout.Detail, contentPadding, modifier)
@@ -165,6 +203,7 @@ fun CoachReviewScreen(
 
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     var sent by rememberSaveable(sessionId) { mutableStateOf(false) }
+    var tab by rememberSaveable(sessionId) { mutableStateOf(0) }
 
     val snapshot = state.snapshotOf(playerUid)
     // Resolved from the full history, not from the snapshot's capped list, so a
@@ -173,7 +212,7 @@ fun CoachReviewScreen(
     val review = session?.let(SessionReview::from)
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().imePadding(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -201,6 +240,9 @@ fun CoachReviewScreen(
             )
         }
 
+        item(key = "review-tabs") {
+            CoachFilterTabs(listOf("Analysis", "Recording", "Feedback"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
         if (review == null) {
             // The athlete deleted the recording between submitting it and the coach
             // opening it. Nothing here is recoverable, so the screen says so plainly
@@ -216,17 +258,20 @@ fun CoachReviewScreen(
             return@LazyColumn
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 1) {
                 Scorecard(review, Modifier.padding(horizontal = CoachGutter))
             }
         }
 
-        item {
+        if (tab == 1) item {
             SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter))
         }
+        if (tab == 0) item {
+            com.volleyballlab.player.feature.session.SessionExplanationCard(review.session.id, Modifier.padding(horizontal = CoachGutter))
+        }
 
-        if (review.framingIsPoor) {
+        if (tab == 0 && review.framingIsPoor) {
             item {
                 EntranceAnimation(index = 2) {
                     FramingWarning(
@@ -237,7 +282,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 3) {
                 PointPanel(
                     title = stringResource(R.string.coach_review_strengths),
@@ -250,7 +295,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 4) {
                 PointPanel(
                     title = stringResource(R.string.coach_review_corrections),
@@ -266,7 +311,7 @@ fun CoachReviewScreen(
             }
         }
 
-        if (review.safety.isNotEmpty()) {
+        if (tab == 0 && review.safety.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 5) {
                     SafetyPanel(review.safety, Modifier.padding(horizontal = CoachGutter))
@@ -274,13 +319,16 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 2) item {
             CommentBox(
                 draft = draft,
                 sent = sent,
+                delivery = delivery,
                 onDraftChange = {
+                    presenceReporter.interact()
                     draft = it.take(CoachNote.MAX_LENGTH)
                     sent = false
+                    viewModel.clearSendError()
                 },
                 onSend = {
                     viewModel.postNote(playerUid, sessionId, draft) {
@@ -293,7 +341,7 @@ fun CoachReviewScreen(
         }
 
         val existing = state.notesFor(playerUid).filter { it.sessionId == sessionId }
-        if (existing.isNotEmpty()) {
+        if (tab == 2 && existing.isNotEmpty()) {
             item {
                 CoachSectionTitle(text = stringResource(R.string.coach_player_notes))
             }
@@ -305,7 +353,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             CoachFootnote(
                 text = stringResource(R.string.coach_review_analysis_source),
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -561,6 +609,7 @@ private fun SafetyPanel(checks: List<SafetyCheck>, modifier: Modifier = Modifier
 private fun CommentBox(
     draft: String,
     sent: Boolean,
+    delivery: NoteDeliveryState,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
@@ -574,27 +623,42 @@ private fun CommentBox(
         OutlinedTextField(
             value = draft,
             onValueChange = onDraftChange,
+            enabled = !delivery.sending,
             placeholder = { Text(stringResource(R.string.coach_review_comment_hint)) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            minLines = 4,
+            maxLines = 8,
+            supportingText = { Text(stringResource(R.string.coach_feedback_count, draft.length, CoachNote.MAX_LENGTH)) },
+            modifier = Modifier.fillMaxWidth(),
             shape = CoachInnerShape,
         )
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             CoachPillButton(
-                label = stringResource(R.string.coach_review_send),
+                label = stringResource(if (delivery.sending) R.string.coach_feedback_sending else R.string.coach_review_send),
                 onClick = onSend,
-                enabled = draft.isNotBlank(),
+                enabled = draft.isNotBlank() && !delivery.sending,
             )
-            if (sent) {
+            if (delivery.sending) {
                 HorizontalGap(12)
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            }
+            AnimatedVisibility(visible = sent, enter = fadeIn(vbTween()), exit = fadeOut(vbTween())) {
                 Text(
                     text = stringResource(R.string.coach_review_sent),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.vbColors.success,
+                    modifier = Modifier.padding(start = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
+        }
+        AnimatedVisibility(visible = delivery.failed, enter = fadeIn(vbTween()), exit = fadeOut(vbTween())) {
+            Text(
+                stringResource(R.string.coach_feedback_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
     }
 }

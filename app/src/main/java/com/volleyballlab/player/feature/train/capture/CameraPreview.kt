@@ -199,7 +199,11 @@ fun CameraPreview(
 
     DisposableEffect(Unit) {
         onDispose {
-            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
+            val future = ProcessCameraProvider.getInstance(context)
+            future.addListener(
+                { runCatching { future.get().unbindAll() } },
+                ContextCompat.getMainExecutor(context),
+            )
         }
     }
 

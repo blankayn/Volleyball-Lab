@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:rules": "node --test emulator-tests/*.test.mjs",
+    "test:rules": "node --test --test-concurrency=1 emulator-tests/*.test.mjs",
     "check": "node --check index.mjs"
   },
   "dependencies": {

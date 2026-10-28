@@ -108,6 +108,7 @@ class PlayerAssignmentFlowTest {
         override suspend fun save(session: SessionResult) { sessions.value = sessions.value.filterNot { it.id == session.id } + session }
         override suspend fun byId(id: String) = sessions.value.firstOrNull { it.id == id }
         override suspend fun delete(id: String) { sessions.value = sessions.value.filterNot { it.id == id } }
+        override suspend fun deleteVideo(id: String) { sessions.value = sessions.value.map { if (it.id == id) it.copy(videoPath = null) else it } }
     }
 
     private class FakeCoaches(task: CoachAssignment) : CoachRepository {

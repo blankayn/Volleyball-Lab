@@ -22,6 +22,7 @@ import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.userProfileChangeRequest
+import com.google.firebase.messaging.FirebaseMessaging
 import com.volleyballlab.player.domain.repository.AuthError
 import com.volleyballlab.player.domain.repository.AuthOutcome
 import com.volleyballlab.player.domain.repository.AuthRepository
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** One DataStore per file for the process, as the API requires. */
 private val Context.sessionPreferences: DataStore<Preferences> by preferencesDataStore(
@@ -95,7 +97,7 @@ class FirebaseAuthRepository(
         if (rememberSession()) return user.toAuthUser()
         // They asked not to be remembered, so the credential Firebase kept anyway
         // is discarded here rather than silently honoured.
-        auth.signOut()
+        signOut()
         return null
     }
 
@@ -162,6 +164,9 @@ class FirebaseAuthRepository(
     }
 
     override suspend fun signOut() {
+        runCatching {
+            withTimeoutOrNull(2_000) { FirebaseMessaging.getInstance().unregister().awaitResult() }
+        }
         auth.signOut()
         setRememberSession(false)
     }

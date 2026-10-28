@@ -71,7 +71,8 @@ fun SessionSummaryScreen(
                     null
                 }
             }
-            SessionSummaryContent(current.session, drillName, onBack, onOpenFeedback, contentPadding, modifier)
+            SessionSummaryContent(current.session, drillName, onBack, onOpenFeedback,
+                model::deleteVideo, contentPadding, modifier)
         }
     }
 }
@@ -83,6 +84,7 @@ fun SessionSummaryContent(
     drillName: String?,
     onBack: () -> Unit,
     onOpenFeedback: () -> Unit,
+    onDeleteVideo: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -93,6 +95,7 @@ fun SessionSummaryContent(
             .groupingBy { it.cueId }.eachCount().any { it.value >= SessionReview.MIN_REPS_FOR_PANEL }
     }
     val videoAvailable = remember(session.videoPath) { session.videoPath?.let { File(it).isFile } == true }
+    var confirmDeleteVideo by remember { mutableStateOf(false) }
     val locale = LocalLocale.current.platformLocale
     val zone = ZoneId.systemDefault()
     val date = remember(session.startedAtEpochMs, locale, zone) {
@@ -153,6 +156,7 @@ fun SessionSummaryContent(
                 }
             }
         }
+        item { SessionExplanationCard(session.id, horizontal) }
         if (review.framingIsPoor || (review.formScore == null && session.repCount > 0)) {
             item {
                 SummarySection(stringResource(R.string.session_summary_capture_title), Icons.Rounded.Videocam,
@@ -204,6 +208,40 @@ fun SessionSummaryContent(
                     else R.string.session_summary_full_feedback))
             }
         }
+        if (videoAvailable) item {
+            TextButton(onClick = { confirmDeleteVideo = true }, modifier = horizontal.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.session_delete_video),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+
+    if (confirmDeleteVideo) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteVideo = false },
+            title = { Text(stringResource(R.string.session_delete_video_title)) },
+            text = { Text(stringResource(R.string.session_delete_video_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteVideo = false
+                        onDeleteVideo()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.session_delete_video_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteVideo = false }) {
+                    Text(stringResource(R.string.session_delete_video_cancel))
+                }
+            },
+        )
     }
 }
 

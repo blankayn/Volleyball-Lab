@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.volleyballlab.player.ui.theme.VbMotion
 import com.volleyballlab.player.ui.theme.vbTween
+
+/** A NavHost already animates the page; its cards should be laid out immediately. */
+val LocalScreenEntranceEnabled = compositionLocalOf { true }
 
 /**
  * Fades and lifts its content into place once, shortly after it first appears.
@@ -38,6 +43,10 @@ fun EntranceAnimation(
     index: Int = 0,
     content: @Composable () -> Unit,
 ) {
+    if (!LocalScreenEntranceEnabled.current) {
+        Box(modifier) { content() }
+        return
+    }
     var hasPlayed by rememberSaveable { mutableStateOf(false) }
     var visible by remember { mutableStateOf(hasPlayed) }
 
@@ -51,13 +60,13 @@ fun EntranceAnimation(
         modifier = modifier,
         enter = fadeIn(
             animationSpec = vbTween(
-                durationMillis = VbMotion.Medium,
+                durationMillis = VbMotion.Short,
                 delayMillis = VbMotion.staggerDelay(index),
                 easing = VbMotion.EmphasizedDecelerate,
             ),
         ) + slideInVertically(
             animationSpec = vbTween(
-                durationMillis = VbMotion.Medium,
+                durationMillis = VbMotion.Short,
                 delayMillis = VbMotion.staggerDelay(index),
                 easing = VbMotion.EmphasizedDecelerate,
             ),

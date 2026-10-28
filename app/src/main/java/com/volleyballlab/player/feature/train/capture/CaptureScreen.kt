@@ -242,7 +242,7 @@ private fun GrantedCaptureScreen(
         delay(6_000)
         viewModel.clearCoachingMessage(message.id.toString())
     }
-    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
+    var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_FRONT) }
 
     LaunchedEffect(state) {
         (state as? CaptureUiState.Finished)?.let { onSessionComplete(it.sessionId) }
@@ -280,6 +280,7 @@ private fun GrantedCaptureScreen(
             onStop = viewModel::onStopRequested,
             onCancelCountdown = viewModel::onCancelCountdown,
             onRetry = viewModel::onRetryDetector,
+            onRetrySave = viewModel::onRetrySaveRequested,
             onUseDemo = viewModel::onUseDemoDetector,
             onSwitchCamera = {
                 lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
@@ -316,6 +317,7 @@ internal fun CaptureControls(
     onUseDemo: () -> Unit,
     onSwitchCamera: () -> Unit,
     onBack: () -> Unit,
+    onRetrySave: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -336,6 +338,7 @@ internal fun CaptureControls(
                     } else LivePostureCard(posture = livePosture, coachingText = state.suspensionHint ?: coachingText,
                         modifier = Modifier.padding(horizontal = 24.dp))
                     is CaptureUiState.Analysing -> AnalysingDisplay()
+                    is CaptureUiState.SaveFailed -> SaveFailedCard(onRetrySave)
                     is CaptureUiState.Unavailable -> UnavailableCard(
                         state = state,
                         onRetry = onRetry,
@@ -567,6 +570,25 @@ private fun AnalysingDisplay() {
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White,
             )
+        }
+    }
+}
+
+@Composable
+private fun SaveFailedCard(onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.padding(24.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(R.string.capture_save_failed_title), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.capture_save_failed_body), textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onRetry, shape = VbButtonShape) {
+                Text(stringResource(R.string.capture_retry_save))
+            }
         }
     }
 }

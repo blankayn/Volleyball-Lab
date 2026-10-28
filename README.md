@@ -45,7 +45,8 @@ Verified locally with:
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-206 unit tests pass. Lint has no errors; it reports non-blocking warnings.
+297 unit tests pass as of 24 October 2026. Lint has no errors; warnings remain.
+See [current verification and release gates](docs/app-completion-status.md).
 
 ### Updated manuscript delivery
 
@@ -523,7 +524,8 @@ about having data. If that distinction ever stops holding, delete it.
 
 **Stand-in** — the drill catalogue is compiled into the app
 (`StaticDrillRepository`) pending a drill-library backend. Notification delivery
-uses optional Android alerts and periodic WorkManager refresh rather than FCM push.
+uses optional Android alerts, periodic WorkManager refresh and prepared FCM
+triggers. Live push requires deployment on an enabled Firebase project.
 
 ---
 
@@ -533,7 +535,7 @@ uses optional Android alerts and periodic WorkManager refresh rather than FCM pu
 ./gradlew :app:testDebugUnitTest
 ```
 
-206 tests cover the pose/coaching engine, compatibility, seven-day aggregation,
+297 tests cover the pose/coaching engine, compatibility, seven-day aggregation,
 report reset/reuse, goals, entitlement logic, notifications and progress export:
 
 - `AnglesTest` — joint geometry, including that degenerate input returns `null`
@@ -596,11 +598,10 @@ than someone watching a badge on a phone and deciding it looked about right.
   signing-in on a fresh install with no signal sees empty coach screens until it
   connects — the same as auth itself, which already needs the network for the
   first sign-in. Player training capture and scoring are fully offline regardless.
-- **Being answered is silent.** The athlete finds out they were approved — or
-  declined — by opening their Coach tab, not by being told. A decline is
-  especially quiet: the pending card simply goes and the directory comes back.
-  Telling them needs the Notification entity in Table 18, which nothing
-  implements.
+- **Background alerts depend on Android and deployment.** Approval and ended
+  coach connections now appear in the account-scoped inbox. Optional system
+  alerts honor permission/preferences; periodic refresh may be delayed. Immediate
+  FCM delivery requires deploying the prepared notification triggers.
 - **Merchant activation is pending.** GCash checkout remains disabled until
   verified merchant configuration and live payment testing are complete.
 - **A directory listing is whatever the coach typed.** Name, team, organisation,

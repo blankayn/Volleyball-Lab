@@ -1,21 +1,21 @@
 /* Volleyball Lab coach portal — design tokens.
    The same anchors as the Android app (see app/.../ui/theme/Color.kt): rust
-   primary #CC5500, Alice Blue page #F0F8FF, ink #141C33, Hanken Grotesk.
+   primary #CC5500, Alice Blue page #F0F8FF, ink #141C33.
    Coach accents keep the app's fixed assignment: rust = people, indigo =
    review/queues, green = sessions, violet = written material. */
 
 :root {
-  --rust: #cc5500;
-  --rust-deep: #993f00;
+  --rust: #bd4318;
+  --rust-deep: #9d3510;
   --rust-tint: #ffefe2;
-  --page: #f0f8ff;
+  --page: #ffffff;
   --card: #ffffff;
-  --ink: #141c33;
-  --ink-soft: #44506a;
-  --ink-faint: #6f7a91;
-  --line: #d9e4f2;
-  --navy: #141c33;
-  --navy-soft: #26304c;
+  --ink: #122038;
+  --ink-soft: #4c5d75;
+  --ink-faint: #62738b;
+  --line: #e7e2dd;
+  --navy: #101c30;
+  --navy-soft: #23354f;
 
   --accent-rust-bg: #ffefe2;
   --accent-rust-fg: #993f00;
@@ -30,10 +30,11 @@
   --warn: #9a6200;
   --bad: #b3132b;
 
-  --radius-card: 24px;
-  --radius-inner: 14px;
-  --shadow-card: 0 2px 10px rgb(20 28 51 / 0.08);
-  --font: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-card: 14px;
+  --radius-inner: 9px;
+  --shadow-card: 0 3px 16px rgb(20 28 51 / 0.045);
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
 
   --content: 1120px;
 }

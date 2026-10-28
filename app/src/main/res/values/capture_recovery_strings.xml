@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_save_failed_title">Session not saved yet</string>
+    <string name="capture_save_failed_body">Check available storage and try again. Keep this screen open to retain this session.</string>
+    <string name="capture_retry_save">Retry save</string>
+</resources>

@@ -20,6 +20,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { preferencesPath } from "./account-settings";
+import { normalizePreferences, type PortalPreferences } from "./preferences";
 
 export type MembershipStatus = "Pending" | "Active" | "Ended";
 export type AssignmentStatus = "Pending" | "InProgress" | "Completed";
@@ -326,11 +328,18 @@ export function emptyProfile(): CoachProfile {
   };
 }
 
+export interface ProfileSaveResult {
+  preferencesSaved: boolean;
+  accountNameSynced: boolean;
+}
+
 export async function saveProfile(
   uid: string,
   profile: CoachProfile,
   rosterSize: number,
-): Promise<void> {
+  preferences?: PortalPreferences,
+  publishPortrait = false,
+): Promise<ProfileSaveResult> {
   const now = Date.now();
   const batch = writeBatch(db);
   batch.set(
@@ -342,7 +351,25 @@ export async function saveProfile(
     doc(db, "coachDirectory", uid),
     directoryProjection(profile, rosterSize, now),
   );
+  // Keep the established coach profile and directory atomic. New optional
+  // documents may be unavailable until their rules have been deployed.
   await batch.commit();
+  const [settings, accountName] = await Promise.allSettled([
+    preferences
+      ? (async () => {
+          const data = normalizePreferences(preferences);
+          const photos = writeBatch(db);
+          photos.set(preferencesPath(uid), { ...data, updatedAt: now });
+          if (publishPortrait) photos.set(doc(db, "coachPhotos", uid), { photo: data.photo, updatedAt: now });
+          await photos.commit();
+        })()
+      : Promise.resolve(),
+    updateDoc(doc(db, "users", uid), { displayName: profile.name, updatedAt: now }),
+  ]);
+  return {
+    preferencesSaved: settings.status === "fulfilled",
+    accountNameSynced: accountName.status === "fulfilled",
+  };
 }
 
 /** Public fields only; preferences and licence remain in the private profile. */
@@ -451,10 +478,10 @@ export async function postNote(note: CoachNote): Promise<void> {
   const batch = writeBatch(db);
   batch.set(doc(db, "notes", note.id), { ...note });
   if (note.sessionId) {
-    batch.update(
-      doc(db, "submissions", `${note.coachUid}_${note.sessionId}`),
-      { reviewedAt: Date.now() },
-    );
+    const submission = await getDoc(doc(db, "submissions", `${note.coachUid}_${note.sessionId}`));
+    if (submission.exists() && submission.data().reviewedAt === null) {
+      batch.update(submission.ref, { reviewedAt: Date.now() });
+    }
   }
   await batch.commit();
 }
@@ -488,4 +515,12 @@ export function queueQuery(coachUid: string): Query {
 
 export function rosterQuery(coachUid: string): Query {
   return query(collection(db, "roster", coachUid, "members"));
+}
+
+export function assignmentsQuery(coachUid: string): Query {
+  return query(collection(db, "assignments"), where("coachUid", "==", coachUid));
+}
+
+export function sharedSessionsQuery(coachUid: string): Query {
+  return query(collection(db, "sessions"), where("sharedWith", "array-contains", coachUid));
 }

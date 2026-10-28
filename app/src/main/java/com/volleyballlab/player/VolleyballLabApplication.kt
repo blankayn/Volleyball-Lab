@@ -3,6 +3,7 @@ package com.volleyballlab.player
 import android.app.Application
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.volleyballlab.player.data.push.PushNotifications
 import com.volleyballlab.player.di.AppContainer
 
 class VolleyballLabApplication : Application() {
@@ -13,6 +14,7 @@ class VolleyballLabApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         installAppCheckProvider()
+        PushNotifications.ensureChannel(this)
         container = AppContainer(this)
     }
 }

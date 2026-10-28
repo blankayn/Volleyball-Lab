@@ -81,12 +81,18 @@ fun interface PoseDetectorFactory {
  * through a constructor, that migration is mechanical.
  */
 class AppContainer(private val context: Context) {
+    val coachPhotoStore by lazy { com.volleyballlab.player.data.coach.CoachPhotoStore(firestore, authRepository) }
+    val coachPresenceReporter by lazy { com.volleyballlab.player.data.coach.CoachPresenceReporter(context, firestore, authRepository) }
+    val coachingHubRepository by lazy { com.volleyballlab.player.data.coach.CoachingHubRepository(firestore, authRepository) }
     val videoReviewStore = VideoReviewCache(context)
     val accountDeletionService by lazy {
         com.volleyballlab.player.data.account.AccountDeletionService(context, authRepository, profileRepository, sessionRepository)
     }
     val sharedRecordingStore by lazy {
         com.volleyballlab.player.data.session.SharedRecordingStore(context, authRepository, firestore, videoReviewStore)
+    }
+    val pushTokenRegistrar by lazy {
+        com.volleyballlab.player.data.push.PushTokenRegistrar({ authRepository.currentUid }, firestore)
     }
     suspend fun observeNotifications() {
         authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collectLatest { uid ->
@@ -101,11 +107,15 @@ class AppContainer(private val context: Context) {
                 }
                 launch { sessionRepository.sessions.collect { sessions -> notificationRepository.ingest(uid,
                     sessions.map(com.volleyballlab.player.domain.model.NotificationEvents::session) + com.volleyballlab.player.domain.model.NotificationEvents.milestones(sessions)) } }
+                launch { notificationRepository.connectionEvents(uid).collect { events -> notificationRepository.ingest(uid, events) } }
                 launch { coachRepository.notesForMe.collect { notes -> notificationRepository.ingest(uid, notes.map(com.volleyballlab.player.domain.model.NotificationEvents::feedback)) } }
+                launch { coachingHubRepository.coachQuestions.collect { questions -> notificationRepository.ingest(uid, questions.filter { it.answer == null && it.createdAt > 0 }.map(com.volleyballlab.player.domain.model.NotificationEvents::question)) } }
+                launch { coachingHubRepository.playerQuestions.collect { questions -> notificationRepository.ingest(uid, questions.mapNotNull(com.volleyballlab.player.domain.model.NotificationEvents::answer)) } }
                 launch { coachRepository.assignmentsForMe.collect { assignments -> notificationRepository.ingest(uid, assignments.map(com.volleyballlab.player.domain.model.NotificationEvents::assignment)) } }
                 launch { combine(coachRepository.coachProfile, coachRepository.submissions, ::Pair).collect { (profile, submissions) ->
                     notificationRepository.ingest(uid, submissions.map(com.volleyballlab.player.domain.model.NotificationEvents::submission), profile.notifySubmissions) } }
                 launch { runCatching { kotlinx.coroutines.withTimeout(25_000) { notificationRepository.refresh() } } }
+                launch { runCatching { pushTokenRegistrar.registerCurrentUser() } }
             }
         }
     }
@@ -179,6 +189,11 @@ class AppContainer(private val context: Context) {
 
     val assessmentRepository: AssessmentRepository by lazy {
         DataStoreAssessmentRepository(context, authRepository)
+    }
+
+    /** The install-level welcome, before any account exists. */
+    val welcomeRepository: com.volleyballlab.player.domain.repository.WelcomeRepository by lazy {
+        com.volleyballlab.player.data.welcome.DataStoreWelcomeRepository(context)
     }
 
     /**
@@ -256,6 +271,7 @@ class AppContainer(private val context: Context) {
 
     /** Gemini writes grounded copy; measured scores and cue choice stay on-device. */
     val aiCoachRepository: AiCoachRepository by lazy { FirebaseAiCoachRepository(context) }
+    val sessionExplanationRepository by lazy { com.volleyballlab.player.data.ai.CloudSessionExplanationRepository() }
 
     /** The real detector. Throws if the model asset is missing. */
     val poseDetectorFactory = PoseDetectorFactory {

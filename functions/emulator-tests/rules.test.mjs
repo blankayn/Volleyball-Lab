@@ -13,6 +13,30 @@ beforeEach(async () => { await env.clearFirestore(); await seed("coachDirectory/
 
 async function seed(path, data) { await env.withSecurityRulesDisabled(async context => setDoc(doc(context.firestore(), path), data)); }
 function client(uid) { return env.authenticatedContext(uid).firestore(); }
+
+test("push registrations are write-only, bound to the signed-in account and removed only by their owner", async () => {
+  const registration = { uid: "player", token: "fid-device", platform: "android", updatedAt: Date.now() };
+  await assertSucceeds(setDoc(doc(client("player"), "pushTokens/fid-device"), registration));
+  await assertFails(getDoc(doc(client("player"), "pushTokens/fid-device")));
+  await assertFails(getDocs(collection(client("player"), "pushTokens")));
+  await assertFails(setDoc(doc(client("other"), "pushTokens/fid-device"), registration));
+  await assertFails(deleteDoc(doc(client("other"), "pushTokens/fid-device")));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "pushTokens/fid-device"), registration));
+  await assertFails(setDoc(doc(client("player"), "pushTokens/other-device"), registration));
+  await assertFails(setDoc(doc(client("player"), "pushTokens/fid-device"), { ...registration, secret: "extra" }));
+  await assertSucceeds(deleteDoc(doc(client("player"), "pushTokens/fid-device")));
+});
+
+test("a device can move to its newly signed-in account, but deleting accounts cannot register", async () => {
+  await seed("pushTokens/fid-device", { uid: "previous", token: "fid-device", platform: "android", updatedAt: Date.now() });
+  await assertSucceeds(setDoc(doc(client("player"), "pushTokens/fid-device"), {
+    uid: "player", token: "fid-device", platform: "android", updatedAt: Date.now(),
+  }));
+  await seed("accountDeletions/player", { status: "deleting" });
+  await assertFails(setDoc(doc(client("player"), "pushTokens/fid-device"), {
+    uid: "player", token: "fid-device", platform: "android", updatedAt: Date.now(),
+  }));
+});
 const active = { ownerUid: "paid", status: "active", expiresAtEpochMs: Date.now() + 86400000 };
 const now = Date.now();
 function directory() { return { name: "Coach", teamName: "Team", specialisation: null, yearsExperience: null, rosterSize: 0, updatedAt: now }; }
@@ -94,6 +118,19 @@ test("a client cannot self-grant, modify expiry, revoke, or delete entitlement",
   await assertFails(updateDoc(ref, { expiresAtEpochMs: 0 }));
   await assertFails(updateDoc(ref, { status: "active", ownerUid: "other" }));
   await assertFails(deleteDoc(ref));
+});
+
+test("temporary demo code unlocks Pro coach requests only for the signed-in account", async () => {
+  const db = client("demo-player");
+  const access = doc(db, "demoProAccess/demo-player");
+  await assertFails(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
+  await assertFails(setDoc(access, { code: "000000" }));
+  await assertFails(setDoc(doc(db, "demoProAccess/other"), { code: "123456" }));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "demoProAccess/demo-player"), { code: "123456" }));
+  await assertSucceeds(setDoc(access, { code: "123456" }));
+  await assertSucceeds(getDoc(access));
+  await assertSucceeds(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
+  await assertFails(getDoc(doc(client("other"), "demoProAccess/demo-player")));
 });
 test("billing configuration is signed-in read only and internal billing data stays private", async () => {
   await seed("billingConfig/pro", { enabled: false, priceCentavos: 0 });
