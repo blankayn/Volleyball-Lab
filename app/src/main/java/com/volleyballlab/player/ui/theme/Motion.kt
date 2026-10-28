@@ -64,7 +64,7 @@ object VbMotion {
     const val Long = 450
 
     /** A page-to-page fade. Short enough to stay out of the way of the content. */
-    const val Navigation = 200
+    const val Navigation = 180
 
     /** Splash beats and the result reveal only. */
     const val ExtraLong = 700

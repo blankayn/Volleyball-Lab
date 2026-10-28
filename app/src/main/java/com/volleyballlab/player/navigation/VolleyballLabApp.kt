@@ -5,8 +5,6 @@ import androidx.core.view.WindowCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -30,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
@@ -95,6 +94,7 @@ import com.volleyballlab.player.feature.train.drill.DrillPracticeScreen
 import com.volleyballlab.player.feature.train.drill.DrillPracticeSummaryScreen
 import com.volleyballlab.player.feature.welcome.WelcomeScreen
 import com.volleyballlab.player.ui.component.VolleyballBackdrop
+import com.volleyballlab.player.ui.component.LocalScreenEntranceEnabled
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbMotion
 import com.volleyballlab.player.ui.theme.vbTween
@@ -270,13 +270,17 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
             }
         },
     ) { innerPadding ->
-        VbNavHost(
-            navController = navController,
-            start = start,
-            hasOnboarded = hasOnboarded,
-            contentPadding = innerPadding,
-            modifier = Modifier.fillMaxSize(),
-        )
+        // The route owns its entrance. Mount card content immediately instead of
+        // following the page fade with another sequence of delayed entrances.
+        CompositionLocalProvider(LocalScreenEntranceEnabled provides false) {
+            VbNavHost(
+                navController = navController,
+                start = start,
+                hasOnboarded = hasOnboarded,
+                contentPadding = innerPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -343,11 +347,13 @@ private fun CoachShell() {
     ) { innerPadding ->
         // Keep the neutral workspace surface behind every coach destination.
         Box(Modifier.fillMaxSize().coachWorkspaceBackground()) {
-            CoachNavHost(
-                navController = navController,
-                contentPadding = innerPadding,
-                modifier = Modifier.fillMaxSize(),
-            )
+            CompositionLocalProvider(LocalScreenEntranceEnabled provides false) {
+                CoachNavHost(
+                    navController = navController,
+                    contentPadding = innerPadding,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
@@ -448,13 +454,12 @@ private fun CoachNavHost(
     val reduceMotion = LocalReduceMotion.current
     val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
-    val travel = VbMotion.tween<IntOffset>(VbMotion.Navigation, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = CoachDashboardRoute,
         modifier = modifier,
-        enterTransition = { fadeIn(page) + slideInVertically(travel) { it / 70 } },
+        enterTransition = { fadeIn(page) },
         exitTransition = { fadeOut(quick) },
         popEnterTransition = { fadeIn(quick) },
         popExitTransition = { fadeOut(quick) },
