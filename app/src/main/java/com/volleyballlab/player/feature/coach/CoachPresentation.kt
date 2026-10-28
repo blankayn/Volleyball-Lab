@@ -120,19 +120,20 @@ internal val CoachInk = Color(0xFF242925)
 
 @Composable internal fun CoachMetrics(summary: CoachPublicSummary) {
     Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(summary.averageRating?.let { "★ ${String.format(Locale.getDefault(), "%.1f", it)}" } ?: "—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("Coach rating", style = MaterialTheme.typography.labelMedium)
-                Text(if (summary.reviews.isEmpty()) "No reviews yet" else "${summary.reviews.size} session reviews", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Box(Modifier.width(1.dp).height(75.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)))
-            Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(summary.typicalResponseMs?.let(::coachingResponseLabel) ?: "—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("Typical response", style = MaterialTheme.typography.labelMedium)
-                Text(if (summary.typicalResponseMs == null) "History building" else "From recent replies", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        com.volleyballlab.player.ui.component.ResponsivePair(Modifier.padding(20.dp), minItemWidth = 120.dp, spacing = 20.dp,
+            first = { CoachMetricText(summary.averageRating?.let { "★ ${String.format(Locale.getDefault(), "%.1f", it)}" } ?: "—",
+                "Coach rating", if (summary.reviews.isEmpty()) "No reviews yet" else "${summary.reviews.size} session reviews", it) },
+            second = { CoachMetricText(summary.typicalResponseMs?.let(::coachingResponseLabel) ?: "—",
+                "Typical response", if (summary.typicalResponseMs == null) "History building" else "From recent replies", it) })
+    }
+}
+
+@Composable
+private fun CoachMetricText(value: String, label: String, caption: String, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

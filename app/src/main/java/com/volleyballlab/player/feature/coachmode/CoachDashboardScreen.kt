@@ -161,7 +161,7 @@ fun CoachDashboardScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item(key = "hero") {

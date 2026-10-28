@@ -299,18 +299,38 @@ fun CoachDetailHeader(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val back: @Composable () -> Unit = {
         Surface(shape = CoachChipShape, color = MaterialTheme.colorScheme.surfaceContainerLowest,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back), Modifier.size(21.dp)) }
+            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back), Modifier.size(21.dp))
+            }
         }
-        Spacer(Modifier.width(14.dp))
-        if (leading != null) { leading(); Spacer(Modifier.width(12.dp)) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    }
+    val identity: @Composable (Modifier) -> Unit = { textModifier ->
+        Column(textModifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             if (!subtitle.isNullOrBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            trailing?.invoke()
         }
-        trailing?.invoke()
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 14.dp)) {
+        if (maxWidth / fontScale < 300.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    back()
+                    leading?.invoke()
+                }
+                identity(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                back()
+                leading?.invoke()
+                identity(Modifier.weight(1f))
+            }
+        }
     }
 }
 // ---------------------------------------------------------------------------

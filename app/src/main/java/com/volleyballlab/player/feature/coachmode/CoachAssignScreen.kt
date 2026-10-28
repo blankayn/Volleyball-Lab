@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -206,7 +208,7 @@ fun CoachAssignListScreen(
     }.sortedWith(compareBy<CoachAssignment> { !it.isOpen }.thenBy { it.dueAtEpochMs ?: Long.MAX_VALUE })
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -218,33 +220,9 @@ fun CoachAssignListScreen(
             }
         }
 
-        item {
-            EntranceAnimation(index = 1) {
-                Column(
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    CoachPillButton(
-                        label = stringResource(R.string.coach_assign_new),
-                        onClick = onNew,
-                        // Disabled rather than hidden, so a coach with no squad can see
-                        // that the feature exists and read why it is not available yet.
-                        // The footnote directly beneath is the "why", which is why the
-                        // two live in one block rather than as separate list items.
-                        enabled = state.activeMembers.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (state.activeMembers.isEmpty()) {
-                        CoachFootnote(stringResource(R.string.coach_assign_no_players))
-                    }
-                }
-            }
-        }
-
-        item(key = "assignment-search") {
-            OutlinedTextField(search, { search = it }, placeholder = { Text("Search drill or player") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true, shape = CoachInnerShape,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter))
+        item(key = "assignment-tools") {
+            CoachAssignmentTools(search, { search = it }, state.activeMembers.isNotEmpty(), onNew,
+                Modifier.padding(horizontal = CoachGutter))
         }
         item(key = "assignment-filters") {
             CoachFilterTabs(listOf("All", "Active", "Completed", "Overdue"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
@@ -272,6 +250,16 @@ fun CoachAssignListScreen(
                 )
             }
         }
+    }
+}
+
+/** Search precedes creation on both empty and populated assignment lists. */
+@Composable
+internal fun CoachAssignmentTools(search: String, onSearch: (String) -> Unit, hasPlayers: Boolean, onNew: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        CoachSearchField(search, onSearch, "Search drill or player")
+        CoachPillButton(stringResource(R.string.coach_assign_new), onNew, Modifier.fillMaxWidth(), enabled = hasPlayers)
+        if (!hasPlayers) CoachFootnote(stringResource(R.string.coach_assign_no_players))
     }
 }
 
@@ -396,7 +384,7 @@ fun CoachAssignEditScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize().imePadding(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
@@ -524,25 +512,7 @@ fun CoachAssignEditScreen(
 
                     // The steppers carry their own labels, so they sit in the card
                     // as a bare pair rather than inside another labelled field.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Stepper(
-                            label = stringResource(R.string.coach_assign_sets),
-                            value = sets,
-                            range = CoachAssignment.SETS_RANGE,
-                            onChange = { sets = it },
-                            modifier = Modifier.weight(1f),
-                        )
-                        Stepper(
-                            label = stringResource(R.string.coach_assign_reps),
-                            value = reps,
-                            range = CoachAssignment.REPS_RANGE,
-                            onChange = { reps = it },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    AssignmentTargets(sets, reps, { sets = it }, { reps = it })
 
                     FormField(stringResource(R.string.coach_assign_due)) {
                         ChipRow {
@@ -608,7 +578,7 @@ fun CoachAssignEditScreen(
                             shape = CoachInnerShape,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(140.dp),
+                                .heightIn(min = 140.dp),
                         )
                     }
                 }
@@ -696,6 +666,14 @@ private fun ChipRow(content: @Composable () -> Unit) {
     }
 }
 
+/** Keep two 48dp controls and the value legible instead of squeezing a half-width card. */
+@Composable
+internal fun AssignmentTargets(sets: Int, reps: Int, onSets: (Int) -> Unit, onReps: (Int) -> Unit) {
+    com.volleyballlab.player.ui.component.ResponsivePair(minItemWidth = 160.dp,
+        first = { Stepper(stringResource(R.string.coach_assign_sets), sets, CoachAssignment.SETS_RANGE, onSets, it) },
+        second = { Stepper(stringResource(R.string.coach_assign_reps), reps, CoachAssignment.REPS_RANGE, onReps, it) })
+}
+
 /**
  * Minus, number, plus.
  *
@@ -733,9 +711,10 @@ private fun Stepper(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = { onChange((value - 1).coerceIn(range)) },
+                    modifier = Modifier.size(48.dp),
                     enabled = value > range.first,
                 ) {
-                    Icon(Icons.Rounded.Remove, contentDescription = null)
+                    Icon(Icons.Rounded.Remove, contentDescription = "Decrease $label")
                 }
                 Text(
                     text = value.toString(),
@@ -748,9 +727,10 @@ private fun Stepper(
                 )
                 IconButton(
                     onClick = { onChange((value + 1).coerceIn(range)) },
+                    modifier = Modifier.size(48.dp),
                     enabled = value < range.last,
                 ) {
-                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Icon(Icons.Rounded.Add, contentDescription = "Increase $label")
                 }
             }
         }

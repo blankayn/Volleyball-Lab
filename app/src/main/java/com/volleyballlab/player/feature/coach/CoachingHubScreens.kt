@@ -118,10 +118,9 @@ fun MyCoachScreen(
                             }
                         }
                         item(key = "overview-counts") {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, Modifier.weight(1f))
-                                CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, Modifier.weight(1f))
-                            }
+                            com.volleyballlab.player.ui.component.ResponsivePair(
+                                first = { CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, it) },
+                                second = { CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, it) })
                         }
                         state.notes.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null }?.let { note -> item(key = "general-note") {
                             CoachSectionCard {
@@ -491,11 +490,11 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = hub::retry) { Text("Retry coaching sync") } }
 }
 @Composable private fun HubHeader(title: String, onBack: () -> Unit, eyebrow: String = "Your training space") {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.size(21.dp)) }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             CoachEyebrow(eyebrow)
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         }

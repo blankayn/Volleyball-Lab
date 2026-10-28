@@ -122,7 +122,7 @@ fun CoachRosterScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -134,28 +134,13 @@ fun CoachRosterScreen(
             }
         }
 
+        item(key = "player-search") {
+            CoachSearchField(search, { search = it }, stringResource(R.string.coach_search_players),
+                Modifier.padding(horizontal = CoachGutter),
+                supportingText = if (query.isNotEmpty()) stringResource(R.string.coach_search_count, visibleCount) else null)
+        }
         item(key = "roster-tabs") {
             CoachFilterTabs(listOf("Team ${active.size}", "Requests ${requests.size}", "Past ${past.size}"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
-        }
-
-        item(key = "player-search") {
-            OutlinedTextField(
-                value = search,
-                onValueChange = { search = it },
-                placeholder = { Text(stringResource(R.string.coach_search_players)) },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (search.isNotEmpty()) IconButton(onClick = { search = "" }) {
-                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.coach_search_clear))
-                    }
-                },
-                supportingText = {
-                    if (query.isNotEmpty()) Text(stringResource(R.string.coach_search_count, visibleCount))
-                },
-                singleLine = true,
-                shape = CoachInnerShape,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter),
-            )
         }
         if (query.isNotEmpty() && visibleCount == 0) {
             item(key = "search-empty") {
