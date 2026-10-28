@@ -93,6 +93,9 @@ data class CoachProfileRoute(val coachUid: String)
 data object MyCoachRoute
 
 @Serializable
+data class MyCoachSectionRoute(val section: String)
+
+@Serializable
 data object CoachQuestionsRoute
 
 @Serializable

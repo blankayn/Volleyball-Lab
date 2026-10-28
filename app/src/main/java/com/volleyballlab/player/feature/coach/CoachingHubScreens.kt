@@ -68,6 +68,8 @@ fun MyCoachScreen(
     onOpenAssignment: (String) -> Unit,
     contentPadding: PaddingValues,
     onOpenProfile: (String) -> Unit = {},
+    section: String? = null,
+    onOpenSection: (String) -> Unit = {},
 ) {
     val model: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
@@ -80,7 +82,7 @@ fun MyCoachScreen(
     val reviews by actions.hub.myReviews.collectAsStateWithLifecycle(emptyList())
     val busy by actions.busy.collectAsStateWithLifecycle()
     val errors by actions.errors.collectAsStateWithLifecycle()
-    var selected by rememberSaveable { mutableStateOf(CoachWorkspaceTab.Overview) }
+    val selected = section?.let { value -> CoachWorkspaceTab.entries.firstOrNull { it.name == value } ?: CoachWorkspaceTab.Overview }
     var feedbackFilter by rememberSaveable { mutableIntStateOf(0) }
     var showLeave by rememberSaveable { mutableStateOf(false) }
     val link = state.link
@@ -94,7 +96,7 @@ fun MyCoachScreen(
     LaunchedEffect(active, leaving, leaveError) { if (!active && !leaving && leaveError == null) showLeave = false }
 
     LazyColumn(Modifier.fillMaxSize().coachPageBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item(key = "header") { Column { HubHeader("My coach", onBack); HubSync(actions.hub) } }
+        item(key = "header") { Column { HubHeader(selected?.label ?: "My coach", onBack); HubSync(actions.hub) } }
         if (!state.loaded) item { CircularProgressIndicator() }
         else {
             if (active && coach != null) {
@@ -103,8 +105,9 @@ fun MyCoachScreen(
                 } }
                 item(key = "metrics") { CoachMetrics(summary) }
             }
-            item(key = "tabs") { CoachWorkspaceTabs(selected) { selected = it } }
+            if (selected != null) item(key = "tabs") { CoachWorkspaceTabs(selected) { onOpenSection(it.name) } }
             when (selected) {
+                null -> item(key = "workspace-sections") { MyCoachHubSections(state) { onOpenSection(it.name) } }
                 CoachWorkspaceTab.Overview -> {
                     if (active) {
                         item(key = "intro") {
@@ -117,8 +120,8 @@ fun MyCoachScreen(
                         }
                         item(key = "overview-counts") {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { selected = CoachWorkspaceTab.Training }, Modifier.weight(1f))
-                                CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { selected = CoachWorkspaceTab.Feedback }, Modifier.weight(1f))
+                                CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, Modifier.weight(1f))
+                                CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, Modifier.weight(1f))
                             }
                         }
                         state.notes.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null }?.let { note -> item(key = "general-note") {
@@ -139,7 +142,7 @@ fun MyCoachScreen(
                             Text(if (link?.isPending == true) "Your coach is reviewing your request" else "Find your training connection", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                             Text(if (link?.isPending == true) "You’ll see your coach workspace here when they accept." else "Explore coach profiles and choose the guidance that fits your goals.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (link == null) Button(onClick = onBrowse, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Find a coach") }
-                            if (state.submissions.isNotEmpty()) TextButton(onClick = { selected = CoachWorkspaceTab.Feedback }) { Text("View previous coaching feedback") }
+                            if (state.submissions.isNotEmpty()) TextButton(onClick = { onOpenSection(CoachWorkspaceTab.Feedback.name) }) { Text("View previous coaching feedback") }
                         }
                     }
                 }

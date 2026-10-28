@@ -219,7 +219,7 @@ private fun CoachAccountSectionContent(section: AccountSection, state: CoachAcco
             AccountSection.Personal -> {
                 com.volleyballlab.player.feature.profile.PersonalInformationSummary(state.identity.name.ifBlank { profile.name }.ifBlank { "Coach" }, state.account?.email) { editing = !editing }
                 if (editing) com.volleyballlab.player.feature.profile.AccountIdentityEditor(onDone = { editing = false })
-                com.volleyballlab.player.feature.profile.ProfileTrainingTools(section = com.volleyballlab.player.feature.profile.ProfileToolSection.Photo)
+                com.volleyballlab.player.feature.profile.ProfileTrainingTools(section = com.volleyballlab.player.feature.profile.ProfileToolSection.Photo, publishCoachPhoto = true)
                 com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
             }
             AccountSection.Team -> {

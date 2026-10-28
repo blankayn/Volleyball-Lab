@@ -43,7 +43,7 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
     await erase(db.collection('billingSessions').where('orderId', '==', order.id));
     await erase(db.collection('billingPayments').where('orderId', '==', order.id));
   });
-  for (const collection of ['profiles', 'users', 'coachDirectory', 'coachAvailability', 'entitlements', 'demoProAccess', 'billingPending'])
+  for (const collection of ['profiles', 'users', 'coachDirectory', 'coachPhotos', 'coachAvailability', 'entitlements', 'demoProAccess', 'billingPending'])
     await db.doc(`${collection}/${uid}`).delete();
   await bucket.deleteFiles({ prefix: `recordings/${uid}/`, force: true });
   // The authentication identity is removed last, after all data operations succeed.

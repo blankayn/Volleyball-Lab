@@ -288,6 +288,19 @@ service cloud.firestore {
       }
     }
 
+    match /coachPhotos/{coachUid} {
+      allow read: if signedIn() && exists(/databases/$(database)/documents/coachDirectory/$(coachUid));
+      allow create, update: if isUser(coachUid)
+        && notDeleting(coachUid)
+        && exists(/databases/$(database)/documents/coaches/$(coachUid))
+        && request.resource.data.keys().hasAll(['photo', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['photo', 'updatedAt'])
+        && boundedString(request.resource.data.photo, 120000)
+        && (request.resource.data.photo == '' || request.resource.data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if isUser(coachUid);
+    }
+
     match /coachDirectory/{coachUid} {
       allow read: if signedIn();
       allow create, update: if isUser(coachUid) && isValidDirectory(request.resource.data);

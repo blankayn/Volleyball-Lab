@@ -338,6 +338,7 @@ export async function saveProfile(
   profile: CoachProfile,
   rosterSize: number,
   preferences?: PortalPreferences,
+  publishPortrait = false,
 ): Promise<ProfileSaveResult> {
   const now = Date.now();
   const batch = writeBatch(db);
@@ -355,7 +356,13 @@ export async function saveProfile(
   await batch.commit();
   const [settings, accountName] = await Promise.allSettled([
     preferences
-      ? setDoc(preferencesPath(uid), { ...normalizePreferences(preferences), updatedAt: now })
+      ? (async () => {
+          const data = normalizePreferences(preferences);
+          const photos = writeBatch(db);
+          photos.set(preferencesPath(uid), { ...data, updatedAt: now });
+          if (publishPortrait) photos.set(doc(db, "coachPhotos", uid), { photo: data.photo, updatedAt: now });
+          await photos.commit();
+        })()
       : Promise.resolve(),
     updateDoc(doc(db, "users", uid), { displayName: profile.name, updatedAt: now }),
   ]);

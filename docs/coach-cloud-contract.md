@@ -309,3 +309,16 @@ Active roster membership. The Coach tab is the entry card, not the full workspac
    config, then `npm install && npm run dev`.
 6. App: no extra step — the bundled `google-services.json` already configures
    the same project; Firestore and Messaging ship in the app build.
+## Coach portraits
+
+`coachPhotos/{coachUid}` contains only `photo` (an empty string or a JPEG data URI,
+at most 120,000 characters) and `updatedAt` (epoch milliseconds). The coach owns
+writes; signed-in users can read a portrait while the directory listing exists.
+Private account preferences, licence numbers and addresses are not included.
+Deleting a directory listing also makes any orphaned portrait unreadable. Account
+cleanup removes the portrait document.
+
+Android and the coach portal publish newly chosen pictures here. Opening an
+account or saving unrelated profile edits does not publish an older private
+picture. A published empty picture marks removal. Importing an existing private
+portrait requires explicit approval from its owner.

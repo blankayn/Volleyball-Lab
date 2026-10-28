@@ -292,8 +292,13 @@ fun CoachLinkSection(
             )
 
             link != null -> LinkSurface {
-                Text(link.coachName.ifBlank { "Your coach" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (link.teamName.isNotBlank()) Text(link.teamName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    CoachAvatar(link.coachUid, com.volleyballlab.player.domain.model.CoachProfile(name = link.coachName).initials(), Modifier.size(64.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(link.coachName.ifBlank { "Your coach" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        if (link.teamName.isNotBlank()) Text(link.teamName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Text("Your assignments, feedback history, and coaching questions are in your coach workspace.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))

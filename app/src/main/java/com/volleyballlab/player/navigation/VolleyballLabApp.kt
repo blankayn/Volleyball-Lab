@@ -231,6 +231,7 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
         CoachDirectoryRoute::class,
         CoachProfileRoute::class,
         MyCoachRoute::class,
+        MyCoachSectionRoute::class,
     )
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
@@ -442,6 +443,14 @@ internal fun NavHostController.navigateToCoachTab(destination: CoachTabDestinati
         popUpTo<CoachDashboardRoute> { saveState = true }
         launchSingleTop = true
         restoreState = destination != CoachTabDestination.Dashboard
+    }
+}
+
+/** Section navigation keeps the combined workspace as its single Back destination. */
+internal fun NavHostController.openMyCoachSection(section: String) {
+    navigate(MyCoachSectionRoute(section)) {
+        popUpTo<MyCoachRoute> { inclusive = false }
+        launchSingleTop = true
     }
 }
 
@@ -878,7 +887,23 @@ private fun VbNavHost(
                 onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 contentPadding = contentPadding,
                 onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
+                onOpenSection = navController::openMyCoachSection,
             )
+        }
+        composable<MyCoachSectionRoute> { entry ->
+            val workspace = remember(entry) { navController.getBackStackEntry<MyCoachRoute>() }
+            // Share loaded coach data and pending form actions with the hub.
+            CompositionLocalProvider(androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides workspace) {
+                com.volleyballlab.player.feature.coach.MyCoachScreen(
+                    onBack = { navController.popBackStack() },
+                    onBrowse = { navController.navigate(CoachDirectoryRoute) },
+                    onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
+                    contentPadding = contentPadding,
+                    onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
+                    section = entry.toRoute<MyCoachSectionRoute>().section,
+                    onOpenSection = navController::openMyCoachSection,
+                )
+            }
         }
         composable<CoachProfileRoute> { entry ->
             com.volleyballlab.player.feature.coach.CoachProfileScreen(

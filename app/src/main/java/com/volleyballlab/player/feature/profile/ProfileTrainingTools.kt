@@ -46,7 +46,7 @@ fun ProfilePhoto(path: String?, modifier: Modifier = Modifier) {
 enum class ProfileToolSection { Photo, Training }
 
 @Composable
-fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSection = ProfileToolSection.Training) {
+fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSection = ProfileToolSection.Training, publishCoachPhoto: Boolean = false) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val profile by graph.profileRepository.profile.collectAsStateWithLifecycle(AthleteProfile.Anonymous)
@@ -107,9 +107,20 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
                         val file = File(old).canonicalFile
                         if (file.parentFile == File(context.filesDir, "profile_photos").canonicalFile) file.delete()
                     } }
-                    message = "Profile photo saved on this device."
+                    message = if (publishCoachPhoto) {
+                        try {
+                            graph.coachPhotoStore.saveLocalPhoto(path, uid)
+                            "Profile photo saved."
+                        } catch (failure: Exception) {
+                            if (failure is kotlinx.coroutines.CancellationException) throw failure
+                            "Photo saved on this device. Could not share it with players; choose the photo again to retry."
+                        }
+                    } else "Profile photo saved on this device."
                 } else withContext(Dispatchers.IO) { File(path).delete() }
-            } catch (failure: Exception) { message = failure.message ?: "Photo could not be saved." }
+            } catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                message = failure.message ?: "Photo could not be saved."
+            }
             finally { busy = false }
         }
     }
@@ -147,12 +158,22 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
                 TextButton(enabled = !busy && pickingUid == null, onClick = { pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
                 if (profile.photoPath != null) TextButton(enabled = !busy, onClick = {
                     scope.launch {
+                        val uid = graph.authRepository.currentUid ?: return@launch
+                        busy = true
+                        try {
+                        if (publishCoachPhoto) graph.coachPhotoStore.saveLocalPhoto(null, uid)
+                        check(graph.authRepository.currentUid == uid)
                         val old = graph.profileRepository.profile.first().photoPath
                         graph.profileRepository.update { it.copy(photoPath = null) }
                         old?.let { path -> withContext(Dispatchers.IO) {
                             val file = File(path).canonicalFile
                             if (file.parentFile == File(context.filesDir, "profile_photos").canonicalFile) file.delete()
                         } }
+                        message = "Profile photo removed."
+                        } catch (failure: Exception) {
+                            if (failure is kotlinx.coroutines.CancellationException) throw failure
+                            message = "Could not remove the photo. Check your connection and try again."
+                        } finally { busy = false }
                     }
                 }) { Text("Remove photo") }
             }

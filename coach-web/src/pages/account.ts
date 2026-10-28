@@ -92,6 +92,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   let saves = Promise.resolve();
   let photoRevision = 0;
   let pendingPhoto = getPreferences().photo;
+  let portraitChanged = false;
   let processingPhoto = false;
   const setStatus = (text: string, error = false) => {
     if (!account.isConnected) return;
@@ -161,8 +162,9 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       const photo = await photoData(file);
       if (attempt !== photoRevision || !account.isConnected) return;
       pendingPhoto = photo;
+      portraitChanged = true;
       showPhoto();
-      photoStatus.textContent = "Photo ready. Save your profile to keep it.";
+      photoStatus.textContent = "Photo ready. Save to update your coach profile picture.";
     } catch (error) {
       if (attempt !== photoRevision) return;
       photoStatus.textContent = error instanceof Error ? error.message : "This image could not be opened.";
@@ -177,6 +179,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
     processingPhoto = false;
     submit.disabled = false;
     pendingPhoto = "";
+    portraitChanged = true;
     photoInput.value = "";
     showPhoto();
     photoStatus.textContent = "Save your profile to remove the photo.";
@@ -203,7 +206,8 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       const [profile, roster] = await Promise.all([getProfile(coachUid), getRoster(coachUid)]);
       const years = Number.parseInt(value("p-years"), 10);
       const next = { ...getPreferences(), photo: pendingPhoto, certifications: value("p-certifications") };
-      const outcome = await saveProfile(coachUid, { ...profile, name: value("p-name"), teamName: value("p-team"), organisation: value("p-org"), specialisation: value("p-spec") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, licenceNumber: value("p-licence"), notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next);
+      const outcome = await saveProfile(coachUid, { ...profile, name: value("p-name"), teamName: value("p-team"), organisation: value("p-org"), specialisation: value("p-spec") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, licenceNumber: value("p-licence"), notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next, portraitChanged);
+      if (outcome.preferencesSaved) portraitChanged = false;
       updatePreferences(coachUid, next);
       result.textContent = outcome.preferencesSaved
         ? "Profile saved"

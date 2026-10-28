@@ -61,12 +61,19 @@ test("optional account-name synchronization cannot reject a saved coaching profi
   assert.equal(state().writes.find(write => write.path === "coaches/coach").data.name, "Updated coach");
 });
 test("authorized settings store the photo and certifications with a successful result", async () => {
-  const result = await cloud.saveProfile("coach", profile(), 4, preferences());
+  const result = await cloud.saveProfile("coach", profile(), 4, preferences(), true);
   assert.equal(result.preferencesSaved, true);
   assert.equal(result.accountNameSynced, true);
   const saved = state().writes.find(write => write.path === "coaches/coach/webSettings/preferences");
   assert.equal(saved.data.photo, preferences().photo);
   assert.equal(saved.data.certifications, "Level 1");
+  assert.deepEqual(Object.keys(state().writes.find(write => write.path === "coachPhotos/coach").data).sort(), ["photo", "updatedAt"]);
+  assert.equal(state().writes.find(write => write.path === "coachPhotos/coach").data.photo, preferences().photo);
+});
+test("ordinary profile edits keep existing private photos private", async () => {
+  await cloud.saveProfile("coach", profile(), 4, preferences());
+  assert.ok(state().writes.some(write => write.path.includes("/webSettings/")));
+  assert.ok(!state().writes.some(write => write.path.startsWith("coachPhotos/")));
 });
 test("a denied core profile write still fails without claiming success or writing optional data", async () => {
   state().denyProfile = true;

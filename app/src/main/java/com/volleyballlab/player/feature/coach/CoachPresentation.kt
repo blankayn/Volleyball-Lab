@@ -77,11 +77,7 @@ internal val CoachInk = Color(0xFF242925)
                 AvailabilityTag(summary.availability, onDark = true)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(modifier = Modifier.size(72.dp), shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = .10f), border = BorderStroke(1.dp, Color.White.copy(alpha = .2f))) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(coach.initials() ?: "C", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
+                CoachAvatar(coach.coachUid, coach.initials(), Modifier.size(72.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(coach.displayName(stringResource(R.string.coach_coach_default)), color = Color.White,
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, lineHeight = 32.sp)

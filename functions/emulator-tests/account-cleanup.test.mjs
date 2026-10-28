@@ -13,6 +13,7 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
     'profiles/delete-owner': { name: 'Private' }, 'users/delete-owner': { role: 'PLAYER' },
     'coaches/delete-owner': { name: 'Coach' }, 'coachDirectory/delete-owner': { name: 'Coach' },
     'coaches/delete-owner/webSettings/preferences': { photo: 'private-thumbnail' },
+    'coachPhotos/delete-owner': { photo: 'public-thumbnail' },
     'coachEmailDeliveries/own': { coachUid: uid, state: 'sent' },
     'coachEmailDeliveries/other': { coachUid: 'other', state: 'sent' },
     'sessions/own': { ownerUid: uid, sharedWith: ['other'] },
