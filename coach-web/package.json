@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "test:profile": "node --test checks/profile-save.test.mjs",
+    "test:coach": "node --test checks/*.test.mjs",
     "preview": "vite preview --port 4173"
   },
   "dependencies": {
@@ -15,6 +17,7 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "esbuild": "^0.25.12",
     "@types/three": "^0.170.0",
     "typescript": "~5.6.3",
     "vite": "^6.0.3"

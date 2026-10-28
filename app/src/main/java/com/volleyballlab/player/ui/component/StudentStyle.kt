@@ -1,11 +1,5 @@
 package com.volleyballlab.player.ui.component
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,7 +13,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -34,22 +27,16 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.currentStateAsState
-import com.volleyballlab.player.ui.theme.LocalReduceMotion
 
-/** State is read during drawing only; ambient movement does not recompose card content. */
+/**
+ * Static art direction for the student pages.
+ *
+ * The previous ambient clock redrew a full-screen gradient on every frame, on
+ * every tab. The pools and seams are decoration; holding a fixed phase removes
+ * that perpetual work without changing the composition.
+ */
 @Composable
-private fun studentMotion(): State<Float> {
-    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
-    if (LocalReduceMotion.current || !lifecycle.isAtLeast(Lifecycle.State.RESUMED)) {
-        return rememberUpdatedState(.35f)
-    }
-    val transition = rememberInfiniteTransition(label = "studentAmbient")
-    return transition.animateFloat(0f, 1f,
-        infiniteRepeatable(tween(18_000, easing = LinearEasing), RepeatMode.Reverse), label = "courtDrift")
-}
+private fun studentMotion(): State<Float> = rememberUpdatedState(.35f)
 
 /** Low-contrast pools of the existing brand colours, behind the scrollable student pages. */
 @Composable

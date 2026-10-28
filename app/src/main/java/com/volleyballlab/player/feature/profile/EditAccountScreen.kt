@@ -1,6 +1,9 @@
 package com.volleyballlab.player.feature.profile
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,29 +21,29 @@ import androidx.compose.ui.res.stringResource
 
 @Composable
 fun EditAccountScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
+    Column(Modifier.fillMaxSize().background(Color.White).imePadding().verticalScroll(rememberScrollState()).padding(contentPadding)
+        .padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        AccountPageHeader("Edit account", onBack)
+        AccountIdentityEditor(onBack)
+    }
+}
+
+@Composable
+internal fun AccountIdentityEditor(onDone: () -> Unit) {
     val model: AuthViewModel = viewModel(factory = AuthViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
     LaunchedEffect(model) { model.loadAccount() }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding)
-        .padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row {
-            IconButton(onClick = onBack, enabled = !state.submitting) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
-            }
-            Text("Edit account", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
-        }
-        Text("Your profile card shows your name and country flag. Your address stays private.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(state.firstName, model::onFirstNameChange, label = { Text("First name") },
-            singleLine = true, enabled = !state.submitting, modifier = Modifier.fillMaxWidth())
+            singleLine = true, enabled = !state.submitting, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(state.lastName, model::onLastNameChange, label = { Text("Last name") },
-            singleLine = true, enabled = !state.submitting, modifier = Modifier.fillMaxWidth())
+            singleLine = true, enabled = !state.submitting, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
         SignUpLocationFields(state, model)
         state.error?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
-        Button(onClick = { model.saveAccount(onBack) }, enabled = !state.submitting &&
+        Button(onClick = { model.saveAccount(onDone) }, enabled = !state.submitting &&
             state.firstName.isNotBlank() && state.lastName.isNotBlank() && state.country != null,
-            modifier = Modifier.fillMaxWidth()) { Text(if (state.submitting) "Loading…" else "Save changes") }
+            shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (state.submitting) "Saving…" else "Save changes") }
+        TextButton(onClick = onDone, enabled = !state.submitting, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Cancel") }
         ProfileSyncCard(Modifier.fillMaxWidth())
     }
 }

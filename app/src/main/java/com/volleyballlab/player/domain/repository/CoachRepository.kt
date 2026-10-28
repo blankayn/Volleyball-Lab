@@ -126,6 +126,7 @@ interface CoachRepository {
 
     /**
      * Records a note and marks the matching submission reviewed in one write.
+     * Failures propagate to the composer, which retains the draft for retry.
      *
      * One call rather than two because a note that saves while the queue entry
      * stays pending leaves the coach re-reviewing a session they have already

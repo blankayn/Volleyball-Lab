@@ -5,6 +5,9 @@ import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { validConfig, verifySignature, paidCheckout, expiryForPayment } from "./billing-policy.mjs";
 export { deleteAccount, resumeAccountDeletion } from './account-deletion.mjs';
+export { notifyPlayerOnCoachNote, notifyPlayerOnAssignment, notifyCoachOnSubmission, notifyPlayerOnCoachConnection } from './push-notifications.mjs';
+export { emailCoachOnSubmission, emailCoachDeadlineReminders } from './coach-email.mjs';
+export { explainTrainingSession, removeSessionExplanation } from './session-explanation.mjs';
 
 initializeApp();
 const db = getFirestore();

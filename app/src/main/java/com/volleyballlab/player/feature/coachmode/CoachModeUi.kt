@@ -1,5 +1,7 @@
 package com.volleyballlab.player.feature.coachmode
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,7 +25,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material3.Button
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,51 +59,20 @@ import androidx.compose.ui.unit.sp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.ui.component.pressScale
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbTween
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
-/**
- * The coach shell's design language, in one file.
- *
- * ## What this is
- *
- * The coach half of the app is a stack of dashboards, and dashboards go wrong in
- * exactly one way: six screens that each invent their own card, their own stat
- * tile and their own empty state, all almost matching. Every surface a coach
- * screen draws comes from here, so the drift is visible in one place.
- *
- * ## The visual system
- *
- * White cards floating on the pale Alice Blue page, generous corner radii, and
- * colour used sparingly as *categorisation* rather than decoration:
- *
- * - **Cards are `surfaceContainerLowest`**, which is pure white in the light
- *   scheme, with a soft shadow rather than a border. That is the one substantive
- *   departure from the rest of the app, where panels sit at `surfaceContainerHigh`
- *   and read as recessed. A coach page is a long scroll of unrelated blocks, and
- *   lifting them off the page is what keeps that legible; a training screen is one
- *   thing at a time and does not need it.
- * - **Icon chips carry a [CoachAccent]** - a pale tint behind a saturated glyph.
- *   Four tones, assigned per *kind of thing* and then kept fixed, so a coach learns
- *   that violet means paperwork and green means sessions without being told.
- * - **The rust primary stays an affordance.** It marks the thing to tap and the
- *   thing that needs attention, exactly as `Color.kt` insists, and it is never
- *   spent on a decorative fill. That is why the accent tones exist at all.
- *
- * ## Nothing here is promoted into `ui/component`
- *
- * These are specific in their *use*, not their rendering, and a player screen
- * reaching for a "coach stat strip" would be a smell rather than a reuse win.
- */
+/** Shared coach surfaces, typography, actions and status treatments. */
 
 // ---------------------------------------------------------------------------
 // Tokens
 // ---------------------------------------------------------------------------
 
 /** Corner radius for the large cards that make up a coach page. */
-val CoachCardShape = RoundedCornerShape(24.dp)
+val CoachCardShape = RoundedCornerShape(22.dp)
 
 /** Corner radius for things that sit *inside* a card - tiles, chips, wells. */
 val CoachInnerShape = RoundedCornerShape(16.dp)
@@ -106,7 +81,7 @@ val CoachInnerShape = RoundedCornerShape(16.dp)
 val CoachChipShape = RoundedCornerShape(14.dp)
 
 /** The pill used for primary actions and for the small "view all" chips. */
-val CoachPillShape = RoundedCornerShape(50)
+val CoachPillShape = RoundedCornerShape(14.dp)
 
 /**
  * The lift that separates a card from the page.
@@ -114,7 +89,7 @@ val CoachPillShape = RoundedCornerShape(50)
  * Deliberately small. At 2dp the shadow reads as a soft edge rather than as a
  * drop shadow, which is what keeps a page of eight cards from looking cluttered.
  */
-val CoachCardElevation = 2.dp
+val CoachCardElevation = 0.dp
 
 /** Standard page gutter. Every coach screen indents its content by this. */
 val CoachGutter = 20.dp
@@ -186,9 +161,9 @@ fun CoachAccent.colors(): CoachAccentColors = if (MaterialTheme.colorScheme.isDa
 } else {
     when (this) {
         CoachAccent.Rust -> CoachAccentColors(Color(0xFFFDEBDD), Color(0xFFCC5500))
-        CoachAccent.Indigo -> CoachAccentColors(Color(0xFFE8EEFD), Color(0xFF3B5BDB))
+        CoachAccent.Indigo -> CoachAccentColors(Color(0xFFEEEFEA), Color(0xFF414C45))
         CoachAccent.Green -> CoachAccentColors(Color(0xFFE3F5EA), Color(0xFF12855A))
-        CoachAccent.Violet -> CoachAccentColors(Color(0xFFF0EAFB), Color(0xFF7048C4))
+        CoachAccent.Violet -> CoachAccentColors(Color(0xFFF2EDE5), Color(0xFF796044))
     }
 }
 
@@ -238,10 +213,12 @@ fun CoachCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .animateContentSize(animationSpec = vbTween())
             .tappable(onClick),
         shape = CoachCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
         shadowElevation = CoachCardElevation,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f)),
     ) {
         Column(Modifier.padding(padding), content = content)
     }
@@ -266,6 +243,7 @@ fun CoachRowCard(
         shape = CoachCardShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
         shadowElevation = CoachCardElevation,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -279,67 +257,22 @@ fun CoachRowCard(
 // Hero
 // ---------------------------------------------------------------------------
 
-/**
- * The two-tone greeting at the top of a coach tab.
- *
- * [lead] in ink and [accent] in the primary colour, on consecutive lines at
- * display size. The split is what gives the page its one moment of scale: below
- * this everything is card-sized, so the header has to do the work of announcing
- * which screen you are on without a title bar.
- *
- * ## No illustration
- *
- * The reference design this shell is styled after puts a character mascot beside
- * the greeting. There is none here, by decision rather than omission: this project
- * has no mascot art, and a stand-in - the app logo in a tinted disc was the
- * obvious one - reads as a placeholder someone forgot to replace. Type alone at
- * this size carries the header perfectly well, and the full width makes the two
- * lines breathe rather than wrap.
- */
+/** Compact dashboard greeting with the team name as context. */
 @Composable
 fun CoachHero(
     lead: String,
-    accent: String,
     body: String?,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = CoachGutter, end = CoachGutter, top = 16.dp, bottom = 8.dp),
-    ) {
-        Text(
-            text = lead,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
-            lineHeight = 38.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = accent,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
-            lineHeight = 38.sp,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        if (!body.isNullOrBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+    Column(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        WorkspaceEyebrow(body?.takeIf { it.isNotBlank() } ?: "Coach workspace")
+        Text(lead.trimEnd(',', ' ') + ", coach", style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text("Your team, ready for the next step.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-/**
- * The lighter page header, for the tabs that are not the dashboard.
- *
- * Same weight and size as [CoachHero]'s first line, but one tone and no art. The
- * two-tone hero is a *welcome*, and a welcome belongs on the screen you land on;
- * repeating it on every tab would make each one feel like a separate app.
- */
+/** Consistent tab heading with a quiet eyebrow and optional action. */
 @Composable
 fun CoachPageHeader(
     title: String,
@@ -347,38 +280,16 @@ fun CoachPageHeader(
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = CoachGutter, end = CoachGutter, top = 18.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    Row(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            WorkspaceEyebrow(subtitle?.takeIf { it.isNotBlank() } ?: "Coach workspace")
+            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         }
         trailing?.invoke()
     }
 }
 
-/**
- * The header for a detail screen: back arrow, title, optional subtitle and slot.
- *
- * Detail screens keep a back affordance where the tabs keep a hero, because they
- * are pushed rather than switched to and the difference has to be visible before
- * the user reaches for the system gesture.
- */
+/** A back control and the identity of the detail being viewed. */
 @Composable
 fun CoachDetailHeader(
     title: String,
@@ -388,37 +299,16 @@ fun CoachDetailHeader(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 6.dp, end = CoachGutter, top = 8.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.cd_back),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
+    Row(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = CoachChipShape, color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back), Modifier.size(21.dp)) }
         }
-        if (leading != null) {
-            leading()
-            Spacer(Modifier.width(12.dp))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Spacer(Modifier.width(14.dp))
+        if (leading != null) { leading(); Spacer(Modifier.width(12.dp)) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            if (!subtitle.isNullOrBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         trailing?.invoke()
     }
@@ -447,27 +337,19 @@ data class CoachStat(
     val onAction: (() -> Unit)? = null,
 )
 
-/**
- * The headline numbers, as one card of evenly-weighted columns.
- *
- * One card rather than a grid of separate tiles, because these are four readings
- * of a single subject - the team - and separating them into four cards would
- * imply four unrelated things. Columns share the width evenly so the row stays
- * balanced whether it holds two figures or four.
- */
+/** A two-column summary that stays readable on narrow screens. */
 @Composable
 fun CoachStatStrip(
     stats: List<CoachStat>,
     modifier: Modifier = Modifier,
 ) {
     if (stats.isEmpty()) return
-    CoachCard(modifier = modifier, padding = 16.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            stats.forEach { stat ->
-                StatColumn(stat, Modifier.weight(1f))
+    CoachCard(modifier, padding = 0.dp) {
+        stats.chunked(2).forEachIndexed { index, pair ->
+            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { stat -> StatColumn(stat, Modifier.weight(1f)) }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -475,41 +357,14 @@ fun CoachStatStrip(
 
 @Composable
 private fun StatColumn(stat: CoachStat, modifier: Modifier = Modifier) {
-    val accent = stat.accent.colors()
-    Column(modifier) {
-        CoachIconChip(icon = stat.icon, accent = stat.accent)
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = stat.value,
-            style = MaterialTheme.typography.headlineSmall.merge(VbTabularNumerals),
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stat.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (stat.actionLabel != null && stat.onAction != null) {
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.clickable(onClick = stat.onAction),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stat.actionLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accent.ink,
-                )
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = accent.ink,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+    Column(modifier.clip(CoachInnerShape).tappable(stat.onAction).padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stat.value, style = MaterialTheme.typography.headlineMedium.merge(VbTabularNumerals),
+                fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Icon(stat.icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Text(stat.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (stat.onAction != null && stat.actionLabel != null) Text(stat.actionLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -546,7 +401,7 @@ fun CoachIconChip(
  * The one dark card on a page: a single prompt the coach is being asked to act on.
  *
  * Inverted against everything around it because that is the entire mechanism -
- * on a page of white cards, one navy card is unmissable without needing a colour,
+ * on a page of white cards, one charcoal card is unmissable without needing a colour,
  * a badge or a bigger typeface. Which means the rule is *one per screen*. A second
  * one costs the first all of its emphasis.
  */
@@ -565,6 +420,7 @@ fun CoachFeatureCard(
         shape = CoachCardShape,
         color = CoachFeatureSurface,
         shadowElevation = CoachCardElevation,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f)),
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
@@ -615,11 +471,11 @@ fun CoachFeatureCard(
  * mode and still distinct from it in dark mode. A role would follow the scheme and
  * the card would vanish into a dark page.
  */
-private val CoachFeatureSurface = Color(0xFF1B2440)
-private val CoachFeatureEyebrow = Color(0xFFFFA45C)
-private val CoachFeatureBody = Color(0xFFB4BDD4)
+private val CoachFeatureSurface = Color(0xFF282D29)
+private val CoachFeatureEyebrow = Color(0xFFF1B58F)
+private val CoachFeatureBody = Color(0xFFD9DCD4)
 
-/** The filled pill. The one control that always means "do the main thing here". */
+/** Primary coach action with a 50dp minimum touch target. */
 @Composable
 fun CoachPillButton(
     label: String,
@@ -627,27 +483,8 @@ fun CoachPillButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    Surface(
-        modifier = modifier
-            .tappable(onClick, enabled = enabled),
-        shape = CoachPillShape,
-        color = if (enabled) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
-        },
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (enabled) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
-        )
+    Button(onClick = onClick, enabled = enabled, shape = CoachPillShape, modifier = modifier.heightIn(min = 50.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
 }
 
@@ -658,19 +495,8 @@ fun CoachPillChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier
-            .tappable(onClick),
-        shape = CoachPillShape,
-        color = CoachAccent.Rust.colors().tint,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = CoachAccent.Rust.colors().ink,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-        )
+    TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), shape = CoachPillShape) {
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -848,13 +674,7 @@ data class CoachAction(
     val onClick: () -> Unit,
 )
 
-/**
- * A row of tinted shortcut tiles.
- *
- * Each tile is a whole tone rather than a white card with a coloured icon,
- * because these are peers competing for the same glance and a shared white
- * background would make them read as one control with three labels.
- */
+/** Full-width shortcuts with an icon, explanatory label and navigation affordance. */
 @Composable
 fun CoachActionRow(
     actions: List<CoachAction>,
@@ -862,59 +682,22 @@ fun CoachActionRow(
     title: String? = null,
 ) {
     if (actions.isEmpty()) return
-    CoachCard(modifier = modifier, padding = 14.dp) {
-        if (title != null) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            actions.forEach { action ->
-                ActionTile(action, Modifier.weight(1f))
-            }
-        }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (title != null) Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 4.dp))
+        actions.forEach { action -> ActionTile(action, Modifier.fillMaxWidth()) }
     }
 }
 
 @Composable
 private fun ActionTile(action: CoachAction, modifier: Modifier = Modifier) {
-    val colors = action.accent.colors()
-    Surface(
-        modifier = modifier
-            .tappable(action.onClick, enabled = action.enabled),
-        shape = CoachInnerShape,
-        // A disabled tile drops to the page's own container tone rather than
-        // fading its tint, so "not available" never looks like "faintly available".
-        color = if (action.enabled) colors.tint else MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-            Icon(
-                imageVector = action.icon,
-                contentDescription = null,
-                tint = if (action.enabled) colors.ink else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = action.title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = if (action.enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Text(
-                text = action.subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    CoachRowCard(modifier, onClick = action.onClick.takeIf { action.enabled }) {
+        CoachIconChip(action.icon, action.accent, size = 36.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(action.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(action.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Icon(Icons.Rounded.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -997,7 +780,7 @@ fun InitialsAvatar(
     Box(
         modifier = modifier
             .size(diameter.dp)
-            .clip(CircleShape)
+            .clip(RoundedCornerShape((diameter * .29f).dp))
             .background(colors.tint),
         contentAlignment = Alignment.Center,
     ) {

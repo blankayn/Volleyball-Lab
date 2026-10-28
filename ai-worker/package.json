@@ -1,0 +1,14 @@
+{
+  "name": "volleyball-lab-session-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/worker.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply AI_DB --remote"
+  },
+  "devDependencies": { "wrangler": "4.153.0" }
+}

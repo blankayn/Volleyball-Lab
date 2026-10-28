@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SportsVolleyball
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -195,101 +197,81 @@ class ProfileViewModel(
 /** The athlete's identity, training record, and account controls. */
 @Composable
 fun ProfileScreen(
-    onSignedOut: () -> Unit,
-    contentPadding: PaddingValues,
-    modifier: Modifier = Modifier,
-    onEditAccount: () -> Unit = {},
+    onSignedOut: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier,
+    onBrowseCoaches: () -> Unit = {},
 ) {
-    val viewModel: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var editingName by rememberSaveable { mutableStateOf(false) }
-    val profileColors = MaterialTheme.colorScheme.copy(
-        primary = ProfileOrange,
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFFFD9BF),
-        onPrimaryContainer = Color(0xFF331500),
-    )
-
-    MaterialTheme(
-        colorScheme = profileColors,
-        shapes = MaterialTheme.shapes.copy(large = RoundedCornerShape(24.dp)),
-    ) {
-        if (!state.loaded) {
-            GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier)
-        } else {
-            LazyColumn(
-                modifier = modifier.fillMaxSize().studentBackground(),
-                contentPadding = contentPadding,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                item {
-                    EntranceAnimation(index = 0) {
-                        IdentityCard(
-                            profile = state.profile,
-                            onEditName = onEditAccount,
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
-                        )
-                    }
-                }
-                item { ProfileSyncCard(Modifier.padding(horizontal = 20.dp).fillMaxWidth()) }
-                item {
-                    EntranceAnimation(index = 1) {
-                        TotalsCard(state.totals, Modifier.padding(horizontal = 20.dp))
-                    }
-                }
-                item {
-                    ProfileSectionHeading(
-                        title = "Training preferences",
-                        subtitle = "Manage audio and vibration during training.",
-                    )
-                }
-                item {
-                    CoachingPreferencesCard(
-                        preferences = state.coachingPreferences,
-                        onVoiceChanged = viewModel::onVoiceChanged,
-                        onHapticsChanged = viewModel::onHapticsChanged,
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
-                item {
-                    ProfileSectionHeading(
-                        title = stringResource(R.string.profile_section_account),
-                        subtitle = "Manage your subscription, privacy, and security.",
-                    )
-                }
-                item { ProPlanCard(Modifier.padding(horizontal = 20.dp)) }
-                item { AccountSecurityCard(Modifier.padding(horizontal = 20.dp)) }
-                item { PrivacyCard(Modifier.padding(horizontal = 20.dp)) }
-                item { DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = 20.dp)) }
-                item {
-                    AccountCard(
-                        account = state.account,
-                        onSignOut = { viewModel.onSignOut(onSignedOut) },
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
-                item { Spacer(Modifier.height(16.dp)) }
-            }
-        }
-        if (editingName) {
-            NameDialog(
-                initialName = state.profile.name,
-                onConfirm = {
-                    viewModel.onNameChanged(it)
-                    editingName = false
-                },
-                onDismiss = { editingName = false },
+    val model: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
+    val state by model.uiState.collectAsStateWithLifecycle()
+    if (!state.loaded) { GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier); return }
+    AccountMenuScreen(coach = false, onLogout = { model.onSignOut(onSignedOut) }, contentPadding = contentPadding, modifier = modifier,
+        banner = {
+            com.volleyballlab.player.feature.coachmode.CoachWorkspaceIdentity(
+                name = state.profile.name.ifBlank { state.account?.displayName.orEmpty() }.ifBlank { "Player" },
+                subtitle = state.profile.position?.let { stringResource(it.displayName) } ?: "Your training workspace",
+                initials = state.profile.initials(), eyebrow = "Student profile",
+                portrait = state.profile.photoPath?.let { path -> { ProfilePhoto(path, Modifier.fillMaxSize()) } },
             )
+        },
+        sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut) },
+    )
+}
+
+@Composable
+private fun StudentAccountSectionContent(
+    section: AccountSection, state: ProfileUiState, model: ProfileViewModel,
+    onBrowseCoaches: () -> Unit, onSignedOut: () -> Unit,
+) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        when (section) {
+            AccountSection.Personal -> {
+                PersonalInformationSummary(state.profile.name.ifBlank { state.account?.displayName.orEmpty() }.ifBlank { "Player" }, state.account?.email) { editing = !editing }
+                if (editing) AccountIdentityEditor(onDone = { editing = false })
+                ProfileTrainingTools(section = ProfileToolSection.Photo)
+                PlayerDetailsCard(state.profile, model::onPositionSelected, model::onHandSelected)
+                ProfileSyncCard(Modifier.fillMaxWidth())
+                TotalsCard(state.totals)
+            }
+            AccountSection.Plan -> ProPlanCard(onBrowseCoaches = onBrowseCoaches)
+            AccountSection.Settings -> InlineAccountSettings(coach = false) { selected ->
+                StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut)
+            }
+            AccountSection.Training -> {
+                CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged)
+                ProfileTrainingTools(section = ProfileToolSection.Training)
+            }
+            AccountSection.Security -> AccountSecurityCard()
+            AccountSection.Notifications -> NotificationInboxEntry()
+            AccountSection.Privacy -> {
+                PrivacyCard()
+                DeleteAccountCard(onSignedOut)
+            }
+            AccountSection.Help -> AccountHelpContent(coach = false)
+            else -> Unit
         }
     }
 }
 
 @Composable
-private fun ProfileSectionHeading(title: String, subtitle: String) {
-    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun PlayerDetailsCard(profile: AthleteProfile, onPosition: (CourtPosition) -> Unit, onHand: (DominantHand) -> Unit) {
+    Surface(shape = RoundedCornerShape(22.dp), color = AccountMenuSurface, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Player details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Court position", style = MaterialTheme.typography.labelMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CourtPosition.entries.forEach { position ->
+                    androidx.compose.material3.FilterChip(profile.position == position, { onPosition(position) },
+                        label = { Text(stringResource(position.displayName)) }, modifier = Modifier.heightIn(min = 44.dp))
+                }
+            }
+            Text("Dominant hand", style = MaterialTheme.typography.labelMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DominantHand.entries.forEach { hand ->
+                    androidx.compose.material3.FilterChip(profile.dominantHand == hand, { onHand(hand) },
+                        label = { Text(stringResource(hand.displayName)) }, modifier = Modifier.heightIn(min = 44.dp))
+                }
+            }
+        }
     }
 }
 
@@ -304,7 +286,7 @@ private fun CoachingPreferencesCard(
     StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = AccountMenuSurface,
     ) {
         Column(Modifier.padding(20.dp)) {
             Text("Live coaching", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -367,119 +349,6 @@ private fun CoachingPreferenceRow(
     }
 }
 
-/**
- * The account section: who is signed in and sign-out.
- */
-@Composable
-private fun AccountCard(
-    account: AuthUser?,
-    onSignOut: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    StudentCard(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("Sign out", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            if (account != null) {
-                Text(
-                    text = stringResource(R.string.profile_signed_in_as, account.email),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-
-            TextButton(
-                onClick = onSignOut,
-                shape = VbButtonShape,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.profile_sign_out),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun IdentityCard(
-    profile: AthleteProfile,
-    onEditName: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF702900), Color(0xFFCC5500)))),
-    ) {
-        CourtCardArtwork(Modifier.matchParentSize())
-        Column(Modifier.padding(24.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.SportsVolleyball, contentDescription = null, tint = Color(0xFFFFD6AD), modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("STUDENT PROFILE", color = Color(0xFFFFE2C7), style = MaterialTheme.typography.labelMedium,
-                    letterSpacing = 1.6.sp, modifier = Modifier.weight(1f))
-                IconButton(onClick = onEditName, modifier = Modifier.size(48.dp).background(Color.White.copy(alpha = .12f), CircleShape)) {
-                    Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.profile_edit_name), tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StudentCard(
-                    modifier = Modifier.size(82.dp),
-                    shape = CircleShape,
-                    color = Color(0xFFFFF0DF),
-                    border = BorderStroke(3.dp, Color.White.copy(alpha = .75f)),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        val initials = profile.initials()
-                        if (initials == null) {
-                            Icon(Icons.Rounded.Person, contentDescription = null, tint = ProfileOrange, modifier = Modifier.size(40.dp))
-                        } else {
-                            Text(initials, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color(0xFF743507))
-                        }
-                        ProfilePhoto(profile.photoPath, Modifier.fillMaxSize())
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = profile.name.takeIf { profile.hasName } ?: stringResource(R.string.profile_name_unset),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(5.dp))
-                    Text("Volleyball Lab athlete", style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFE2C7))
-                    profile.address?.let { address ->
-                        Spacer(Modifier.height(5.dp))
-                        Text(countryFlag(address.country.id), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { contentDescription = address.country.name })
-                    }
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                IdentityTag(profile.position?.let { stringResource(it.displayName) } ?: "Player")
-                profile.dominantHand?.let { IdentityTag(stringResource(it.displayName)) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun IdentityTag(text: String) {
-    Surface(shape = CircleShape, color = Color.White.copy(alpha = .12f), border = BorderStroke(1.dp, Color.White.copy(alpha = .16f))) {
-        Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium, color = Color.White)
-    }
-}
-
 @Composable
 private fun TotalsCard(totals: TrainingTotals, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -537,7 +406,7 @@ internal fun PrivacyCard(modifier: Modifier = Modifier) {
     StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = AccountMenuSurface,
     ) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.Top) {
             Icon(Icons.Rounded.Shield, contentDescription = null, tint = ProfileOrange, modifier = Modifier.size(24.dp))
@@ -558,45 +427,6 @@ internal fun PrivacyCard(modifier: Modifier = Modifier) {
             }
         }
     }
-}
-
-@Composable
-private fun NameDialog(
-    initialName: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var draft by remember { mutableStateOf(initialName) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.profile_edit_name)) },
-        text = {
-            OutlinedTextField(
-                value = draft,
-                // Truncated on input rather than validated on submit: a length
-                // limit the athlete only discovers when they press Save is a worse
-                // experience than one that simply stops accepting characters.
-                onValueChange = { draft = it.take(AthleteProfile.MAX_NAME_LENGTH) },
-                singleLine = true,
-                label = { Text(stringResource(R.string.profile_name_label)) },
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                    imeAction = ImeAction.Done,
-                ),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(draft) }) {
-                Text(stringResource(R.string.profile_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.capture_cancel))
-            }
-        },
-    )
 }
 
 private val ProfileOrange = Color(0xFFCC5500)

@@ -63,14 +63,17 @@ object VbMotion {
     /** Screen-level transitions and container transforms. */
     const val Long = 450
 
+    /** A page-to-page fade. Short enough to stay out of the way of the content. */
+    const val Navigation = 180
+
     /** Splash beats and the result reveal only. */
     const val ExtraLong = 700
 
     /** Stagger step between siblings in a list entrance. */
-    const val StaggerStep = 45
+    const val StaggerStep = 30
 
     /** Ceiling on cumulative stagger delay, so long lists do not crawl in. */
-    const val StaggerMaxDelay = 270
+    const val StaggerMaxDelay = 180
 
     // Material 3 easing curves.
     val Emphasized: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)

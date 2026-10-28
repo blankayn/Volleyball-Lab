@@ -47,4 +47,10 @@ class InMemorySessionRepository : SessionRepository {
     override suspend fun delete(id: String) {
         state.update { current -> current.filterNot { it.id == id } }
     }
+
+    override suspend fun deleteVideo(id: String) {
+        state.update { current ->
+            current.map { if (it.id == id) it.copy(videoPath = null) else it }
+        }
+    }
 }

@@ -149,6 +149,25 @@ class DataStoreSessionRepository(
         cloudMirror?.delete(ownerUid, id)
     }
 
+    override suspend fun deleteVideo(id: String) {
+        val ownerUid = authRepository.currentUid ?: return
+        val scope = UserScope.of(ownerUid) ?: return
+        var deletedVideo: String? = null
+        var updatedSession: SessionResult? = null
+        context.sessionStore.edit { preferences ->
+            val key = scope.string(KEY_SESSIONS)
+            val sessions = preferences[key].decodeSessions()
+            val target = sessions.firstOrNull { it.id == id } ?: return@edit
+            deletedVideo = target.videoPath
+            updatedSession = target.copy(videoPath = null)
+            preferences[key] = json.encodeToString(
+                sessions.map { if (it.id == id) target.copy(videoPath = null) else it }.map { it.toRecord() },
+            )
+        }
+        deletedVideo?.let(::deletePrivateVideo)
+        updatedSession?.let { cloudMirror?.upload(ownerUid, it) }
+    }
+
     private fun deletePrivateVideo(path: String) {
         runCatching {
             val directory = File(context.filesDir, "training_videos").canonicalFile

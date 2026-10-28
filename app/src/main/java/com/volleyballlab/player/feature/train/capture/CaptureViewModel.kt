@@ -14,7 +14,6 @@ import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.SessionAngleStage
-import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.domain.repository.CoachingPreferencesRepository
@@ -34,10 +33,8 @@ import com.volleyballlab.player.pose.analysis.ReactiveCoachingEngine
 import com.volleyballlab.player.pose.analysis.CoachingEvent
 import com.volleyballlab.player.pose.analysis.Side
 import com.volleyballlab.player.pose.model.PoseFrame
-import com.volleyballlab.player.pose.review.CapturedReviewInput
 import com.volleyballlab.player.pose.review.CapturedReviewWriter
 import com.volleyballlab.player.pose.review.RecordingVideoClock
-import com.volleyballlab.player.pose.review.ReviewIssue
 import com.volleyballlab.player.pose.quality.PoseQuality
 import com.volleyballlab.player.pose.quality.PoseQualityValidator
 import java.io.File
@@ -55,11 +52,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Where the capture screen is in its lifecycle.
@@ -130,6 +124,9 @@ sealed interface CaptureUiState {
 
     /** Post-hoc scoring, after recording stops. */
     data object Analysing : CaptureUiState
+
+    /** Local storage failed; the prepared result remains available for retry. */
+    data object SaveFailed : CaptureUiState
 
     data class Finished(val sessionId: String, val repCount: Int) : CaptureUiState
 }
@@ -271,7 +268,6 @@ class CaptureViewModel(
     private var lastRepSummary = ""
     private var lastFrameRecordingElapsedMs = 0L
 
-    private data class CaptureChunk(val stageIndex: Int, val angle: CameraAngle, val frames: List<PoseFrame>)
 
     private val qualityValidator = PoseQualityValidator()
     private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill))
@@ -299,6 +295,7 @@ class CaptureViewModel(
     private val recordedFrames = mutableListOf<PoseFrame>()
     private var recordingStartedAtEpochMs = 0L
     private var recordingSessionId: String? = null
+    private var pendingCompletion: CaptureCompletion? = null
     private var videoFinalization: CompletableDeferred<String?>? = null
     private val videoClock = RecordingVideoClock()
     private val replayFrames = mutableListOf<PoseFrame>()
@@ -811,57 +808,43 @@ class CaptureViewModel(
         reactiveCoach.cancelPendingGuidance()
         _uiState.value = CaptureUiState.Analysing
 
-        viewModelScope.launch {
-            val segments = chunks.toList()
-            val sessionId = requireNotNull(recordingSessionId)
-            val replay = replayFrames.toList()
-            val scored = withContext(Dispatchers.Default) {
-                val parts = segments.map { chunk -> sessionScorer.scoreWithReview(
-                    sessionId = sessionId, skill = skill, drillId = drillId,
-                    startedAtEpochMs = recordingStartedAtEpochMs, frames = chunk.frames,
-                    receivingPostureEvaluator = if (chunk.angle == CameraAngle.Front) receivingPostureEvaluator else null,
-                    angle = if (_guidedOptions.value.enabled) chunk.angle else null,
-                ) }
-                var offset = 0
-                val issues = mutableListOf<ReviewIssue>()
-                parts.forEach { part ->
-                    issues += part.issues.map { it.copy(repNumber = it.repNumber + offset) }
-                    offset += part.session.repCount
-                }
-                val result = SessionResult(id = sessionId, skill = skill, drillId = drillId,
-                    assignmentId = assignmentId,
-                    startedAtEpochMs = recordingStartedAtEpochMs,
-                    durationMs = parts.sumOf { it.session.durationMs },
-                    reps = parts.flatMap { it.session.reps }.mapIndexed { index, rep -> rep.copy(index = index) },
-                    angleStages = if (_guidedOptions.value.enabled) stageSummaries.toList() else emptyList(),
-                )
-                Triple(result, issues.toList(), parts.sumOf { it.assessedCueCount })
-            }
-            val result = scored.first
-            val videoPath = withTimeoutOrNull(VIDEO_FINALIZE_TIMEOUT_MS) {
-                videoFinalization?.await()
-            }
-            videoFinalization?.cancel()
-            if (videoPath != null && capturedReviewWriter != null) {
-                val origin = videoClock.origin() ?: replay.firstOrNull()?.cameraTimestampMs
-                if (origin != null) {
-                    try {
-                        capturedReviewWriter.save(videoPath, skill, CapturedReviewInput(replay, scored.second, scored.third, origin))
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                    catch (error: Exception) { Log.w("CaptureViewModel", "Could not save captured video feedback", error) }
-                }
-            }
-            // Saved even when no reps were detected. An empty session is a real
-            // outcome the athlete should see recorded, and discarding it silently
-            // would look like the app lost their work.
-            sessionRepository.save(result.copy(videoPath = videoPath))
-            recordedFrames.clear()
-            replayFrames.clear()
-            chunks.clear()
-            recordingSessionId = null
-            videoFinalization = null
-            _uiState.value = CaptureUiState.Finished(sessionId, result.repCount)
+        pendingCompletion = CaptureCompletion(
+            input = CaptureCompletionInput(
+                sessionId = requireNotNull(recordingSessionId), skill = skill, drillId = drillId,
+                assignmentId = assignmentId, startedAtEpochMs = recordingStartedAtEpochMs,
+                chunks = chunks.toList(), guidedAngles = _guidedOptions.value.enabled,
+                angleStages = stageSummaries.toList(), replayFrames = replayFrames.toList(),
+            ),
+            scorer = sessionScorer, sessions = sessionRepository,
+            videoFinalization = videoFinalization, videoOrigin = videoClock::origin,
+            reviewWriter = capturedReviewWriter, receivingPostureEvaluator = receivingPostureEvaluator,
+        )
+        viewModelScope.launch { completePendingCapture() }
+    }
+
+    fun onRetrySaveRequested() {
+        if (_uiState.value != CaptureUiState.SaveFailed || pendingCompletion == null) return
+        _uiState.value = CaptureUiState.Analysing
+        viewModelScope.launch { completePendingCapture() }
+    }
+
+    private suspend fun completePendingCapture() {
+        val completion = pendingCompletion ?: return
+        val result = try {
+            completion.complete()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            _uiState.value = CaptureUiState.SaveFailed
+            return
         }
+        recordedFrames.clear()
+        replayFrames.clear()
+        chunks.clear()
+        recordingSessionId = null
+        videoFinalization = null
+        pendingCompletion = null
+        _uiState.value = CaptureUiState.Finished(result.id, result.repCount)
     }
 
     /** Completes the recording once CameraX has closed the MP4 file. */
@@ -920,7 +903,6 @@ class CaptureViewModel(
         const val COUNTDOWN_SECONDS = 3
         const val MAX_RECORDING_MS = 90_000L
         const val MAX_GUIDED_RECORDING_MS = 300_000L
-        private const val VIDEO_FINALIZE_TIMEOUT_MS = 10_000L
         private const val TIMER_TICK_MS = 100L
 
         /**

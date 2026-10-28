@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="coach_search_players">Search players by name</string>
+    <string name="coach_search_clear">Clear search</string>
+    <string name="coach_search_count">%1$d results</string>
+    <string name="coach_search_empty_title">No matching players</string>
+    <string name="coach_search_empty_body">Try another name or clear the search to see your team.</string>
+    <string name="coach_review_first">Review a session</string>
+    <string name="coach_requests_focus_body">Review the player requests so they can start sharing sessions with your team.</string>
+    <string name="coach_reviews_show_all">Show all %1$d reviews</string>
+    <string name="coach_reviews_show_less">Show fewer reviews</string>
+    <string name="coach_feedback_sending">Sending…</string>
+    <string name="coach_feedback_failed">Feedback could not be sent. Your draft is still here. Check your connection and try again.</string>
+    <string name="coach_feedback_count">%1$d/%2$d</string>
+</resources>

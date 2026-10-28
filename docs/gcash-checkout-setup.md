@@ -1,6 +1,10 @@
 # GCash checkout setup
 
 Status: app and backend code prepared; merchant activation and live payment testing pending.
+Temporary demo: enter `123456` in Subscribe to Pro to save account-scoped
+`demoProAccess/{uid}` through Firestore rules. This grants Pro, including coach
+requests, without Cloud Functions or a payment account. Remove the demo collection
+rules and its `hasPro` branch before launching real payments.
 Distribution: APK, as requested. Free detailed reports: 5 per Monday-to-Sunday week.
 Owner Pro: Firebase UID `4j06UlYqbrbLzujmfi8VW5yEIOq2`, confirmed for `kirt@gmail.com`.
 

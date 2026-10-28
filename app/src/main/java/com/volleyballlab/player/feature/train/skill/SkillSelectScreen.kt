@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,8 +41,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.ui.component.EntranceAnimation
@@ -55,9 +59,9 @@ import java.util.Locale
 /**
  * Entry point of the training flow: choose one of the five MVP skills.
  *
- * No ViewModel. The skill list is a compile-time constant with no state to hold
- * and nothing to load, so introducing one would add a lifecycle-aware object
- * whose only job is to return [Skill.All].
+ * The skills themselves are a compile-time constant. The ViewModel adds only the
+ * stored form progress for each one, so the card can show whether the athlete has
+ * trained it without the screen doing aggregation during composition.
  *
  * ## Why this screen carries its own colours
  *
@@ -76,6 +80,8 @@ fun SkillSelectScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
+    val viewModel: SkillSelectViewModel = viewModel(factory = SkillSelectViewModel.Factory)
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
     LazyColumn(
         modifier = modifier.fillMaxSize().studentBackground(),
         contentPadding = contentPadding,
@@ -111,6 +117,8 @@ fun SkillSelectScreen(
                 SkillCard(
                     skill = skill,
                     position = index + 1,
+                    progress = progress.bySkill[skill],
+                    progressLoaded = progress.loaded,
                     onClick = { onSkillSelected(skill) },
                 )
             }
@@ -129,7 +137,13 @@ fun SkillSelectScreen(
  * the two occupy the same rectangle without either needing a scrim.
  */
 @Composable
-private fun SkillCard(skill: Skill, position: Int, onClick: () -> Unit) {
+private fun SkillCard(
+    skill: Skill,
+    position: Int,
+    progress: SkillFormProgress?,
+    progressLoaded: Boolean,
+    onClick: () -> Unit,
+) {
     val palette = paletteFor(skill)
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -191,6 +205,8 @@ private fun SkillCard(skill: Skill, position: Int, onClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.width(DESCRIPTION_WIDTH_DP.dp),
                     )
+                    Spacer(Modifier.height(6.dp))
+                    SkillProgressLine(progress, progressLoaded, palette.accent)
                 }
             }
 
@@ -201,6 +217,41 @@ private fun SkillCard(skill: Skill, position: Int, onClick: () -> Unit) {
                     .padding(14.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun SkillProgressLine(
+    progress: SkillFormProgress?,
+    loaded: Boolean,
+    accent: Color,
+) {
+    if (!loaded) return
+    val text = when {
+        progress == null -> stringResource(R.string.skill_progress_none)
+        progress.meanScore == null -> if (progress.sessionCount == 1) {
+            stringResource(R.string.skill_progress_one_no_score)
+        } else {
+            stringResource(R.string.skill_progress_many_no_score, progress.sessionCount)
+        }
+        progress.sessionCount == 1 -> stringResource(R.string.skill_progress_one, progress.meanScore)
+        else -> stringResource(R.string.skill_progress_many, progress.sessionCount, progress.meanScore)
+    }
+    Row(
+        modifier = Modifier.width(DESCRIPTION_WIDTH_DP.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(5.dp).clip(CircleShape).background(
+            if (progress != null) accent else MaterialTheme.colorScheme.outline
+        ))
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (progress != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

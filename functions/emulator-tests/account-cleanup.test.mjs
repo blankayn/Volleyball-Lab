@@ -12,12 +12,28 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
   const records = {
     'profiles/delete-owner': { name: 'Private' }, 'users/delete-owner': { role: 'PLAYER' },
     'coaches/delete-owner': { name: 'Coach' }, 'coachDirectory/delete-owner': { name: 'Coach' },
+    'coaches/delete-owner/webSettings/preferences': { photo: 'private-thumbnail' },
+    'coachPhotos/delete-owner': { photo: 'public-thumbnail' },
+    'coachEmailDeliveries/own': { coachUid: uid, state: 'sent' },
+    'coachEmailDeliveries/other': { coachUid: 'other', state: 'sent' },
     'sessions/own': { ownerUid: uid, sharedWith: ['other'] },
+    'sessions/own/aiExplanations/session-explanation-v1': { status: 'ready', explanation: { overview: 'Private feedback' } },
+    'aiUsage/delete-owner': { day: '2026-10-26', count: 1 },
     'sessions/other': { ownerUid: 'other', sharedWith: [uid, 'retained-coach'] },
     'recordings/own': { ownerUid: uid }, 'recordings/other': { ownerUid: 'other' },
+    'pushTokens/own': { uid }, 'pushTokens/other': { uid: 'other' },
     'assignments/a': { playerUid: uid, coachUid: 'other' },
     'submissions/s': { playerUid: 'other', coachUid: uid },
     'notes/n': { playerUid: uid, coachUid: 'other' },
+    'coachingQuestions/player-question': { playerUid: uid, coachUid: 'other' },
+    'coachingQuestions/coach-question': { playerUid: 'other', coachUid: uid },
+    'coachResponseTimes/player-question': { coachUid: 'other' },
+    'coachResponseTimes/coach-question': { coachUid: uid },
+    'coachReviews/player-review': { playerUid: uid, coachUid: 'other' },
+    'coachReviews/coach-review': { playerUid: 'other', coachUid: uid },
+    'coachAvailability/delete-owner': { coachUid: uid, status: 'Busy' },
+    'coachPresence/own-session': { coachUid: uid, status: 'Online' },
+    'coachPresence/other-session': { coachUid: 'other', status: 'Online' },
     'roster/delete-owner/members/other': { playerUid: 'other' },
     'roster/other/members/delete-owner': { playerUid: uid },
     'roster/other/members/survivor': { playerUid: 'survivor' },
@@ -36,7 +52,7 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
   assert.equal((await db.doc('sessions/other').get()).data().ownerUid, 'other');
   assert.deepEqual((await db.doc('sessions/other').get()).data().sharedWith, ['retained-coach']);
   for (const path of Object.keys(records)) {
-    const keep = ['sessions/other', 'recordings/other', 'roster/other/members/survivor', 'profiles/other'].includes(path);
+    const keep = ['sessions/other', 'recordings/other', 'pushTokens/other', 'roster/other/members/survivor', 'profiles/other', 'coachEmailDeliveries/other', 'coachPresence/other-session'].includes(path);
     assert.equal((await db.doc(path).get()).exists, keep, path);
   }
   assert.equal((await db.doc(`accountDeletions/${uid}`).get()).data().status, 'deleted');

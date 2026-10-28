@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "volleyball-lab-session-ai",
+  "account_id": "1dbc7ce81e2d4055f05061fa6379de00",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://volleyball-lab.web.app,https://volleyball-lab.firebaseapp.com,http://localhost:5173,http://127.0.0.1:5173"
+  },
+  "d1_databases": [{
+    "binding": "AI_DB",
+    "database_name": "volleyball-lab-session-ai",
+    "database_id": "ea3761da-d9c5-405a-a3b3-3936a0cdedfd",
+    "migrations_dir": "migrations"
+  }],
+  "triggers": { "crons": ["17 * * * *"] },
+  "observability": { "enabled": false }
+}

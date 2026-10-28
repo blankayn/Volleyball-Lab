@@ -5,8 +5,6 @@ import androidx.core.view.WindowCompat
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -30,11 +28,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -68,6 +69,7 @@ import com.volleyballlab.player.feature.auth.SignUpScreen
 import com.volleyballlab.player.feature.auth.findActivity
 import com.volleyballlab.player.feature.coach.CoachScreen
 import com.volleyballlab.player.feature.coach.PlayerAssignmentScreen
+import com.volleyballlab.player.feature.coachmode.coachWorkspaceBackground
 import com.volleyballlab.player.feature.coachmode.CoachAccountScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignEditScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignListScreen
@@ -90,7 +92,9 @@ import com.volleyballlab.player.feature.train.drill.DrillLibraryScreen
 import com.volleyballlab.player.feature.train.drill.DrillDetailScreen
 import com.volleyballlab.player.feature.train.drill.DrillPracticeScreen
 import com.volleyballlab.player.feature.train.drill.DrillPracticeSummaryScreen
+import com.volleyballlab.player.feature.welcome.WelcomeScreen
 import com.volleyballlab.player.ui.component.VolleyballBackdrop
+import com.volleyballlab.player.ui.component.LocalScreenEntranceEnabled
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbMotion
 import com.volleyballlab.player.ui.theme.vbTween
@@ -172,8 +176,13 @@ fun VolleyballLabApp() {
                     if (!startupViewModel.hasSession) {
                         // A coach sign-out rebuilds this shell, but startup may
                         // still say CoachHome. Never reuse it without a session.
-                        StartDestination.Login
-                    } else if (start != StartDestination.Login && start != StartDestination.CoachHome) {
+                        if (start == StartDestination.Welcome) {
+                            StartDestination.Welcome
+                        } else {
+                            StartDestination.Login
+                        }
+                    } else if (start != StartDestination.Login && start != StartDestination.CoachHome &&
+                        start != StartDestination.Welcome) {
                         start
                     } else if (startupViewModel.hasOnboarded.value) {
                         StartDestination.Home
@@ -215,9 +224,14 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
     // is nothing yet to switch to, and offering the switch would imply there is.
     val hiddenBarRoutes = listOf(
         CaptureRoute::class,
+        WelcomeRoute::class,
         LoginRoute::class,
         SignUpRoute::class,
         AssessmentRoute::class,
+        CoachDirectoryRoute::class,
+        CoachProfileRoute::class,
+        MyCoachRoute::class,
+        MyCoachSectionRoute::class,
     )
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
@@ -257,13 +271,17 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
             }
         },
     ) { innerPadding ->
-        VbNavHost(
-            navController = navController,
-            start = start,
-            hasOnboarded = hasOnboarded,
-            contentPadding = innerPadding,
-            modifier = Modifier.fillMaxSize(),
-        )
+        // The route owns its entrance. Mount card content immediately instead of
+        // following the page fade with another sequence of delayed entrances.
+        CompositionLocalProvider(LocalScreenEntranceEnabled provides false) {
+            VbNavHost(
+                navController = navController,
+                start = start,
+                hasOnboarded = hasOnboarded,
+                contentPadding = innerPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -283,13 +301,27 @@ private fun CoachShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val coachGraph = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container
+    val coachUser by coachGraph.authRepository.currentUser.collectAsStateWithLifecycle(null)
+    DisposableEffect(coachUser?.uid) {
+        coachUser?.uid?.let(coachGraph.coachPresenceReporter::connect)
+        onDispose { coachGraph.coachPresenceReporter.disconnect() }
+    }
+    LaunchedEffect(currentDestination, coachUser?.uid) {
+        coachGraph.coachPresenceReporter.reviewing(currentDestination?.hasRoute<CoachReviewRoute>() == true || currentDestination?.hasRoute<CoachAssignEditRoute>() == true)
+    }
+    var selectedTab by rememberSaveable { mutableStateOf(CoachTabDestination.Dashboard) }
+    val topLevelTab = CoachTabDestination.All.firstOrNull { tab ->
+        currentDestination?.hierarchy?.any { it.hasRoute(tab.graphClass) } == true
+    }
+    LaunchedEffect(topLevelTab) { if (topLevelTab != null) selectedTab = topLevelTab }
     val window = LocalContext.current.findActivity()?.window
     SideEffect { setSystemBarIconAppearance(window, useDarkIcons = true) }
 
     // The same rule as the athlete's shell, minus the camera: auth screens have
     // nothing to switch to. Detail screens keep their tabs, because a coach three
     // levels into a player's history should still be able to jump to their queue.
-    val hiddenBarRoutes = listOf(LoginRoute::class, SignUpRoute::class)
+    val hiddenBarRoutes = listOf(LoginRoute::class, SignUpRoute::class, CoachQuestionsRoute::class)
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
     Scaffold(
@@ -298,7 +330,8 @@ private fun CoachShell() {
                 androidx.compose.foundation.layout.Column {
                     TopAppBar(
                         title = { AppBrandTitle() },
-                        actions = { com.volleyballlab.player.feature.notifications.NotificationBell() },
+                        actions = { Box(Modifier.padding(end = 10.dp)) { com.volleyballlab.player.feature.notifications.NotificationBell() } },
+                        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
                     )
                     com.volleyballlab.player.feature.coach.CoachSyncBanner(coach = true)
                 }
@@ -308,24 +341,20 @@ private fun CoachShell() {
             if (showBottomBar) {
                 CoachBottomBar(
                     navController = navController,
-                    currentDestination = currentDestination,
+                    selectedTab = topLevelTab ?: selectedTab,
                 )
             }
         },
     ) { innerPadding ->
-        // The backdrop is a sibling of the nav host rather than something each
-        // screen draws, for two reasons. It stays put while a page scrolls over it,
-        // which a motif inside a LazyColumn cannot do. And switching tabs does not
-        // re-draw it, so the ball does not flicker or shift on every crossfade -
-        // the cards move and the background stays, which is what makes it read as
-        // the room the screens are in rather than as part of any one of them.
-        Box(Modifier.fillMaxSize()) {
-            VolleyballBackdrop()
-            CoachNavHost(
-                navController = navController,
-                contentPadding = innerPadding,
-                modifier = Modifier.fillMaxSize(),
-            )
+        // Keep the neutral workspace surface behind every coach destination.
+        Box(Modifier.fillMaxSize().coachWorkspaceBackground()) {
+            CompositionLocalProvider(LocalScreenEntranceEnabled provides false) {
+                CoachNavHost(
+                    navController = navController,
+                    contentPadding = innerPadding,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
@@ -365,12 +394,11 @@ private fun AppBrandTitle() {
 @Composable
 private fun CoachBottomBar(
     navController: NavHostController,
-    currentDestination: NavDestination?,
+    selectedTab: CoachTabDestination,
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest) {
         CoachTabDestination.All.forEach { destination ->
-            val selected = currentDestination?.hierarchy
-                ?.any { it.hasRoute(destination.graphClass) } == true
+            val selected = selectedTab == destination
 
             NavigationBarItem(
                 selected = selected,
@@ -418,6 +446,14 @@ internal fun NavHostController.navigateToCoachTab(destination: CoachTabDestinati
     }
 }
 
+/** Section navigation keeps the combined workspace as its single Back destination. */
+internal fun NavHostController.openMyCoachSection(section: String) {
+    navigate(MyCoachSectionRoute(section)) {
+        popUpTo<MyCoachRoute> { inclusive = false }
+        launchSingleTop = true
+    }
+}
+
 @Composable
 private fun CoachNavHost(
     navController: NavHostController,
@@ -425,17 +461,17 @@ private fun CoachNavHost(
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = LocalReduceMotion.current
-    val medium = VbMotion.tween<Float>(VbMotion.Medium, reduceMotion = reduceMotion)
+    val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = CoachDashboardRoute,
         modifier = modifier,
-        enterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 0.96f) },
+        enterTransition = { fadeIn(page) },
         exitTransition = { fadeOut(quick) },
-        popEnterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 1.04f) },
-        popExitTransition = { fadeOut(quick) + scaleOut(medium, targetScale = 0.96f) },
+        popEnterTransition = { fadeIn(quick) },
+        popExitTransition = { fadeOut(quick) },
     ) {
         composable<CoachDashboardRoute> {
             CoachDashboardScreen(
@@ -449,6 +485,7 @@ private fun CoachNavHost(
                 onOpenRoster = { navController.navigateToCoachTab(CoachTabDestination.Roster) },
                 onOpenAssign = { navController.navigateToCoachTab(CoachTabDestination.Assign) },
                 onOpenAccount = { navController.navigateToCoachTab(CoachTabDestination.Account) },
+                onOpenQuestions = { navController.navigate(CoachQuestionsRoute) },
                 contentPadding = contentPadding,
             )
         }
@@ -458,6 +495,10 @@ private fun CoachNavHost(
                 onOpenPlayer = { navController.navigate(CoachPlayerRoute(it)) },
                 contentPadding = contentPadding,
             )
+        }
+
+        composable<CoachQuestionsRoute> {
+            com.volleyballlab.player.feature.coach.CoachQuestionsScreen({ navController.popBackStack() }, contentPadding)
         }
 
         composable<CoachPlayerRoute> { entry ->
@@ -514,7 +555,6 @@ private fun CoachNavHost(
         }
         composable<CoachAccountRoute> {
             CoachAccountScreen(
-                onEditAccount = { navController.navigate(EditAccountRoute) },
                 // Signing out rebuilds the shell at the login screen.
                 onSignedOut = {},
                 contentPadding = contentPadding,
@@ -607,12 +647,13 @@ private fun VbNavHost(
     // NavHost's transition parameters are plain lambdas, not composable ones, so
     // the reduce-motion preference is read here and captured.
     val reduceMotion = LocalReduceMotion.current
-    val medium = VbMotion.tween<Float>(VbMotion.Medium, reduceMotion = reduceMotion)
+    val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
     NavHost(
         navController = navController,
         startDestination = when (start) {
+            StartDestination.Welcome -> WelcomeRoute
             StartDestination.Login -> LoginRoute
             StartDestination.Assessment -> AssessmentRoute
             StartDestination.Home -> HomeRoute
@@ -623,14 +664,28 @@ private fun VbNavHost(
             StartDestination.CoachHome -> HomeRoute
         },
         modifier = modifier,
-        // A fade-through with a slight scale, rather than a horizontal slide.
-        // Slides imply a left-to-right hierarchy that bottom tabs do not have, and
-        // sliding between sibling tabs looks like the user navigated backwards.
-        enterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 0.96f) },
+        // A single short fade-through. Scale and the staggered entrances that
+        // followed it made a tab switch feel like three animations competing.
+        enterTransition = { fadeIn(page) },
         exitTransition = { fadeOut(quick) },
-        popEnterTransition = { fadeIn(medium) + scaleIn(medium, initialScale = 1.04f) },
-        popExitTransition = { fadeOut(quick) + scaleOut(medium, targetScale = 0.96f) },
+        popEnterTransition = { fadeIn(quick) },
+        popExitTransition = { fadeOut(quick) },
     ) {
+        composable<WelcomeRoute> {
+            WelcomeScreen(
+                onGetStarted = {
+                    navController.navigate(SignUpRoute) {
+                        popUpTo<WelcomeRoute> { inclusive = true }
+                    }
+                },
+                onLogIn = {
+                    navController.navigate(LoginRoute) {
+                        popUpTo<WelcomeRoute> { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable<LoginRoute> {
             LoginScreen(
                 // Nothing to do for a coach: the role flow is about to swap this
@@ -797,6 +852,8 @@ private fun VbNavHost(
                 onPractiseSkill = { skill -> navController.navigate(DrillSelectRoute(skill)) },
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
                 onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
+                onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
+                onMyCoach = { navController.navigate(MyCoachRoute) },
                 contentPadding = contentPadding,
             )
         }
@@ -816,12 +873,61 @@ private fun VbNavHost(
             )
         }
 
+        composable<CoachDirectoryRoute> {
+            com.volleyballlab.player.feature.coach.CoachDirectoryScreen(
+                onBack = { navController.popBackStack() },
+                onOpenCoach = { navController.navigate(CoachProfileRoute(it)) },
+                contentPadding = contentPadding,
+            )
+        }
+        composable<MyCoachRoute> {
+            com.volleyballlab.player.feature.coach.MyCoachScreen(
+                onBack = { navController.popBackStack() },
+                onBrowse = { navController.navigate(CoachDirectoryRoute) },
+                onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
+                contentPadding = contentPadding,
+                onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
+                onOpenSection = navController::openMyCoachSection,
+            )
+        }
+        composable<MyCoachSectionRoute> { entry ->
+            val workspace = remember(entry) { navController.getBackStackEntry<MyCoachRoute>() }
+            // Share loaded coach data and pending form actions with the hub.
+            CompositionLocalProvider(androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides workspace) {
+                com.volleyballlab.player.feature.coach.MyCoachScreen(
+                    onBack = { navController.popBackStack() },
+                    onBrowse = { navController.navigate(CoachDirectoryRoute) },
+                    onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
+                    contentPadding = contentPadding,
+                    onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
+                    section = entry.toRoute<MyCoachSectionRoute>().section,
+                    onOpenSection = navController::openMyCoachSection,
+                )
+            }
+        }
+        composable<CoachProfileRoute> { entry ->
+            com.volleyballlab.player.feature.coach.CoachProfileScreen(
+                coachUid = entry.toRoute<CoachProfileRoute>().coachUid,
+                onBack = { navController.popBackStack() },
+                onRequestSent = {
+                    navController.navigate(CoachRoute) {
+                        popUpTo<CoachDirectoryRoute> { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onOpenWorkspace = {
+                    if (!navController.popBackStack<MyCoachRoute>(inclusive = false)) navController.navigate(MyCoachRoute)
+                },
+                contentPadding = contentPadding,
+            )
+        }
+
         composable<EditAccountRoute> {
             com.volleyballlab.player.feature.profile.EditAccountScreen({ navController.popBackStack() }, contentPadding)
         }
         composable<ProfileRoute> {
             ProfileScreen(
-                onEditAccount = { navController.navigate(EditAccountRoute) },
+                onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.
                 onSignedOut = {

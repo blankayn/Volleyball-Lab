@@ -1,9 +1,17 @@
-import { onAuthStateChanged } from "firebase/auth";
+import { beforeAuthStateChanged, onAuthStateChanged } from "firebase/auth";
+import { setCoachPresenceAccount, stopCoachPresence } from "./lib/coach-presence";
 import { auth, configError, initFirebase } from "./lib/firebase";
 import { getUserRole } from "./lib/cloud";
 import { go, parseRoute } from "./lib/router";
 import "./styles/tokens.css";
 import "./styles/main.css";
+import "./styles/portal.css";
+import "./styles/preferences.css";
+import "./styles/coach-experience.css";
+import "./styles/coach-focus-card.css";
+import "./styles/auth-login.css";
+import "./styles/coaching-hub.css";
+import { setPreferenceAccount, watchSystemPreferences } from "./lib/preferences";
 
 const appRoot = document.querySelector<HTMLElement>("#app");
 if (!appRoot) throw new Error("#app missing");
@@ -44,6 +52,7 @@ function notCoachPage(): void {
 }
 
 function backendError(): void {
+  setCoachPresenceAccount(null);
   root.innerHTML = `<div class="wrap"><div class="auth-shell"><div class="auth-card">
     <h1>Could not reach the backend</h1>
     <p class="muted">Check your connection and that Firestore is provisioned for this project.</p>
@@ -68,6 +77,7 @@ async function render(): Promise<void> {
   disposeDashboard?.();
   disposeDashboard = undefined;
   const route = parseRoute(hash);
+  if (route.name !== "app") setCoachPresenceAccount(null);
   (await import("./pages/landing")).disposeLanding();
 
   if (version !== renderVersion) return;
@@ -82,6 +92,7 @@ async function render(): Promise<void> {
       const role = await getUserRole(user.uid);
       if (version !== renderVersion) return;
       if (role !== "COACH") {
+        setCoachPresenceAccount(null);
         notCoachPage();
         return;
       }
@@ -89,11 +100,12 @@ async function render(): Promise<void> {
       if (version === renderVersion) backendError();
       return;
     }
+    setCoachPresenceAccount(user.uid);
     const dashboard = await import("./pages/dashboard");
     if (version !== renderVersion) return;
     const { renderDashboard } = dashboard;
     disposeDashboard = dashboard.disposeDashboard;
-    await renderDashboard(root, user.uid, route.tab, route.playerUid);
+    await renderDashboard(root, user.uid, route.tab, route.playerUid, route.sessionId);
     return;
   }
 
@@ -127,6 +139,7 @@ async function render(): Promise<void> {
 }
 
 function boot(): void {
+  watchSystemPreferences();
   const missing = configError();
   if (missing) {
     setupScreen(missing);
@@ -147,7 +160,12 @@ function boot(): void {
   window.addEventListener("hashchange", safelyRender);
 
   // Auth state drives re-render: sign-in/out anywhere swaps the shell.
-  onAuthStateChanged(auth, () => {
+  beforeAuthStateChanged(auth, async (next) => {
+    if (next?.uid !== auth.currentUser?.uid) await Promise.race([stopCoachPresence(), new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
+  });
+  onAuthStateChanged(auth, (user) => {
+    setCoachPresenceAccount(null);
+    setPreferenceAccount(user?.uid ?? null);
     const route = parseRoute(window.location.hash);
     if (current !== null && (route.name === "login" || route.name === "register")) return;
     current = null;

@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     // Brings Kotlin with it: AGP 9 has built-in Kotlin support, so
     // `org.jetbrains.kotlin.android` must NOT be applied alongside it.
@@ -14,6 +16,20 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+// This is a public backend address, never an API key. CI or a local build can
+// select the Cloudflare endpoint with -PsessionAiUrl=https://... or SESSION_AI_URL.
+val sessionAiUrl = providers.gradleProperty("sessionAiUrl")
+    .orElse(providers.environmentVariable("SESSION_AI_URL"))
+    .orElse("")
+    .get().trim()
+if (sessionAiUrl.isNotEmpty()) {
+    val endpoint = URI(sessionAiUrl)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
+        endpoint.userInfo == null && endpoint.query == null && endpoint.fragment == null) {
+        "sessionAiUrl must be a public HTTPS endpoint without credentials, query, or fragment."
+    }
+}
+
 android {
     namespace = "com.volleyballlab.player"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -22,8 +38,9 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 9
+        versionName = "0.1.8"
+        buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,6 +65,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+        // Optimized sideload builds use the existing development certificate and
+        // App Check provider, so they can update test phones without losing data.
+        create("preview") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            versionNameSuffix = "-preview"
+            matchingFallbacks += listOf("release")
         }
     }
 
@@ -94,9 +119,11 @@ dependencies {
     implementation(libs.firebase.ai)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
+    add("previewImplementation", libs.firebase.appcheck.debug)
     // Coach cloud: the shared roster/assignment/review backend also served by
     // the coach web portal. See docs/coach-cloud-contract.md.
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-functions")
     implementation(libs.androidx.credentials)

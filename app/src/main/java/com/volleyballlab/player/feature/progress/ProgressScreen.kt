@@ -69,6 +69,7 @@ import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import com.volleyballlab.player.ui.theme.vbColors
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -130,6 +131,8 @@ data class ProgressSummary(
                         repCount = forSkill.sumOf { it.repCount },
                         meanScore = skillScores.takeIf { it.isNotEmpty() }
                             ?.average()?.roundToInt(),
+                        bestScore = skillScores.maxOrNull(),
+                        lastPracticedEpochMs = forSkill.maxOfOrNull { it.startedAtEpochMs },
                     )
                 }
                 // Most-trained first: the ordering answers "what have I actually
@@ -156,6 +159,8 @@ data class SkillProgress(
     val sessionCount: Int,
     val repCount: Int,
     val meanScore: Int?,
+    val bestScore: Int?,
+    val lastPracticedEpochMs: Long?,
 )
 
 class ProgressViewModel(sessionRepository: SessionRepository) : ViewModel() {
@@ -214,7 +219,7 @@ fun ProgressScreen(
             }
         }
 
-        item { WeeklyProgressCard(summary.week, Modifier.padding(horizontal = 20.dp)) }
+        item { ProgressCalendarCard(summary.history, onOpenSession, onStartTraining, Modifier.padding(horizontal = 20.dp)) }
 
         if (!summary.hasSessions) {
             item {
@@ -258,7 +263,7 @@ fun ProgressScreen(
                 )
             }
         }
-        itemsIndexed(summary.bySkill) { index, skill ->
+        itemsIndexed(summary.bySkill, key = { _, skill -> skill.skill.name }) { index, skill ->
             EntranceAnimation(index = index + 5) {
                 SkillProgressRow(skill, Modifier.padding(horizontal = 20.dp))
             }
@@ -272,7 +277,7 @@ fun ProgressScreen(
                 )
             }
         }
-        itemsIndexed(summary.history) { index, session ->
+        itemsIndexed(summary.history, key = { _, session -> session.id }) { index, session ->
             EntranceAnimation(index = index) {
                 RecentSessionSummaryCard(session, { onOpenSession(session.id) }, Modifier.padding(horizontal = 20.dp))
             }
@@ -550,6 +555,15 @@ private fun TrendCard(trend: List<Int>, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modifier) {
+    val best = progress.bestScore?.let { stringResource(R.string.progress_skill_best, it) }
+    val last = progress.lastPracticedEpochMs?.let { epochMs ->
+        stringResource(
+            R.string.progress_skill_last,
+            Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).toLocalDate()
+                .format(SkillDate),
+        )
+    }
+    val details = listOfNotNull(best, last).joinToString(" · ")
     StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -575,6 +589,13 @@ private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modif
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (details.isNotEmpty()) {
+                    Text(
+                        text = details,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (progress.meanScore != null) {
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
@@ -638,5 +659,7 @@ private fun NoDataCard(onStartTraining: () -> Unit, modifier: Modifier = Modifie
 private const val MIN_TREND_POINTS = 2
 
 private val CHART_HEIGHT = 154.dp
+
+private val SkillDate = DateTimeFormatter.ofPattern("d MMM")
 
 private const val NO_VALUE = "—"

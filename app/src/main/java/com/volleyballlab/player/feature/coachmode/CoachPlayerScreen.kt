@@ -32,6 +32,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,36 +102,7 @@ class CoachPlayerViewModel(
     }
 }
 
-/**
- * One athlete, in full. The storyboard's player-detail screen.
- *
- * ## The five things the storyboard asks for
- *
- * Thirty-day trend, consistency, session history, skill breakdown, and a
- * "corrective drill generated from patterns detected in the athlete's recorded
- * movements". The first four are arithmetic and are here as such. The fifth is
- * shown as *the lowest-scoring cue*, labelled as exactly that, with a line saying
- * where the number came from - see [PlayerSnapshot] for why calling it a generated
- * recommendation would be a claim this project cannot support.
- *
- * ## Why the history rows open a review
- *
- * Every session listed here is tappable whether or not the athlete submitted it.
- * That is a deliberate widening of the submission model: submission decides what
- * lands in the coach's *queue*, and an approved coach reading their own player's
- * history is the thing the athlete consented to when they joined the team. What
- * the coach cannot do is see the training of anyone not on the roster.
- *
- * ## Why the lists live inside section cards rather than as lazy items
- *
- * The three lists here - skills, assignments, sessions - are all bounded and
- * small: [PlayerSnapshot.standings] is one row per skill, the history is capped at
- * [PlayerSnapshot.HISTORY_SIZE], and a player's assignments are a handful. Drawing
- * each as its own floating card would give a page of a dozen identical white
- * rectangles with no indication of where one subject ends and the next begins, so
- * each list is one [CoachSectionCard] and pays for it with a few rows composed
- * eagerly. A roster or a queue - unbounded - would not get this treatment.
- */
+/** Player overview, shared-session history and training plan as separate views. */
 @Composable
 fun CoachPlayerScreen(
     playerUid: String,
@@ -145,6 +121,8 @@ fun CoachPlayerScreen(
         return
     }
     val snapshot = state.snapshotOf(playerUid)
+    var tab by rememberSaveable(playerUid) { mutableStateOf(0) }
+    var confirmRemoval by rememberSaveable(playerUid) { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -195,13 +173,16 @@ fun CoachPlayerScreen(
             return@LazyColumn
         }
 
-        item(key = "stats") {
+        item(key = "player-tabs") {
+            CoachFilterTabs(listOf("Overview", "Sessions", "Plan"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
+        if (tab == 0) item(key = "stats") {
             EntranceAnimation(index = 1) {
                 PlayerStatStrip(snapshot, Modifier.padding(horizontal = CoachGutter))
             }
         }
 
-        if (!snapshot.hasTraining) {
+        if (tab == 0 && !snapshot.hasTraining) {
             item(key = "no-training") {
                 EntranceAnimation(index = 2) {
                     CoachEmptyCard(
@@ -215,7 +196,7 @@ fun CoachPlayerScreen(
                     )
                 }
             }
-        } else {
+        } else if (tab == 0) {
             snapshot.weakestCue?.let { cue ->
                 item(key = "focus") {
                     val cueLabel = stringResource(cue.label)
@@ -260,35 +241,13 @@ fun CoachPlayerScreen(
             }
         }
 
-        item(key = "actions") {
-            EntranceAnimation(index = 4) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = CoachGutter, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // The pill sizes to its label rather than taking a weight: it is a
-                    // Surface with propagated min constraints, so a stretched one would
-                    // left-align its text instead of centring it.
-                    CoachPillButton(
-                        label = stringResource(R.string.coach_player_new_assignment),
-                        onClick = { onAssignDrill(playerUid) },
-                    )
-                    OutlinedButton(
-                        onClick = { viewModel.remove(playerUid) },
-                        shape = CoachPillShape,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(stringResource(R.string.coach_roster_remove))
-                    }
-                }
-            }
+        if (tab != 1) item(key = "actions") {
+            CoachPillButton(stringResource(R.string.coach_player_new_assignment), { onAssignDrill(playerUid) },
+                Modifier.fillMaxWidth().padding(horizontal = CoachGutter))
         }
 
         val assignments = state.assignmentsFor(playerUid)
-        item(key = "assignments") {
+        if (tab == 2) item(key = "assignments") {
             CoachSectionCard(
                 title = stringResource(R.string.coach_player_assignments),
                 icon = Icons.Rounded.AssignmentTurnedIn,
@@ -311,7 +270,7 @@ fun CoachPlayerScreen(
             }
         }
 
-        if (snapshot.recentSessions.isNotEmpty()) {
+        if (tab == 1 && snapshot.recentSessions.isNotEmpty()) {
             item(key = "history") {
                 CoachSectionCard(
                     title = stringResource(R.string.coach_player_history),
@@ -332,13 +291,28 @@ fun CoachPlayerScreen(
             }
         }
 
-        item(key = "footnote") {
+        if (tab == 1 && snapshot.recentSessions.isEmpty()) item(key = "empty-sessions") {
+            CoachEmptyCard("No shared sessions yet", "The player’s shared sessions will appear here when they send one for review.",
+                icon = Icons.Rounded.CalendarMonth, modifier = Modifier.padding(horizontal = CoachGutter))
+        }
+        if (tab == 2 && snapshot.member.isActive) item(key = "manage-player") {
+            TextButton(onClick = { confirmRemoval = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter)) {
+                Text("Remove from team", color = MaterialTheme.colorScheme.error)
+            }
+        }
+        if (tab == 0) item(key = "footnote") {
             CoachFootnote(
                 text = stringResource(R.string.coach_player_focus_source),
                 modifier = Modifier.padding(horizontal = CoachGutter + 4.dp, vertical = 6.dp),
             )
         }
     }
+    if (confirmRemoval) AlertDialog(
+        onDismissRequest = { confirmRemoval = false }, title = { Text("Remove this player?") },
+        text = { Text("They will need a new approved request to send you sessions again. Previous feedback stays available.") },
+        confirmButton = { TextButton(onClick = { confirmRemoval = false; viewModel.remove(playerUid); onBack() }) { Text("Remove player", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirmRemoval = false }) { Text("Keep player") } },
+    )
 }
 
 /**

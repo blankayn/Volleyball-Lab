@@ -1,0 +1,134 @@
+/* Court photography, readable overlays, and the team's measured form score. */
+.app-content .hero-panel {
+  isolation: isolate;
+  min-height: 340px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(230px, .8fr);
+  gap: 34px;
+  padding: 36px 38px;
+  border: 1px solid #b2a28c66;
+  border-radius: 22px;
+  background: #12191c;
+  box-shadow: inset 0 1px 0 #ffffff20, 0 16px 35px -25px #111a25a0;
+  color: #fff;
+}
+.hero-panel-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 48%;
+  filter: brightness(.6) saturate(.75) blur(1px);
+  transform: scale(1.015);
+  pointer-events: none;
+  z-index: -3;
+}
+.app-content .hero-panel::before {
+  display: block;
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(90deg, #211309e8 0%, #14191bd6 44%, #0f243696 100%),
+    linear-gradient(0deg, #07171ad9, transparent 55%);
+  mask-image: none;
+}
+.app-content .hero-panel::after {
+  content: "";
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 94% 0%, #b7e3ff38 0%, transparent 29%),
+    radial-gradient(circle at 91% 94%, #ffad542b 0%, transparent 15%),
+    radial-gradient(ellipse at 4% 0%, #cf77261c 0%, transparent 40%);
+}
+.hero-panel .hero-panel-copy, .hero-panel .hero-panel-ring { z-index: 1; }
+.app-content .hero-panel h2 {
+  max-width: 24ch;
+  margin: 20px 0 14px;
+  font-family: var(--font);
+  font-size: clamp(29px, 3.1vw, 43px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.035em;
+  color: #fff;
+  text-wrap: balance;
+}
+.app-content .hero-panel p {
+  max-width: 52ch;
+  font-size: calc(14px * var(--portal-scale));
+  line-height: 1.75;
+  color: #e4dfd8;
+}
+.hero-panel .focus-pill {
+  padding: 8px 12px;
+  border: 1px solid #ffb46d65;
+  border-radius: 8px;
+  background: #bc67242e;
+  color: #ffbd83;
+  font-size: calc(10px * var(--portal-scale));
+  font-weight: 600;
+  letter-spacing: .07em;
+  backdrop-filter: blur(8px);
+}
+.hero-panel .focus-pill i { background: #ffa35a; box-shadow: 0 0 12px #ff9b4880; }
+.hero-panel .hero-panel-actions { gap: 12px; margin-top: 26px; }
+.hero-panel .hero-panel-actions .btn {
+  min-height: 48px;
+  padding: 13px 22px;
+  border-radius: 10px;
+  font-size: calc(13px * var(--portal-scale));
+  font-weight: 600;
+  line-height: 1.45;
+}
+.hero-panel .hero-panel-actions .btn-primary {
+  background: #ff7937;
+  border: 1px solid #ffa36e;
+  color: #211309;
+  box-shadow: 0 5px 20px #f0752c24, inset 0 1px 0 #ffffff25;
+}
+.hero-panel .hero-panel-actions .btn-primary:hover { background: #ff975c; }
+.hero-panel .hero-panel-actions .btn-hero-ghost {
+  background: #ffffff0d;
+  border: 1px solid #ffffff38;
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+.hero-panel .hero-panel-actions .btn-hero-ghost:hover { background: #ffffff1c; }
+.hero-panel .hero-panel-actions .btn:focus-visible { outline: 2px solid #ffd0a6; outline-offset: 4px; }
+.hero-panel .hero-panel-ring { display: flex; gap: 20px; align-items: center; }
+.hero-panel .form-ring {
+  width: 228px;
+  height: 228px;
+  background: radial-gradient(circle, #13233662 50%, #42729c21 72%, transparent 73%);
+  box-shadow: none;
+}
+.hero-panel .form-ring::before { display: none; }
+.hero-form-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+.hero-form-ring circle { fill: none; stroke-width: 12; }
+.hero-form-track { stroke: #6684a34a; }
+.hero-form-arc { stroke: #ffa04f; stroke-linecap: round; filter: drop-shadow(0 0 5px #ff9b4880); }
+.hero-panel .form-ring-inner strong { font-size: 62px; font-weight: 650; line-height: 1; letter-spacing: -.055em; color: #fff; text-shadow: 0 3px 15px #0008; }
+.hero-panel .form-ring-inner span { margin-top: 8px; font-size: 10px; font-weight: 600; letter-spacing: .11em; color: #b8c9da; }
+.hero-panel .hero-mini { display: flex; gap: 8px; }
+.hero-panel .hero-mini span { padding: 8px 12px; border: 1px solid #ffffff26; border-radius: 30px; background: #111d244d; backdrop-filter: blur(10px); color: #e9e8e3; font-size: calc(11px * var(--portal-scale)); font-weight: 400; }
+.hero-panel .hero-mini b { color: #fff; font-weight: 600; }
+@media (max-width: 1180px) and (min-width: 741px) {
+  .app-content .hero-panel { grid-template-columns: minmax(0, 1fr) 210px; padding: 30px; gap: 24px; }
+  .hero-panel .form-ring { width: 200px; height: 200px; }
+  .hero-panel .hero-mini { flex-wrap: wrap; justify-content: center; }
+  .app-content .hero-panel h2 { font-size: 34px; }
+}
+@media (max-width: 740px) {
+  .app-content .hero-panel { grid-template-columns: 1fr; padding: 24px; gap: 22px; min-height: 0; }
+  .app-content .hero-panel h2 { font-size: 29px; margin-block: 16px 12px; }
+  .app-content .hero-panel p { font-size: calc(13px * var(--portal-scale)); }
+  .hero-panel .hero-panel-actions { display: grid; grid-template-columns: 1fr 1fr; margin-top: 22px; gap: 10px; }
+  .hero-panel .hero-panel-actions .btn { min-width: 0; padding: 12px 9px; font-size: calc(12px * var(--portal-scale)); }
+  .hero-panel .hero-panel-ring { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 22px; justify-content: start; }
+  .hero-panel .form-ring { width: 108px; height: 108px; }
+  .hero-panel .form-ring-inner strong { font-size: 31px; }
+  .hero-panel .form-ring-inner span { margin-top: 4px; font-size: 7px; }
+  .hero-panel .hero-mini { flex-direction: column; align-items: flex-start; gap: 9px; }
+  .hero-panel-photo { object-position: center; }
+}

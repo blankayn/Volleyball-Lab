@@ -57,9 +57,8 @@ def test_baseline_is_where_the_hips_most_often_are() -> None:
     """A crouch below the baseline must not drag the baseline down with it.
 
     The athlete stands for most of a demonstration and crouches briefly. A mean
-    would sit between the two and under-report every jump; a high percentile
-    lands on the standing height. Image y grows downward, so standing is the
-    *larger* y - which is the whole reason this is p90 rather than p10.
+    sits between the two and over-reports rise. A high percentile selects the
+    crouch; the median retains standing height when standing is the majority.
     """
     print("baseline is the standing height, not the average")
     # 20 frames standing at 0.40, 5 frames crouched down at 0.45.
@@ -67,6 +66,14 @@ def test_baseline_is_where_the_hips_most_often_are() -> None:
     sequence = synthetic_sequence(hip_y)
     baseline = features.standing_baseline_image_y(sequence)
     check("baseline sits at the standing height", baseline, 0.40, tolerance=0.01)
+
+
+def test_baseline_ignores_missing_values_and_minority_motion() -> None:
+    print("standing majority survives missing frames, jumps and crouches")
+    hip_y = np.array([np.nan, 0.40, 0.40, 0.30, 0.40, np.inf, 0.45, 0.40, 0.40])
+    sequence = synthetic_sequence(hip_y)
+    check("mixed motion baseline", features.standing_baseline_image_y(sequence), 0.40)
+    check("baseline independent of order", features.standing_baseline_image_y(sequence[::-1]), 0.40)
 
 
 def test_hip_rise_is_filled_and_signed_correctly() -> None:
@@ -169,6 +176,7 @@ def test_new_columns_are_in_the_model_contract() -> None:
 def main() -> int:
     print(f"features.py - {len(features.FEATURE_NAMES)} columns\n")
     test_baseline_is_where_the_hips_most_often_are()
+    test_baseline_ignores_missing_values_and_minority_motion()
     test_hip_rise_is_filled_and_signed_correctly()
     test_hip_rise_stays_nan_without_a_baseline()
     test_fill_does_not_mutate_its_input()

@@ -130,4 +130,4 @@ internal val NightOutline = Color(0xFF8F94AB)
  * This closes the open decision left blank in section 7 of
  * `docs/rive/splash-contract.md`.
  */
-val VbSplashBackground = AliceBlue // Alice Blue #F0F8FF
+val VbSplashBackground = Color.White // matches the white welcome canvas

@@ -40,6 +40,10 @@ data object LoginRoute
 @Serializable
 data object SignUpRoute
 
+/** First launch only: the product introduction shown before an account exists. */
+@Serializable
+data object WelcomeRoute
+
 /** Onboarding. Shown once per install, then never again unless retaken. */
 @Serializable
 data object AssessmentRoute
@@ -78,6 +82,21 @@ data object ProgressRoute
 
 @Serializable
 data object CoachRoute
+
+@Serializable
+data object CoachDirectoryRoute
+
+@Serializable
+data class CoachProfileRoute(val coachUid: String)
+
+@Serializable
+data object MyCoachRoute
+
+@Serializable
+data class MyCoachSectionRoute(val section: String)
+
+@Serializable
+data object CoachQuestionsRoute
 
 @Serializable
 data class PlayerAssignmentRoute(val assignmentId: String)
