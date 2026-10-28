@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.QuestionAnswer
+import com.volleyballlab.player.feature.coachmode.coachWorkspaceBackground
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.*
@@ -411,33 +413,71 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
     val roster by graph.coachRepository.roster.collectAsStateWithLifecycle(emptyList())
     val user by graph.authRepository.currentUser.collectAsStateWithLifecycle(null)
-    LazyColumn(Modifier.fillMaxSize().studentBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { HubHeader("Player questions", onBack) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val pending = questions.filter { it.answer == null }
+    val visible = if (tab == 0) pending.sortedBy { it.createdAt } else questions.filter { it.answer != null }.sortedByDescending { it.answeredAt ?: it.createdAt }
+    LazyColumn(Modifier.fillMaxSize().coachWorkspaceBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        item { HubHeader("Player questions", onBack, "Coach workspace") }
         item { HubSync(actions.hub) }
         user?.uid?.let { uid -> item {
             val summaryFlow = remember(uid) { actions.hub.summary(uid) }
             val summary by summaryFlow.collectAsStateWithLifecycle(CoachPublicSummary())
-            HubCard("Your availability") {
-                Text("Shown on your coach profile. Set this when your capacity changes.", style = MaterialTheme.typography.bodySmall)
-                CoachAvailability.entries.forEach { status -> FilterChip(selected = status == summary.availability,
-                    onClick = { actions.perform("availability") { actions.hub.setAvailability(status) } }, enabled = "availability" !in busy, label = { Text(status.label) }) }
+            com.volleyballlab.player.feature.coachmode.CoachCard {
+                com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your availability")
+                Spacer(Modifier.height(8.dp))
+                Text("Let players know when you can coach", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CoachAvailability.entries.forEach { status -> FilterChip(selected = status == summary.availability,
+                        onClick = { actions.perform("availability") { actions.hub.setAvailability(status) } },
+                        enabled = "availability" !in busy, label = { Text(status.label) }, shape = RoundedCornerShape(12.dp)) }
+                }
                 errors["availability"]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         } }
-        if (questions.isEmpty()) item { Text("New-player introductions and questions about reviewed sessions will appear here.") }
-        items(questions.sortedWith(compareBy<CoachingQuestion> { it.answer != null }.thenBy { it.createdAt }), key = { it.id }) { question ->
+        item {
+            com.volleyballlab.player.feature.coachmode.CoachFilterTabs(
+                listOf("Needs reply ${pending.size}", "Answered ${questions.size - pending.size}"), tab, { tab = it })
+        }
+        if (visible.isEmpty()) item {
+            com.volleyballlab.player.feature.coachmode.CoachEmptyCard(
+                title = if (tab == 0) "You’re up to date" else "No responses yet",
+                body = if (tab == 0) "New player introductions and session questions will appear here." else "Your answered coaching questions will stay here for reference.",
+                icon = Icons.Rounded.QuestionAnswer)
+        }
+        items(visible, key = { it.id }) { question ->
             val active = roster.any { it.playerUid == question.playerUid && it.isActive }
-            HubCard(roster.firstOrNull { it.playerUid == question.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player") {
-                Text("${question.topic.label} · ${if (question.sessionId == null) "Getting started" else "Session question"}", style = MaterialTheme.typography.labelMedium)
-                Text(question.text, style = MaterialTheme.typography.bodyLarge)
-                Text(dateLabel(question.createdAt), style = MaterialTheme.typography.labelSmall)
-                if (question.answer != null) { Text("Your response", style = MaterialTheme.typography.titleSmall); Text(question.answer) }
-                else if (active) {
-                    var reply by rememberSaveable(question.id) { mutableStateOf("") }
-                    OutlinedTextField(reply, { reply = it.take(1000) }, label = { Text("Training guidance") }, isError = hasCoachingLink(reply), supportingText = { if (hasCoachingLink(reply)) Text("Text only; links are not supported.") }, enabled = question.id !in busy, modifier = Modifier.fillMaxWidth())
-                    errors[question.id]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Button(onClick = { actions.perform(question.id) { actions.hub.answer(question, reply) } }, enabled = reply.isNotBlank() && !hasCoachingLink(reply) && question.id !in busy) { Text(if (question.id in busy) "Sending…" else "Send coach response") }
-                } else Text("This player is no longer on your active roster.", style = MaterialTheme.typography.bodySmall)
+            var replying by rememberSaveable(question.id) { mutableStateOf(false) }
+            var reply by rememberSaveable(question.id) { mutableStateOf("") }
+            com.volleyballlab.player.feature.coachmode.CoachCard(padding = 22.dp) {
+                com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow(if (question.sessionId == null) "Getting started" else "Session question")
+                Spacer(Modifier.height(10.dp))
+                Text(roster.firstOrNull { it.playerUid == question.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text("${question.topic.label} · ${dateLabel(question.createdAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+                Text(question.text, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+                Spacer(Modifier.height(12.dp))
+                if (question.answer != null) {
+                    com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your response")
+                    Spacer(Modifier.height(8.dp))
+                    Text(question.answer, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
+                } else if (active) {
+                    if (!replying) com.volleyballlab.player.feature.coachmode.CoachPillButton("Write a response", { replying = true }, Modifier.fillMaxWidth())
+                    else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(reply, { reply = it.take(1000) }, label = { Text("Training guidance") }, minLines = 4,
+                            shape = RoundedCornerShape(16.dp), isError = hasCoachingLink(reply),
+                            supportingText = { Text(if (hasCoachingLink(reply)) "Text only; links are not supported." else "${reply.length}/1000") },
+                            enabled = question.id !in busy, modifier = Modifier.fillMaxWidth())
+                        errors[question.id]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        com.volleyballlab.player.feature.coachmode.CoachPillButton(
+                            if (question.id in busy) "Sending…" else "Send coach response",
+                            { actions.perform(question.id) { actions.hub.answer(question, reply) } },
+                            Modifier.fillMaxWidth(), enabled = reply.isNotBlank() && !hasCoachingLink(reply) && question.id !in busy)
+                        TextButton(onClick = { replying = false }, enabled = question.id !in busy, modifier = Modifier.fillMaxWidth()) { Text("Keep for later") }
+                    }
+                } else Text("This player is no longer on your active roster.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -447,13 +487,13 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val error by hub.error.collectAsStateWithLifecycle(null)
     error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = hub::retry) { Text("Retry coaching sync") } }
 }
-@Composable private fun HubHeader(title: String, onBack: () -> Unit) {
+@Composable private fun HubHeader(title: String, onBack: () -> Unit, eyebrow: String = "Your training space") {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.size(21.dp)) }
         }
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            CoachEyebrow("Your training space")
+            CoachEyebrow(eyebrow)
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         }
     }

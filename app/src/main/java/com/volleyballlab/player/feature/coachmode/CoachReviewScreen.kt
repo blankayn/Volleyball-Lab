@@ -201,6 +201,7 @@ fun CoachReviewScreen(
 
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     var sent by rememberSaveable(sessionId) { mutableStateOf(false) }
+    var tab by rememberSaveable(sessionId) { mutableStateOf(0) }
 
     val snapshot = state.snapshotOf(playerUid)
     // Resolved from the full history, not from the snapshot's capped list, so a
@@ -237,6 +238,9 @@ fun CoachReviewScreen(
             )
         }
 
+        item(key = "review-tabs") {
+            CoachFilterTabs(listOf("Analysis", "Recording", "Feedback"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
         if (review == null) {
             // The athlete deleted the recording between submitting it and the coach
             // opening it. Nothing here is recoverable, so the screen says so plainly
@@ -252,20 +256,20 @@ fun CoachReviewScreen(
             return@LazyColumn
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 1) {
                 Scorecard(review, Modifier.padding(horizontal = CoachGutter))
             }
         }
 
-        item {
+        if (tab == 1) item {
             SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter))
         }
-        item {
+        if (tab == 0) item {
             com.volleyballlab.player.feature.session.SessionExplanationCard(review.session.id, Modifier.padding(horizontal = CoachGutter))
         }
 
-        if (review.framingIsPoor) {
+        if (tab == 0 && review.framingIsPoor) {
             item {
                 EntranceAnimation(index = 2) {
                     FramingWarning(
@@ -276,7 +280,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 3) {
                 PointPanel(
                     title = stringResource(R.string.coach_review_strengths),
@@ -289,7 +293,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             EntranceAnimation(index = 4) {
                 PointPanel(
                     title = stringResource(R.string.coach_review_corrections),
@@ -305,7 +309,7 @@ fun CoachReviewScreen(
             }
         }
 
-        if (review.safety.isNotEmpty()) {
+        if (tab == 0 && review.safety.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 5) {
                     SafetyPanel(review.safety, Modifier.padding(horizontal = CoachGutter))
@@ -313,7 +317,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 2) item {
             CommentBox(
                 draft = draft,
                 sent = sent,
@@ -334,7 +338,7 @@ fun CoachReviewScreen(
         }
 
         val existing = state.notesFor(playerUid).filter { it.sessionId == sessionId }
-        if (existing.isNotEmpty()) {
+        if (tab == 2 && existing.isNotEmpty()) {
             item {
                 CoachSectionTitle(text = stringResource(R.string.coach_player_notes))
             }
@@ -346,7 +350,7 @@ fun CoachReviewScreen(
             }
         }
 
-        item {
+        if (tab == 0) item {
             CoachFootnote(
                 text = stringResource(R.string.coach_review_analysis_source),
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),

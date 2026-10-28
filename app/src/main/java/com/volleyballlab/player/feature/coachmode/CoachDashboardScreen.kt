@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.QuestionAnswer
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.PersonAdd
@@ -161,7 +162,7 @@ fun CoachDashboardScreen(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item(key = "hero") {
             EntranceAnimation(index = 0) {
@@ -169,7 +170,6 @@ fun CoachDashboardScreen(
                 // every other item below applies.
                 CoachHero(
                     lead = stringResource(greeting),
-                    accent = stringResource(R.string.coach_hero_accent),
                     // The team's own name once the coach has set one, and the
                     // standing welcome line only until they have. The name is the
                     // more useful of the two the moment it exists, and it is also
@@ -177,22 +177,6 @@ fun CoachDashboardScreen(
                     // hero copy is the fallback, not a replacement for it.
                     body = state.profile.teamName.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.coach_hero_body),
-                )
-            }
-        }
-
-        item(key = "questions") {
-            androidx.compose.material3.OutlinedButton(onClick = onOpenQuestions,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter)) {
-                Text("Player questions & availability")
-            }
-        }
-        item(key = "stats") {
-            EntranceAnimation(index = 1) {
-                TeamStats(
-                    state = state,
-                    onOpenRoster = onOpenRoster,
-                    modifier = Modifier.padding(horizontal = CoachGutter),
                 )
             }
         }
@@ -206,6 +190,21 @@ fun CoachDashboardScreen(
                     modifier = Modifier.padding(horizontal = CoachGutter),
                 )
             }
+        }
+
+        item(key = "stats") {
+            EntranceAnimation(index = 1) {
+                TeamStats(
+                    state = state,
+                    onOpenRoster = onOpenRoster,
+                    modifier = Modifier.padding(horizontal = CoachGutter),
+                )
+            }
+        }
+
+        item(key = "questions") {
+            CoachNavigationRow("Player questions", "Answer training questions and set your availability", Icons.Rounded.QuestionAnswer,
+                onOpenQuestions, Modifier.padding(horizontal = CoachGutter))
         }
 
         // The queue is a heading over free-standing rows rather than a
@@ -317,21 +316,6 @@ fun CoachDashboardScreen(
                     title = stringResource(R.string.coach_quick_title),
                 )
             }
-        }
-
-        item(key = "local-note") {
-            // A footnote rather than a CoachInfoRow, which is what the rest of this
-            // restyle would reach for. That row wants a two-or-three word title
-            // sitting above the body, and nothing already in strings.xml is short
-            // enough to be one for this particular caveat - splitting the note at
-            // its own em dash yields a fifty-odd character "title" that wraps to
-            // three bold lines and wrecks the row's shape. CoachFootnote is where
-            // this shell puts provenance and limitation lines anyway, so the
-            // fallback is the design system's own answer rather than a compromise.
-            CoachFootnote(
-                text = stringResource(R.string.coach_dash_local_note),
-                modifier = Modifier.padding(horizontal = CoachGutter, vertical = 4.dp),
-            )
         }
 
         // The disclosure that lets the sample team exist at all. An info row rather

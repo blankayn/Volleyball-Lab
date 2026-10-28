@@ -20,6 +20,10 @@ import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -189,10 +193,16 @@ fun CoachAssignListScreen(
         GhostLoadingScreen(GhostLayout.List, contentPadding, modifier)
         return
     }
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var search by rememberSaveable { mutableStateOf("") }
     val names = remember(state.roster) {
         state.roster.associate { it.playerUid to it.playerName }
     }
 
+    val visibleAssignments = state.assignments.filter { assignment ->
+        (tab == 0 || (tab == 1 && assignment.isOpen) || (tab == 2 && assignment.status == AssignmentStatus.Completed) || (tab == 3 && assignment.isOverdue(now))) &&
+            (assignment.title.contains(search.trim(), ignoreCase = true) || names[assignment.playerUid].orEmpty().contains(search.trim(), ignoreCase = true))
+    }.sortedWith(compareBy<CoachAssignment> { !it.isOpen }.thenBy { it.dueAtEpochMs ?: Long.MAX_VALUE })
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
@@ -230,12 +240,20 @@ fun CoachAssignListScreen(
             }
         }
 
-        if (state.assignments.isEmpty()) {
+        item(key = "assignment-search") {
+            OutlinedTextField(search, { search = it }, placeholder = { Text("Search drill or player") },
+                leadingIcon = { Icon(Icons.Rounded.Search, null) }, singleLine = true, shape = CoachInnerShape,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter))
+        }
+        item(key = "assignment-filters") {
+            CoachFilterTabs(listOf("All", "Active", "Completed", "Overdue"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
+        if (visibleAssignments.isEmpty()) {
             item {
                 EntranceAnimation(index = 2) {
                     CoachEmptyCard(
-                        title = stringResource(R.string.coach_assign_empty_title),
-                        body = stringResource(R.string.coach_assign_empty_body),
+                        title = if (state.assignments.isEmpty()) stringResource(R.string.coach_assign_empty_title) else "No matching assignments",
+                        body = if (state.assignments.isEmpty()) stringResource(R.string.coach_assign_empty_body) else "Try another status or search for a different drill or player.",
                         icon = Icons.Rounded.EditNote,
                         accent = CoachAccent.Violet,
                         modifier = Modifier.padding(horizontal = CoachGutter),
@@ -243,7 +261,7 @@ fun CoachAssignListScreen(
                 }
             }
         } else {
-            items(items = state.assignments, key = { it.id }) { assignment ->
+            items(items = visibleAssignments, key = { it.id }) { assignment ->
                 AssignmentRow(
                     assignment = assignment,
                     playerName = names[assignment.playerUid].orEmpty(),
@@ -276,52 +294,24 @@ private fun AssignmentRow(
     modifier: Modifier = Modifier,
 ) {
     val overdue = assignment.isOverdue(now)
-    CoachRowCard(modifier = modifier, onClick = onClick) {
-        SkillAccentRule(skill = assignment.skill, height = 44)
-        HorizontalGap(14)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = assignment.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = listOf(
-                    playerName.ifBlank { stringResource(R.string.coach_unnamed) },
-                    stringResource(
-                        R.string.coach_assign_target,
-                        assignment.targetSets,
-                        assignment.targetReps,
-                    ),
-                ).joinToString("  ·  "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            assignment.dueAtEpochMs?.let { due ->
-                Text(
-                    text = stringResource(
-                        R.string.coach_assign_due_on,
-                        relativeDayLabel(due, now),
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    CoachCard(modifier, onClick = onClick, padding = 20.dp) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AccentChip(stringResource(assignment.skill.displayName), CoachAccent.Rust)
+            if (overdue) StatusChip(stringResource(R.string.coach_assign_overdue), MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+            else AccentChip(stringResource(assignment.status.displayName), if (assignment.status == AssignmentStatus.Completed) CoachAccent.Green else CoachAccent.Indigo)
         }
-        HorizontalGap(10)
-        if (overdue) {
-            StatusChip(
-                label = stringResource(R.string.coach_assign_overdue),
-                container = MaterialTheme.colorScheme.errorContainer,
-                content = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            AccentChip(
-                label = stringResource(assignment.status.displayName),
-                accent = CoachAccent.Violet,
-            )
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(assignment.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Spacer(Modifier.height(7.dp))
+        Text(playerName.ifBlank { stringResource(R.string.coach_unnamed) }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.coach_assign_target, assignment.targetSets, assignment.targetReps), style = MaterialTheme.typography.labelLarge)
+        assignment.dueAtEpochMs?.let { Text(stringResource(R.string.coach_assign_due_on, relativeDayLabel(it, now)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -403,13 +393,13 @@ fun CoachAssignEditScreen(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().imePadding(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
             CoachDetailHeader(
-                title = stringResource(R.string.coach_assign_edit_title),
+                title = if (existing == null) "Create assignment" else "Edit assignment",
                 subtitle = null,
                 onBack = onBack,
                 // The trailing slot draws nothing at all for a new assignment

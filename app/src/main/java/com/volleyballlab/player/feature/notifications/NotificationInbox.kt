@@ -12,6 +12,9 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -30,19 +33,29 @@ fun NotificationBell() {
     val inbox by repository.inbox.collectAsStateWithLifecycle(emptyList())
     var open by remember { mutableStateOf(false) }
     val unreadCount = inbox.count { !it.isRead }
-    BadgedBox(badge = {
-        if (unreadCount > 0) {
-            Badge(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) }
-        }
+    NotificationBellButton(unreadCount) { open = true }
+    if (open) NotificationInboxDialog { open = false }
+}
+
+/** The badge follows the 24dp glyph while the button retains a 48dp touch target. */
+@Composable
+internal fun NotificationBellButton(unreadCount: Int, onClick: () -> Unit) {
+    val title = stringResource(R.string.notifications_title)
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).semantics {
+        contentDescription = if (unreadCount > 0) "$title, $unreadCount unread" else title
     }) {
-        IconButton(onClick = { open = true }) {
-            Icon(Icons.Rounded.Notifications, contentDescription = stringResource(R.string.notifications_title))
+        BadgedBox(modifier = Modifier.clearAndSetSemantics {}, badge = {
+            if (unreadCount > 0) {
+                Badge(
+                    modifier = Modifier.offset(x = (if (unreadCount > 99) -6 else -2).dp, y = 2.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) }
+            }
+        }) {
+            Icon(Icons.Rounded.Notifications, contentDescription = null, modifier = Modifier.size(24.dp))
         }
     }
-    if (open) NotificationInboxDialog { open = false }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

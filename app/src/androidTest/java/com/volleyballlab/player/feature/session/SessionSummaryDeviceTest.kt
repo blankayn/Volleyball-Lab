@@ -39,6 +39,7 @@ class SessionSummaryDeviceTest {
                 CompositionLocalProvider(LocalReduceMotion provides true) {
                     if (selected) SessionSummaryContent(session, "Forearm passing practice",
                         onBack = { selected = false }, onOpenFeedback = { feedbackOpened++ },
+                        onDeleteVideo = {},
                         contentPadding = PaddingValues(12.dp))
                     else Box(Modifier.fillMaxSize().padding(20.dp)) {
                         RecentSessionSummaryCard(session, { selected = true })
@@ -74,7 +75,7 @@ class SessionSummaryDeviceTest {
         compose.setContent {
             VolleyballLabTheme {
                 CompositionLocalProvider(LocalReduceMotion provides true) {
-                    SessionSummaryContent(session, "Forearm passing practice", {}, {}, PaddingValues(12.dp))
+                    SessionSummaryContent(session, "Forearm passing practice", onBack = {}, onOpenFeedback = {}, onDeleteVideo = {}, contentPadding = PaddingValues(12.dp))
                 }
             }
         }

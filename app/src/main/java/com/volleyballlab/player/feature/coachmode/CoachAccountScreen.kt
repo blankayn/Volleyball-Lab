@@ -27,6 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -180,34 +183,7 @@ class CoachAccountViewModel(
     }
 }
 
-/**
- * The coach's own account. Figure 29 of the capstone document.
- *
- * Four sections, in the order the figure lists them: who they are and what team
- * they run, their credentials, their notification switches, and the way out.
- *
- * ## The identity block is a card, not a hero
- *
- * [CoachHero] is the shell's two-tone welcome and it needs a second line to put in
- * the primary colour - here that could only be the team name, which is already one
- * of the fields directly below and does not want announcing twice. The initials
- * disc says "this is you" more directly than a display-size greeting does on the
- * one tab that is about the account rather than about the team, so the top of this
- * screen is a plain [CoachCard]: avatar, name, and the address the session belongs
- * to. Everything below it is a titled section card, so the page reads as one stack
- * of settings rather than a dashboard with settings appended.
- *
- * ## Accent assignment
- *
- * Rust on the team block and on the way out, because both are about *people* - the
- * coach and the roster they own. Violet on credentials, which are paperwork. Indigo
- * on notifications, which are the queue of things that would otherwise wait for the
- * coach to come looking.
- *
- * Submission and weekly-overview preferences control the notification inbox.
- * Optional Android delivery is enabled there. Safety-risk alerts remain
- * unavailable until a validated risk assessment exists.
- */
+/** Account identity and settings grouped into Profile, Preferences and Security. */
 @Composable
 fun CoachAccountScreen(
     onSignedOut: () -> Unit,
@@ -217,195 +193,89 @@ fun CoachAccountScreen(
 ) {
     val viewModel: CoachAccountViewModel = viewModel(factory = CoachAccountViewModel.Factory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-
+    var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(0) }
     if (!state.loaded) {
         GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier)
         return
     }
     val profile = state.profile
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
-        contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    LazyColumn(modifier.fillMaxSize().coachWorkspaceBackground().imePadding(), contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        item(key = "header") { CoachPageHeader("Your account", "Make it yours") }
         item(key = "identity") {
             EntranceAnimation(index = 0) {
-                AccountSectionCard(title = stringResource(R.string.coach_account_title), modifier = Modifier.padding(start = CoachGutter, end = CoachGutter, top = 16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        InitialsAvatar(
-                            initials = profile.initials(),
-                            diameter = 56,
-                            accent = CoachAccent.Rust,
-                        )
-                        HorizontalGap(14)
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = state.identity.name.ifBlank { profile.name }.ifBlank {
-                                    stringResource(R.string.coach_coach_default)
-                                },
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            state.identity.address?.let { address ->
-                                Text(com.volleyballlab.player.feature.profile.countryFlag(address.country.id), modifier = Modifier.semantics { contentDescription = address.country.name })
-                            }
-                            state.account?.email?.takeIf { it.isNotBlank() }?.let { email ->
-                                Text(
-                                    text = email,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                CoachWorkspaceIdentity(
+                    name = state.identity.name.ifBlank { profile.name }.ifBlank { stringResource(R.string.coach_coach_default) },
+                    subtitle = listOfNotNull(profile.teamName.takeIf { it.isNotBlank() }, state.account?.email?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                    initials = profile.initials(), eyebrow = "Coach profile", modifier = Modifier.padding(horizontal = CoachGutter),
+                    portrait = state.identity.photoPath?.takeIf { it.isNotBlank() }?.let { path ->
+                        { com.volleyballlab.player.feature.profile.ProfilePhoto(path, Modifier.fillMaxSize()) }
+                    },
+                    action = {
+                        HorizontalDivider(color = androidx.compose.ui.graphics.Color.White.copy(alpha = .15f))
+                        TextButton(onClick = onEditAccount, modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.textButtonColors(contentColor = androidx.compose.ui.graphics.Color.White)) {
+                            Text("Edit account details", modifier = Modifier.weight(1f))
+                            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.ChevronRight, null)
+                        }
+                    },
+                )
+            }
+        }
+        item(key = "account-tabs") {
+            CoachFilterTabs(listOf("Profile", "Preferences", "Security"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
+        when (tab) {
+            0 -> {
+                item(key = "team") {
+                    AccountSectionCard("Your team", Modifier.padding(horizontal = CoachGutter)) {
+                        AccountField(stringResource(R.string.coach_account_team_name), profile.teamName, viewModel::onTeam)
+                        Spacer(Modifier.height(14.dp))
+                        AccountField(stringResource(R.string.coach_account_organisation), profile.organisation, viewModel::onOrganisation)
+                    }
+                }
+                item(key = "credentials") {
+                    AccountSectionCard("Coaching background", Modifier.padding(horizontal = CoachGutter)) {
+                        Text(stringResource(R.string.coach_account_specialisation), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CoachSpecialisation.All.forEach { candidate ->
+                                FilterChip(profile.specialisation == candidate, { viewModel.onSpecialisation(candidate) },
+                                    label = { Text(stringResource(candidate.displayName)) }, shape = CoachPillShape)
                             }
                         }
+                        Spacer(Modifier.height(16.dp))
+                        AccountField(stringResource(R.string.coach_account_experience), profile.yearsExperience?.toString().orEmpty(), viewModel::onExperience, KeyboardType.Number)
+                        Spacer(Modifier.height(14.dp))
+                        AccountField(stringResource(R.string.coach_account_licence), profile.licenceNumber, viewModel::onLicence)
+                    }
+                }
+                item(key = "profile-sync") { com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.padding(horizontal = CoachGutter)) }
+            }
+            1 -> {
+                item(key = "notifications") {
+                    AccountSectionCard("Training notifications", Modifier.padding(horizontal = CoachGutter)) {
+                        SwitchRow(stringResource(R.string.coach_account_notify_submissions), profile.notifySubmissions, viewModel::onNotifySubmissions)
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+                        SwitchRow(stringResource(R.string.coach_account_notify_digest), profile.notifyWeeklyDigest, viewModel::onNotifyDigest)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Manage Android delivery from the notification bell.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-        }
-
-        item {
-            Column(Modifier.padding(horizontal = CoachGutter)) {
-
-                TextButton(onClick = onEditAccount) { Text("Edit account details") }
-                com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
-            }
-        }
-        item { com.volleyballlab.player.feature.profile.PrivacyCard(Modifier.padding(horizontal = CoachGutter)) }
-        item { com.volleyballlab.player.feature.profile.DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = CoachGutter)) }
-        item(key = "team") {
-            EntranceAnimation(index = 1) {
-                AccountSectionCard(
-                    title = stringResource(R.string.coach_account_team),
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                ) {
-
-                    AccountField(
-                        label = stringResource(R.string.coach_account_team_name),
-                        value = profile.teamName,
-                        onValueChange = viewModel::onTeam,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    AccountField(
-                        label = stringResource(R.string.coach_account_organisation),
-                        value = profile.organisation,
-                        onValueChange = viewModel::onOrganisation,
-                    )
-                }
-            }
-        }
-
-        item(key = "credentials") {
-            EntranceAnimation(index = 2) {
-                AccountSectionCard(
-                    title = stringResource(R.string.coach_account_credentials),
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                ) {
-                    Text(
-                        text = stringResource(R.string.coach_account_specialisation),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    // Scrolled rather than wrapped: the chips are one ranked list of
-                    // specialisations and a flow layout would break it into ragged
-                    // rows whose length changes with the locale.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CoachSpecialisation.All.forEach { candidate ->
-                            FilterChip(
-                                selected = profile.specialisation == candidate,
-                                onClick = { viewModel.onSpecialisation(candidate) },
-                                label = { Text(stringResource(candidate.displayName)) },
-                                shape = CoachPillShape,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                    AccountField(
-                        label = stringResource(R.string.coach_account_experience),
-                        value = profile.yearsExperience?.toString().orEmpty(),
-                        onValueChange = viewModel::onExperience,
-                        keyboardType = KeyboardType.Number,
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-                    AccountField(
-                        label = stringResource(R.string.coach_account_licence),
-                        value = profile.licenceNumber,
-                        onValueChange = viewModel::onLicence,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    // Inside the card, under the field it qualifies: "nothing here is
-                    // verified" is a caveat about this licence box specifically, and
-                    // floating it between cards would leave it attached to nothing.
-                    Text(stringResource(R.string.coach_account_licence_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-
-        item(key = "notifications") {
-            EntranceAnimation(index = 3) {
-                AccountSectionCard(
-                    title = stringResource(R.string.coach_account_notifications),
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                ) {
-                    SwitchRow(
-                        label = stringResource(R.string.coach_account_notify_submissions),
-                        checked = profile.notifySubmissions,
-                        onCheckedChange = viewModel::onNotifySubmissions,
-                    )
-                    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    SwitchRow(
-                        label = stringResource(R.string.coach_account_notify_digest),
-                        checked = profile.notifyWeeklyDigest,
-                        onCheckedChange = viewModel::onNotifyDigest,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    // The load-bearing sentence of this whole section, and it stays in
-                    // the same card as the switches it is about. A coach who reads only
-                    // the switches must not be able to miss it.
-                    Text(stringResource(R.string.coach_account_notify_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-
-        item(key = "security") {
-            AccountSecurityCard(Modifier.padding(horizontal = CoachGutter))
-        }
-
-        item(key = "exit") {
-            EntranceAnimation(index = 4) {
-                // Given the same titled-card treatment as the sections above rather
-                // than a bare card, so the way out is a destination on the page
-                // instead of two loose buttons after the last setting. The sign-out
-                // is the only text button on the screen and the only thing in the
-                // error colour, which is what keeps it from being tapped by accident
-                // while still being findable.
-                AccountSectionCard(
-                    title = "Account controls",
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                ) {
-                    TextButton(
-                        onClick = { viewModel.signOut(onSignedOut) },
-                        shape = CoachPillShape,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.profile_sign_out))
+            else -> {
+                item(key = "security") { AccountSecurityCard(Modifier.padding(horizontal = CoachGutter)) }
+                item(key = "privacy") { com.volleyballlab.player.feature.profile.PrivacyCard(Modifier.padding(horizontal = CoachGutter)) }
+                item(key = "sign-out") {
+                    AccountSectionCard("Session", Modifier.padding(horizontal = CoachGutter)) {
+                        TextButton(onClick = { viewModel.signOut(onSignedOut) }, modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.profile_sign_out)) }
                     }
                 }
+                item(key = "delete-account") { com.volleyballlab.player.feature.profile.DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = CoachGutter)) }
             }
         }
-        item { Spacer(Modifier.height(24.dp)) }
+        item(key = "bottom-space") { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -474,9 +344,9 @@ private fun AccountSectionCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = CoachCardShape,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f)),
     ) {
         Column(Modifier.padding(20.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

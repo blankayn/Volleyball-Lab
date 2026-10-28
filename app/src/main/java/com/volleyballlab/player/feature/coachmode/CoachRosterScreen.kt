@@ -96,21 +96,7 @@ class CoachRosterViewModel(
     }
 }
 
-/**
- * The roster, and the requests waiting to get onto it.
- *
- * Figures 26 and 27 of the capstone document, which the web portal draws as two
- * separate pages. They are one screen here because on a phone they are the same
- * question - who is on my team - asked about two groups, and a coach who has to
- * find a second page to answer a request will leave requests unanswered.
- *
- * ## Nothing here adds a player
- *
- * The document is explicit that the player asks and the coach answers, so there is
- * no add button on this screen and there should not be one. What fills this roster
- * is an athlete typing the coach code on their own phone; the code lives on the
- * Team tab, where a coach can read it out.
- */
+/** Team, pending join requests and former players, with search within each view. */
 @Composable
 fun CoachRosterScreen(
     onOpenPlayer: (String) -> Unit,
@@ -126,11 +112,13 @@ fun CoachRosterScreen(
         return
     }
 
+    var tab by rememberSaveable { mutableStateOf(if (state.pendingRequests.isNotEmpty()) 1 else 0) }
     var search by rememberSaveable { mutableStateOf("") }
     val query = search.trim()
     val active = state.snapshots.filter { it.member.isActive && it.member.playerName.contains(query, ignoreCase = true) }
     val requests = state.pendingRequests.filter { it.playerName.contains(query, ignoreCase = true) }
     val past = state.pastMembers.filter { it.playerName.contains(query, ignoreCase = true) }
+    val visibleCount = when (tab) { 0 -> active.size; 1 -> requests.size; else -> past.size }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -146,6 +134,10 @@ fun CoachRosterScreen(
             }
         }
 
+        item(key = "roster-tabs") {
+            CoachFilterTabs(listOf("Team ${active.size}", "Requests ${requests.size}", "Past ${past.size}"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
+        }
+
         item(key = "player-search") {
             OutlinedTextField(
                 value = search,
@@ -158,14 +150,14 @@ fun CoachRosterScreen(
                     }
                 },
                 supportingText = {
-                    if (query.isNotEmpty()) Text(stringResource(R.string.coach_search_count, active.size + requests.size + past.size))
+                    if (query.isNotEmpty()) Text(stringResource(R.string.coach_search_count, visibleCount))
                 },
                 singleLine = true,
                 shape = CoachInnerShape,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter),
             )
         }
-        if (query.isNotEmpty() && active.isEmpty() && requests.isEmpty() && past.isEmpty()) {
+        if (query.isNotEmpty() && visibleCount == 0) {
             item(key = "search-empty") {
                 CoachCard(Modifier.padding(horizontal = CoachGutter)) {
                     Text(stringResource(R.string.coach_search_empty_title), style = MaterialTheme.typography.titleMedium)
@@ -180,7 +172,7 @@ fun CoachRosterScreen(
         // them. That is the ranking this screen argues for: answering a request is
         // something only the coach can do and the player is blocked until they do
         // it, whereas reading a roster row can wait.
-        if (requests.isNotEmpty()) {
+        if (tab == 1 && requests.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 1) {
                     CoachSectionTitle(text = stringResource(R.string.coach_roster_requests))
@@ -202,7 +194,7 @@ fun CoachRosterScreen(
             }
         }
 
-        if (active.isEmpty() && query.isEmpty()) {
+        if (tab == 0 && active.isEmpty() && query.isEmpty()) {
             item {
                 EntranceAnimation(index = 2) {
                     CoachFeatureCard(
@@ -228,7 +220,7 @@ fun CoachRosterScreen(
                     )
                 }
             }
-        } else if (active.isNotEmpty()) {
+        } else if (tab == 0 && active.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 2) {
                     CoachSectionTitle(text = stringResource(R.string.coach_roster_active))
@@ -249,7 +241,16 @@ fun CoachRosterScreen(
             }
         }
 
-        if (past.isNotEmpty()) {
+        if (query.isEmpty() && ((tab == 1 && requests.isEmpty()) || (tab == 2 && past.isEmpty()))) {
+            item(key = "empty-group") {
+                CoachEmptyCard(
+                    title = if (tab == 1) "All requests are up to date" else "No past players",
+                    body = if (tab == 1) "New requests to join your team will appear here." else "Players who leave your team will be listed here.",
+                    icon = Icons.Rounded.PersonAdd, modifier = Modifier.padding(horizontal = CoachGutter),
+                )
+            }
+        }
+        if (tab == 2 && past.isNotEmpty()) {
             item {
                 CoachSectionTitle(
                     text = stringResource(R.string.coach_roster_past),

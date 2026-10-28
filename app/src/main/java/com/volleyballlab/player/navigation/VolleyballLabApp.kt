@@ -35,6 +35,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -68,6 +69,7 @@ import com.volleyballlab.player.feature.auth.SignUpScreen
 import com.volleyballlab.player.feature.auth.findActivity
 import com.volleyballlab.player.feature.coach.CoachScreen
 import com.volleyballlab.player.feature.coach.PlayerAssignmentScreen
+import com.volleyballlab.player.feature.coachmode.coachWorkspaceBackground
 import com.volleyballlab.player.feature.coachmode.CoachAccountScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignEditScreen
 import com.volleyballlab.player.feature.coachmode.CoachAssignListScreen
@@ -293,6 +295,11 @@ private fun CoachShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    var selectedTab by rememberSaveable { mutableStateOf(CoachTabDestination.Dashboard) }
+    val topLevelTab = CoachTabDestination.All.firstOrNull { tab ->
+        currentDestination?.hierarchy?.any { it.hasRoute(tab.graphClass) } == true
+    }
+    LaunchedEffect(topLevelTab) { if (topLevelTab != null) selectedTab = topLevelTab }
     val window = LocalContext.current.findActivity()?.window
     SideEffect { setSystemBarIconAppearance(window, useDarkIcons = true) }
 
@@ -308,7 +315,8 @@ private fun CoachShell() {
                 androidx.compose.foundation.layout.Column {
                     TopAppBar(
                         title = { AppBrandTitle() },
-                        actions = { com.volleyballlab.player.feature.notifications.NotificationBell() },
+                        actions = { Box(Modifier.padding(end = 10.dp)) { com.volleyballlab.player.feature.notifications.NotificationBell() } },
+                        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
                     )
                     com.volleyballlab.player.feature.coach.CoachSyncBanner(coach = true)
                 }
@@ -318,19 +326,13 @@ private fun CoachShell() {
             if (showBottomBar) {
                 CoachBottomBar(
                     navController = navController,
-                    currentDestination = currentDestination,
+                    selectedTab = topLevelTab ?: selectedTab,
                 )
             }
         },
     ) { innerPadding ->
-        // The backdrop is a sibling of the nav host rather than something each
-        // screen draws, for two reasons. It stays put while a page scrolls over it,
-        // which a motif inside a LazyColumn cannot do. And switching tabs does not
-        // re-draw it, so the ball does not flicker or shift on every crossfade -
-        // the cards move and the background stays, which is what makes it read as
-        // the room the screens are in rather than as part of any one of them.
-        Box(Modifier.fillMaxSize()) {
-            VolleyballBackdrop()
+        // Keep the neutral workspace surface behind every coach destination.
+        Box(Modifier.fillMaxSize().coachWorkspaceBackground()) {
             CoachNavHost(
                 navController = navController,
                 contentPadding = innerPadding,
@@ -375,12 +377,11 @@ private fun AppBrandTitle() {
 @Composable
 private fun CoachBottomBar(
     navController: NavHostController,
-    currentDestination: NavDestination?,
+    selectedTab: CoachTabDestination,
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest) {
         CoachTabDestination.All.forEach { destination ->
-            val selected = currentDestination?.hierarchy
-                ?.any { it.hasRoute(destination.graphClass) } == true
+            val selected = selectedTab == destination
 
             NavigationBarItem(
                 selected = selected,
