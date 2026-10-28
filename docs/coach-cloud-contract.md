@@ -270,12 +270,24 @@ Active roster membership. The Coach tab is the entry card, not the full workspac
   only after the coach has reviewed that player's submitted session. The player
   sees the public-review disclosure before saving and may edit their own review;
   the coach cannot alter ratings. No account email or player display name is copied.
-- `coachAvailability/{coachUid}` is a coach-controlled capacity indicator, not
-  automatically inferred presence. Values are Available, Busy, Offline, FullyBooked.
-  Unknown availability is displayed as not set. Existing connection permissions
-  remain authoritative; this status does not automatically end a team relationship.
+- `coachPresence/{connectionId}` holds a separate automatic activity lease for
+  each app connection or browser tab: `coachUid`, `status` (Online, Busy, Offline),
+  server `updatedAt`, and bounded `expiresAt`. Only the listed coach with the COACH
+  role may write their own lease. No route, device identity, email or typed text
+  is copied into presence. Signed-in users may read these coarse statuses.
+  Foreground clients renew at most once per minute while active. Reviewing training
+  or preparing guidance means Busy; other active coaching use means Online.
+  Background/hidden clients and five minutes without interaction mean Offline.
+  An acknowledged lease expires after two minutes, re-evaluated every 15 seconds,
+  so a crash or disconnect cannot leave someone indefinitely online. Rules reject
+  expired queued writes and leases over 150 seconds into the future. Across devices,
+  a live Busy lease wins, then Online, otherwise Offline. Read errors show status
+  unavailable. Presence is separate from booking capacity and typical response time.
+  Normal disconnect/sign-out removes only that connection; expired records are
+  pruned on the owner's next connection and removed during account cleanup.
+  Legacy `coachAvailability/{coachUid}` records are ignored and client read-only.
 - Android coach mode and the website's **Player questions** queue can reply and
-  update availability. Firestore listeners drive in-app question/answer alerts.
+  show automatic presence without a manual selector. Firestore listeners drive in-app question/answer alerts.
   No new Cloud Functions or paid billing plan are required for these interactions.
   Account cleanup also removes questions, matching response records, availability,
   and reviews belonging to either participant.

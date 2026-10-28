@@ -15,3 +15,7 @@
 .hub-page small { color:var(--ink-faint); }
 .hub-page textarea { min-height:110px; }
 @media(max-width:740px) { .hub-summary { grid-template-columns:1fr; } .hub-question-heading { flex-direction:column; } .hub-page .panel { padding:20px; } }
+.hub-presence-status { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 14px; background: var(--surface-soft, #f1f2ee); font-weight: 700; }
+.hub-presence-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.hub-presence-status[data-presence="Online"] { color: #245b3b; background: #e8f4eb; }
+.hub-presence-status[data-presence="Busy"] { color: #7c4c13; background: #fbefd9; }

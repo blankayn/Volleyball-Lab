@@ -1,4 +1,5 @@
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { watchCoachPresence } from "./coach-presence";
 import { db } from "./firebase";
 import { esc, fullDate } from "./format";
 import type { RosterMember } from "./cloud";
@@ -8,7 +9,6 @@ export interface CoachingQuestion {
   topic: string; text: string; createdAt: number; answer: string | null; answeredAt: number | null;
 }
 const topics: Record<string, string> = { FirstDrill: "First drill", TrainingFocus: "Training focus", RecordingHelp: "Recording help", Technique: "Technique", DrillInstructions: "Drill instructions", FeedbackClarification: "Feedback clarification" };
-export const availabilityLabels = { Available: "Available", Busy: "Busy", Offline: "Offline", FullyBooked: "Fully booked" } as const;
 const millis = (value: unknown): number => value && typeof value === "object" && "toMillis" in value ? (value as { toMillis(): number }).toMillis() : 0;
 export const questionsQuery = (uid: string) => query(collection(db, "coachingQuestions"), where("coachUid", "==", uid));
 export async function getCoachQuestions(uid: string): Promise<CoachingQuestion[]> {
@@ -24,12 +24,10 @@ let draftOwner = "";
 const drafts = new Map<string, string>();
 export async function renderCoachQuestions(uid: string, questions: CoachingQuestion[] | null, roster: RosterMember[]): Promise<string> {
   if (draftOwner !== uid) { draftOwner = uid; drafts.clear(); }
-  const [availability, reviews, timings] = await Promise.all([
-    getDoc(doc(db, "coachAvailability", uid)),
+  const [reviews, timings] = await Promise.all([
     getDocs(query(collection(db, "coachReviews"), where("coachUid", "==", uid))),
     getDocs(query(collection(db, "coachResponseTimes"), where("coachUid", "==", uid))),
   ]);
-  const status = availability.data()?.status;
   const rates = reviews.docs.map((review) => Number(review.data().rating)).filter((rating) => rating >= 1 && rating <= 5);
   const durations = timings.docs.map((entry) => entry.data()).sort((a, b) => millis(b.answeredAt) - millis(a.answeredAt)).slice(0, 20)
     .map((entry) => millis(entry.answeredAt) - millis(entry.askedAt)).filter((duration) => duration >= 0).sort((a, b) => a - b);
@@ -39,9 +37,7 @@ export async function renderCoachQuestions(uid: string, questions: CoachingQuest
     : median < 60_000 ? "Typical response: under a minute" : median < 3_600_000 ? `Typical response: ${Math.floor(median / 60_000)} min`
       : median < 86_400_000 ? `Typical response: ${Math.floor(median / 3_600_000)} hr` : `Typical response: ${Math.floor(median / 86_400_000)} days`;
   return `<section class="hub-page"><div><p class="eyebrow">Training conversations</p><h2>Player questions</h2><p class="muted">One question and one response per reviewed session, plus a getting-started question for newly accepted players.</p></div>
-    <div class="hub-summary"><section class="panel"><h3>Your availability</h3><p class="muted">Shown on your coach profile. Update this when your capacity changes.</p>
-      <label class="field" for="coach-availability">Availability<select id="coach-availability"><option value="" disabled${!status ? " selected" : ""}>Choose availability</option>${Object.entries(availabilityLabels).map(([value, label]) => `<option value="${value}"${status === value ? " selected" : ""}>${label}</option>`).join("")}</select></label>
-      <button type="button" class="btn btn-primary" id="save-availability">Save availability</button><p id="availability-status" role="status"></p></section>
+    <div class="hub-summary"><section class="panel"><h3>Your status</h3><p class="hub-presence-status" data-coach-presence role="status">Connecting…</p><p class="muted">Updates automatically with your recent coaching activity.</p></section>
       <section class="panel"><h3>Your coaching profile</h3><p>${esc(response)}</p><p class="muted">Median of up to 20 recent answered questions.</p><p>${rates.length ? `★ ${(rates.reduce((sum, rate) => sum + rate, 0) / rates.length).toFixed(1)} / 5 · ${rates.length} verified session reviews` : "No session reviews yet"}</p></section></div>
     <p id="question-status" role="status" aria-live="polite"></p>
     ${questions === null ? '<div class="form-error" role="alert">Questions could not load. Check your connection and retry this page.</div>' : questions.length === 0 ? '<section class="panel empty"><h3>No questions yet</h3><p>Questions from active players will appear here.</p></section>' : questions.map((question) => {
@@ -82,16 +78,10 @@ export function wireCoachingHub(root: HTMLElement, uid: string, refresh: () => v
     field.addEventListener("input", onInput); form.addEventListener("submit", onSubmit);
     disposers.push(() => { field.removeEventListener("input", onInput); form.removeEventListener("submit", onSubmit); });
   });
-  const save = root.querySelector<HTMLButtonElement>("#save-availability");
-  const onSave = async () => {
-    const status = root.querySelector<HTMLElement>("#availability-status")!;
-    const field = root.querySelector<HTMLSelectElement>("#coach-availability")!;
-    if (!save || save.disabled || !(field.value in availabilityLabels)) return;
-    save.disabled = true; status.textContent = "Saving…";
-    try { await setDoc(doc(db, "coachAvailability", uid), { coachUid: uid, status: field.value, updatedAt: serverTimestamp() }); status.textContent = "Availability saved."; }
-    catch { status.textContent = "Could not save availability. Please try again."; }
-    finally { save.disabled = false; }
-  };
-  save?.addEventListener("click", onSave);
-  return () => { disposers.forEach((dispose) => dispose()); save?.removeEventListener("click", onSave); };
+  const presence = root.querySelector<HTMLElement>("[data-coach-presence]");
+  if (presence) disposers.push(watchCoachPresence(uid, (status) => {
+    presence.textContent = status ?? "Status unavailable";
+    presence.dataset["presence"] = status ?? "Unknown";
+  }));
+  return () => { disposers.forEach((dispose) => dispose()); };
 }

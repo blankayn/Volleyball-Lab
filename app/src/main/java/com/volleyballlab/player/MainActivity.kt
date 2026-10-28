@@ -31,6 +31,21 @@ import com.volleyballlab.player.ui.theme.VolleyballLabTheme
 class MainActivity : ComponentActivity() {
     private val showNotificationInbox = mutableStateOf(false)
 
+    override fun onResume() {
+        super.onResume()
+        (application as VolleyballLabApplication).container.coachPresenceReporter.foreground(true)
+    }
+
+    override fun onPause() {
+        (application as VolleyballLabApplication).container.coachPresenceReporter.foreground(false)
+        super.onPause()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        (application as VolleyballLabApplication).container.coachPresenceReporter.interact()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

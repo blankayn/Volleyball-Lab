@@ -75,6 +75,7 @@ class CoachAccountViewModel(
     private val coachRepository: CoachRepository,
     private val authRepository: AuthRepository,
     private val profileRepository: com.volleyballlab.player.domain.repository.ProfileRepository,
+    private val beforeSignOut: suspend () -> Unit = {},
 ) : ViewModel() {
 
     val uiState: StateFlow<CoachAccountUiState> = combine(
@@ -165,6 +166,7 @@ class CoachAccountViewModel(
 
     fun signOut(onSignedOut: () -> Unit) {
         viewModelScope.launch {
+            beforeSignOut()
             authRepository.signOut()
             onSignedOut()
         }
@@ -177,6 +179,7 @@ class CoachAccountViewModel(
                     coachRepository = appContainer.coachRepository,
                     authRepository = appContainer.authRepository,
                     profileRepository = appContainer.profileRepository,
+                    beforeSignOut = appContainer.coachPresenceReporter::beforeSignOut,
                 )
             }
         }

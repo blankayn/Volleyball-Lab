@@ -113,15 +113,14 @@ internal val CoachInk = Color(0xFF242925)
 
 @Composable internal fun AvailabilityTag(status: CoachAvailability?, onDark: Boolean = false) {
     val ink = when (status) {
-        CoachAvailability.Available -> if (onDark) Color(0xFFB5D2B4) else Color(0xFF285837)
+        CoachAvailability.Online -> if (onDark) Color(0xFFB5D2B4) else Color(0xFF285837)
         CoachAvailability.Busy -> if (onDark) Color(0xFFF4C57D) else Color(0xFF805217)
-        CoachAvailability.FullyBooked -> if (onDark) Color(0xFFF7B091) else Color(0xFF9F3C1E)
         else -> if (onDark) Color(0xFFD8D8D0) else MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(shape = RoundedCornerShape(20.dp), color = ink.copy(alpha = if (onDark) .10f else .08f)) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(5.dp).clip(RoundedCornerShape(3.dp)).background(ink))
-            Text(status?.label ?: "Not set", style = MaterialTheme.typography.labelSmall, color = ink)
+            Text(status?.label ?: "Status unavailable", style = MaterialTheme.typography.labelSmall, color = ink)
         }
     }
 }

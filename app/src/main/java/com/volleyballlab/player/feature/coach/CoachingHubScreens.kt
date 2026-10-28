@@ -423,16 +423,13 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
             val summaryFlow = remember(uid) { actions.hub.summary(uid) }
             val summary by summaryFlow.collectAsStateWithLifecycle(CoachPublicSummary())
             com.volleyballlab.player.feature.coachmode.CoachCard {
-                com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your availability")
-                Spacer(Modifier.height(8.dp))
-                Text("Let players know when you can coach", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CoachAvailability.entries.forEach { status -> FilterChip(selected = status == summary.availability,
-                        onClick = { actions.perform("availability") { actions.hub.setAvailability(status) } },
-                        enabled = "availability" !in busy, label = { Text(status.label) }, shape = RoundedCornerShape(12.dp)) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your status")
+                        Text("Updates automatically with your coaching activity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    AvailabilityTag(summary.availability)
                 }
-                errors["availability"]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         } }
         item {
@@ -449,6 +446,10 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
             val active = roster.any { it.playerUid == question.playerUid && it.isActive }
             var replying by rememberSaveable(question.id) { mutableStateOf(false) }
             var reply by rememberSaveable(question.id) { mutableStateOf("") }
+            DisposableEffect(question.id, replying, active) {
+                graph.coachPresenceReporter.writing(question.id, replying && active)
+                onDispose { graph.coachPresenceReporter.writing(question.id, false) }
+            }
             com.volleyballlab.player.feature.coachmode.CoachCard(padding = 22.dp) {
                 com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow(if (question.sessionId == null) "Getting started" else "Session question")
                 Spacer(Modifier.height(10.dp))
@@ -466,7 +467,7 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
                 } else if (active) {
                     if (!replying) com.volleyballlab.player.feature.coachmode.CoachPillButton("Write a response", { replying = true }, Modifier.fillMaxWidth())
                     else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(reply, { reply = it.take(1000) }, label = { Text("Training guidance") }, minLines = 4,
+                        OutlinedTextField(reply, { graph.coachPresenceReporter.interact(); reply = it.take(1000) }, label = { Text("Training guidance") }, minLines = 4,
                             shape = RoundedCornerShape(16.dp), isError = hasCoachingLink(reply),
                             supportingText = { Text(if (hasCoachingLink(reply)) "Text only; links are not supported." else "${reply.length}/1000") },
                             enabled = question.id !in busy, modifier = Modifier.fillMaxWidth())

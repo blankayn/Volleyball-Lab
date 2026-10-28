@@ -203,7 +203,7 @@ fun CoachDashboardScreen(
         }
 
         item(key = "questions") {
-            CoachNavigationRow("Player questions", "Answer training questions and set your availability", Icons.Rounded.QuestionAnswer,
+            CoachNavigationRow("Player questions", "Review introductions and answer training questions", Icons.Rounded.QuestionAnswer,
                 onOpenQuestions, Modifier.padding(horizontal = CoachGutter))
         }
 

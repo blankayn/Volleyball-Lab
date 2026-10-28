@@ -1,7 +1,7 @@
 package com.volleyballlab.player.domain.model
 
 enum class CoachAvailability(val label: String) {
-    Available("Available"), Busy("Busy"), Offline("Offline"), FullyBooked("Fully booked")
+    Online("Online"), Busy("Busy"), Offline("Offline")
 }
 
 enum class CoachingTopic(val label: String, val introductory: Boolean = false) {

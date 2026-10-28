@@ -1,4 +1,5 @@
-import { onAuthStateChanged } from "firebase/auth";
+import { beforeAuthStateChanged, onAuthStateChanged } from "firebase/auth";
+import { setCoachPresenceAccount, stopCoachPresence } from "./lib/coach-presence";
 import { auth, configError, initFirebase } from "./lib/firebase";
 import { getUserRole } from "./lib/cloud";
 import { go, parseRoute } from "./lib/router";
@@ -51,6 +52,7 @@ function notCoachPage(): void {
 }
 
 function backendError(): void {
+  setCoachPresenceAccount(null);
   root.innerHTML = `<div class="wrap"><div class="auth-shell"><div class="auth-card">
     <h1>Could not reach the backend</h1>
     <p class="muted">Check your connection and that Firestore is provisioned for this project.</p>
@@ -75,6 +77,7 @@ async function render(): Promise<void> {
   disposeDashboard?.();
   disposeDashboard = undefined;
   const route = parseRoute(hash);
+  if (route.name !== "app") setCoachPresenceAccount(null);
   (await import("./pages/landing")).disposeLanding();
 
   if (version !== renderVersion) return;
@@ -89,6 +92,7 @@ async function render(): Promise<void> {
       const role = await getUserRole(user.uid);
       if (version !== renderVersion) return;
       if (role !== "COACH") {
+        setCoachPresenceAccount(null);
         notCoachPage();
         return;
       }
@@ -96,6 +100,7 @@ async function render(): Promise<void> {
       if (version === renderVersion) backendError();
       return;
     }
+    setCoachPresenceAccount(user.uid);
     const dashboard = await import("./pages/dashboard");
     if (version !== renderVersion) return;
     const { renderDashboard } = dashboard;
@@ -155,7 +160,11 @@ function boot(): void {
   window.addEventListener("hashchange", safelyRender);
 
   // Auth state drives re-render: sign-in/out anywhere swaps the shell.
+  beforeAuthStateChanged(auth, async (next) => {
+    if (next?.uid !== auth.currentUser?.uid) await Promise.race([stopCoachPresence(), new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
+  });
   onAuthStateChanged(auth, (user) => {
+    setCoachPresenceAccount(null);
     setPreferenceAccount(user?.uid ?? null);
     const route = parseRoute(window.location.hash);
     if (current !== null && (route.name === "login" || route.name === "register")) return;

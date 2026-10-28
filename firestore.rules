@@ -406,13 +406,26 @@ service cloud.firestore {
     }
     match /coachAvailability/{coachUid} {
       allow read: if signedIn();
-      allow create, update: if isUser(coachUid)
-        && exists(/databases/$(database)/documents/coachDirectory/$(coachUid))
-        && request.resource.data.keys().hasOnly(['coachUid', 'status', 'updatedAt'])
-        && request.resource.data.coachUid == coachUid
-        && request.resource.data.status in ['Available', 'Busy', 'Offline', 'FullyBooked']
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if false;
+      // Retained for cleanup of legacy data; new clients ignore manual statuses.
+      allow write: if false;
+    }
+    function validCoachPresence(data) {
+      return data.keys().hasAll(['coachUid', 'status', 'updatedAt', 'expiresAt'])
+        && data.keys().hasOnly(['coachUid', 'status', 'updatedAt', 'expiresAt'])
+        && data.coachUid == request.auth.uid
+        && exists(/databases/$(database)/documents/coachDirectory/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['COACH', 'Coach']
+        && data.status in ['Online', 'Busy', 'Offline']
+        && data.updatedAt is timestamp && data.updatedAt == request.time
+        && data.expiresAt is timestamp && data.expiresAt > request.time
+        && data.expiresAt <= request.time + duration.value(150, 's');
+    }
+    match /coachPresence/{sessionId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validCoachPresence(request.resource.data);
+      allow update: if signedIn() && resource.data.coachUid == request.auth.uid
+        && validCoachPresence(request.resource.data);
+      allow delete: if signedIn() && resource.data.coachUid == request.auth.uid;
     }
     match /coachReviews/{reviewId} {
       allow read: if signedIn();

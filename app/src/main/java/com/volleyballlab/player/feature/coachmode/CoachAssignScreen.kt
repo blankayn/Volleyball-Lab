@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -353,6 +354,7 @@ fun CoachAssignEditScreen(
 ) {
     val viewModel: CoachAssignViewModel = viewModel(factory = CoachAssignViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val presenceReporter = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.coachPresenceReporter
     val drills by viewModel.drills.collectAsStateWithLifecycle()
 
     if (!state.loaded) {
@@ -474,7 +476,7 @@ fun CoachAssignEditScreen(
                     FormField(stringResource(R.string.coach_assign_name)) {
                         OutlinedTextField(
                             value = title,
-                            onValueChange = { title = it.take(CoachAssignment.MAX_TITLE_LENGTH) },
+                            onValueChange = { presenceReporter.interact(); title = it.take(CoachAssignment.MAX_TITLE_LENGTH) },
                             placeholder = { Text(stringResource(R.string.coach_assign_name_hint)) },
                             singleLine = true,
                             shape = CoachInnerShape,
@@ -582,6 +584,7 @@ fun CoachAssignEditScreen(
                         OutlinedTextField(
                             value = summary,
                             onValueChange = {
+                                presenceReporter.interact()
                                 summary = it.take(CoachAssignment.MAX_SUMMARY_LENGTH)
                             },
                             placeholder = {
@@ -596,6 +599,7 @@ fun CoachAssignEditScreen(
                         OutlinedTextField(
                             value = instructions,
                             onValueChange = {
+                                presenceReporter.interact()
                                 instructions = it.take(CoachAssignment.MAX_INSTRUCTIONS_LENGTH)
                             },
                             placeholder = {

@@ -7,6 +7,7 @@ import com.volleyballlab.player.domain.repository.AuthRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 
 /** Training questions and verified reviews shared by Android and the coach portal. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,12 +41,12 @@ class CoachingHubRepository(private val db: FirebaseFirestore, private val auth:
     val myReviews: Flow<List<CoachReview>> = mine("coachReviews", "playerUid").map { it.mapNotNull(::review) }
 
     fun summary(coachUid: String): Flow<CoachPublicSummary> = combine(
-        db.collection("coachAvailability").whereEqualTo("coachUid", coachUid).observe(),
+        presence(coachUid),
         db.collection("coachReviews").whereEqualTo("coachUid", coachUid).observe(),
         db.collection("coachResponseTimes").whereEqualTo("coachUid", coachUid).observe(),
     ) { availability, reviews, timings ->
         CoachPublicSummary(
-            availability = availability.firstOrNull()?.getString("status")?.let { value -> CoachAvailability.entries.firstOrNull { it.name == value } },
+            availability = availability,
             reviews = reviews.mapNotNull(::review).sortedByDescending { it.createdAt },
             responseTimesMs = timings.sortedByDescending { it.getTimestamp("answeredAt")?.toDate()?.time ?: 0 }.take(20).mapNotNull {
                 val asked = it.getTimestamp("askedAt")?.toDate()?.time
@@ -99,9 +100,30 @@ class CoachingHubRepository(private val db: FirebaseFirestore, private val auth:
         }.awaitCloud()
     }
 
-    suspend fun setAvailability(status: CoachAvailability) {
-        val uid = requireNotNull(auth.currentUid)
-        db.collection("coachAvailability").document(uid).set(mapOf("coachUid" to uid, "status" to status.name, "updatedAt" to FieldValue.serverTimestamp())).awaitCloud()
+    private fun presence(coachUid: String): Flow<CoachAvailability?> = refresh.flatMapLatest {
+        val key = "${auth.currentUid}|presence-$coachUid"
+        val records: Flow<List<CoachPresenceLease>?> = callbackFlow {
+            val registration = db.collection("coachPresence").whereEqualTo("coachUid", coachUid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        failures.update { it + (key to "Coach status could not sync. Check your connection and retry.") }
+                        trySend(null)
+                    } else if (snapshot != null) {
+                        failures.update { it - key }
+                        val leases = snapshot.documents.mapNotNull { row ->
+                            val status = row.getString("status")?.let { value -> CoachAvailability.entries.firstOrNull { it.name == value } }
+                            val updated = row.getTimestamp("updatedAt")?.toDate()?.time
+                            val expires = row.getTimestamp("expiresAt")?.toDate()?.time
+                            if (status != null && updated != null && expires != null) CoachPresenceLease(status, updated, expires) else null
+                        }
+                        trySend(if (leases.isEmpty() && snapshot.metadata.hasPendingWrites()) null else leases)
+                    }
+                }
+            awaitClose { registration.remove() }
+        }
+        combine(records, flow { while (true) { emit(System.currentTimeMillis()); delay(CoachPresencePolicy.CHECK_MS) } }) { rows, now ->
+            rows?.let { CoachPresencePolicy.resolve(it, now) }
+        }
     }
 
     private fun question(doc: DocumentSnapshot): CoachingQuestion? = runCatching {

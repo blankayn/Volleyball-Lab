@@ -2,7 +2,7 @@ import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, query, where, setDoc, updateDoc, writeBatch, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, setDoc, deleteDoc, updateDoc, writeBatch, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 let env;
 before(async () => { env = await initializeTestEnvironment({ projectId: 'demo-volleyball-lab', firestore: { rules: await readFile(new URL('../../firestore.rules', import.meta.url), 'utf8') } }); });
@@ -12,6 +12,7 @@ async function seed(path, data) { await env.withSecurityRulesDisabled(context =>
 beforeEach(async () => {
   await env.clearFirestore();
   await seed('coachDirectory/coach', { name: 'Coach' });
+  await seed('users/coach', { role: 'COACH' });
   await seed('roster/coach/members/player', { playerUid: 'player', status: 'Active' });
   await seed('submissions/coach_session', { coachUid: 'coach', playerUid: 'player', sessionId: 'session', reviewedAt: Date.now() });
 });
@@ -89,10 +90,44 @@ test('unreviewed sessions cannot earn a coach review', async () => {
   await seed('submissions/coach_session', { coachUid: 'coach', playerUid: 'player', sessionId: 'session', reviewedAt: null });
   await assertFails(setDoc(doc(client('player'), 'coachReviews/coach_player_session'), review()));
 });
-test('availability has four states and only the listed coach controls it', async () => {
-  const data = status => ({ coachUid: 'coach', status, updatedAt: serverTimestamp() });
-  await assertFails(setDoc(doc(client('player'), 'coachAvailability/coach'), data('Available')));
-  await assertFails(setDoc(doc(client('coach'), 'coachAvailability/coach'), data('Dating')));
-  for (const status of ['Available', 'Busy', 'Offline', 'FullyBooked']) await assertSucceeds(setDoc(doc(client('coach'), 'coachAvailability/coach'), data(status)));
-  await assertSucceeds(getDocs(query(collection(client('player'), 'coachAvailability'), where('coachUid', '==', 'coach'))));
+test('legacy manual availability is read-only', async () => {
+  await assertFails(setDoc(doc(client('coach'), 'coachAvailability/coach'), { coachUid: 'coach', status: 'Busy', updatedAt: serverTimestamp() }));
+});
+
+const presence = (patch = {}) => ({ coachUid: 'coach', status: 'Online', updatedAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 120_000), ...patch });
+test('listed coaches publish independent fresh device leases and signed-in players can read them', async () => {
+  await assertSucceeds(setDoc(doc(client('coach'), 'coachPresence/phone'), presence()));
+  await assertSucceeds(setDoc(doc(client('coach'), 'coachPresence/browser'), presence({ status: 'Busy' })));
+  const records = await assertSucceeds(getDocs(query(collection(client('player'), 'coachPresence'), where('coachUid', '==', 'coach'))));
+  assert.equal(records.size, 2);
+  await assertSucceeds(deleteDoc(doc(client('coach'), 'coachPresence/phone')));
+  assert.equal((await getDoc(doc(client('player'), 'coachPresence/browser'))).data().status, 'Busy');
+});
+test('players cannot spoof a coach, overwrite another connection or publish their own coach status', async () => {
+  await assertFails(setDoc(doc(client('player'), 'coachPresence/fake'), presence()));
+  await seed('users/player', { role: 'PLAYER' });
+  await seed('coachDirectory/player', { name: 'Old listing' });
+  await assertFails(setDoc(doc(client('player'), 'coachPresence/fake'), presence({ coachUid: 'player' })));
+  await setDoc(doc(client('coach'), 'coachPresence/phone'), presence());
+  await assertFails(updateDoc(doc(client('player'), 'coachPresence/phone'), { status: 'Offline', updatedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(doc(client('player'), 'coachPresence/phone')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'coachPresence/phone')));
+});
+test('presence rejects manual capacity, arbitrary fields, client update times and stale or excessive leases', async () => {
+  const ref = doc(client('coach'), 'coachPresence/phone');
+  await assertFails(setDoc(ref, presence({ status: 'FullyBooked' })));
+  await assertFails(setDoc(ref, presence({ email: 'private@example.test' })));
+  await assertFails(setDoc(ref, presence({ updatedAt: Timestamp.fromMillis(1) })));
+  await assertFails(setDoc(ref, presence({ expiresAt: Timestamp.fromMillis(Date.now() - 1) })));
+  await assertFails(setDoc(ref, presence({ expiresAt: Timestamp.fromMillis(Date.now() + 180_000) })));
+  const missingExpiry = presence(); delete missingExpiry.expiresAt;
+  await assertFails(setDoc(ref, missingExpiry));
+  await assertSucceeds(setDoc(ref, presence({ status: 'Offline' })));
+});
+test('presence cannot change owners and account deletion fences new heartbeats', async () => {
+  const ref = doc(client('coach'), 'coachPresence/phone');
+  await setDoc(ref, presence());
+  await assertFails(setDoc(ref, presence({ coachUid: 'player' })));
+  await seed('accountDeletions/coach', { status: 'deleting' });
+  await assertFails(setDoc(ref, presence({ status: 'Busy' })));
 });

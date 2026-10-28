@@ -27,6 +27,7 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
     });
   }
   await erase(db.collection('coachResponseTimes').where('coachUid', '==', uid));
+  await erase(db.collection('coachPresence').where('coachUid', '==', uid));
   await erase(db.collectionGroup('members').where('playerUid', '==', uid));
   await db.recursiveDelete(db.doc(`roster/${uid}`));
   await db.recursiveDelete(db.doc(`coaches/${uid}`));

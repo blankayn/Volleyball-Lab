@@ -166,7 +166,7 @@ fun CoachProfileScreen(
                         }
                     }
                     item {
-                        Text("Availability is set by the coach. Response estimates come from recent answered training questions.",
+                        Text("Status follows recent coaching activity. Response estimates come from recent answered training questions.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

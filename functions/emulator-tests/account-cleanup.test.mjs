@@ -31,6 +31,8 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
     'coachReviews/player-review': { playerUid: uid, coachUid: 'other' },
     'coachReviews/coach-review': { playerUid: 'other', coachUid: uid },
     'coachAvailability/delete-owner': { coachUid: uid, status: 'Busy' },
+    'coachPresence/own-session': { coachUid: uid, status: 'Online' },
+    'coachPresence/other-session': { coachUid: 'other', status: 'Online' },
     'roster/delete-owner/members/other': { playerUid: 'other' },
     'roster/other/members/delete-owner': { playerUid: uid },
     'roster/other/members/survivor': { playerUid: 'survivor' },
@@ -49,7 +51,7 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
   assert.equal((await db.doc('sessions/other').get()).data().ownerUid, 'other');
   assert.deepEqual((await db.doc('sessions/other').get()).data().sharedWith, ['retained-coach']);
   for (const path of Object.keys(records)) {
-    const keep = ['sessions/other', 'recordings/other', 'pushTokens/other', 'roster/other/members/survivor', 'profiles/other', 'coachEmailDeliveries/other'].includes(path);
+    const keep = ['sessions/other', 'recordings/other', 'pushTokens/other', 'roster/other/members/survivor', 'profiles/other', 'coachEmailDeliveries/other', 'coachPresence/other-session'].includes(path);
     assert.equal((await db.doc(path).get()).exists, keep, path);
   }
   assert.equal((await db.doc(`accountDeletions/${uid}`).get()).data().status, 'deleted');

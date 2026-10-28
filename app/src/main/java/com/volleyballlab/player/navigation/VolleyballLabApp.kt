@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -295,6 +296,15 @@ private fun CoachShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val coachGraph = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container
+    val coachUser by coachGraph.authRepository.currentUser.collectAsStateWithLifecycle(null)
+    DisposableEffect(coachUser?.uid) {
+        coachUser?.uid?.let(coachGraph.coachPresenceReporter::connect)
+        onDispose { coachGraph.coachPresenceReporter.disconnect() }
+    }
+    LaunchedEffect(currentDestination, coachUser?.uid) {
+        coachGraph.coachPresenceReporter.reviewing(currentDestination?.hasRoute<CoachReviewRoute>() == true || currentDestination?.hasRoute<CoachAssignEditRoute>() == true)
+    }
     var selectedTab by rememberSaveable { mutableStateOf(CoachTabDestination.Dashboard) }
     val topLevelTab = CoachTabDestination.All.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.hasRoute(tab.graphClass) } == true
