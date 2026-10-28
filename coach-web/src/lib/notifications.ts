@@ -9,12 +9,16 @@ export interface NotificationData {
   submissions: Submission[];
   assignments: Assignment[];
   sessionsByPlayer: Map<string, TrainingSession[]>;
+  questions?: { id: string; playerUid: string; createdAt: number; answer: string | null }[] | null;
 }
 export interface CoachAlert { id: string; title: string; body: string; href: string; at: number; }
 
 export function coachAlerts(data: NotificationData, preferences: PortalPreferences, now = Date.now()): CoachAlert[] {
   const alerts: CoachAlert[] = [];
   const name = (uid: string) => data.roster.find((member) => member.playerUid === uid)?.playerName || "A player";
+  for (const question of data.questions ?? []) {
+    if (question.answer === null) alerts.push({ id: `question-${question.id}`, title: "Coaching question", body: `${name(question.playerUid)} asked for training guidance.`, href: appPath("questions"), at: question.createdAt });
+  }
   if (preferences.submissionAlerts) {
     for (const submission of data.submissions.filter((entry) => entry.reviewedAt === null)) {
       alerts.push({ id: `submission-${submission.sessionId}-${submission.submittedAt}`, title: "Session ready to review", body: `${name(submission.playerUid)} submitted a session.`, href: appPath("queue"), at: submission.submittedAt });

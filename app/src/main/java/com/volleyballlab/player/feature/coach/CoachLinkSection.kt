@@ -92,6 +92,7 @@ data class CoachLinkState(
     val assignments: List<CoachAssignment> = emptyList(),
     val submissions: List<SessionSubmission> = emptyList(),
     val latestSession: SessionResult? = null,
+    val sessions: List<SessionResult> = emptyList(),
     val loaded: Boolean = false,
 ) {
     val isLinked: Boolean get() = link?.isActive == true
@@ -99,7 +100,7 @@ data class CoachLinkState(
     /** True when the newest session is already sitting in the coach's queue. */
     val latestIsSubmitted: Boolean
         get() = latestSession != null && submissions.any {
-            it.sessionId == latestSession.id
+            it.sessionId == latestSession.id && it.coachUid == link?.coachUid
         }
 }
 
@@ -124,6 +125,7 @@ class CoachLinkViewModel(
             assignments = assignments,
             submissions = submissions,
             latestSession = sessions.maxByOrNull { it.startedAtEpochMs },
+            sessions = sessions.sortedByDescending { it.startedAtEpochMs },
             loaded = true,
         )
     }.stateIn(
@@ -248,6 +250,7 @@ fun CoachLinkSection(
     modifier: Modifier = Modifier,
     onOpenAssignment: (String) -> Unit = {},
     onBrowseCoaches: () -> Unit = {},
+    onMyCoach: () -> Unit = {},
 ) {
     val viewModel: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -272,13 +275,14 @@ fun CoachLinkSection(
                 onCancel = viewModel::leave,
             )
 
-            link != null -> LinkedCard(
-                state = state,
-                onSubmit = viewModel::submit,
-                onLeave = viewModel::leave,
-                onOpenAssignment = onOpenAssignment,
-                sending = sending,
-            )
+            link != null -> LinkSurface {
+                Text(link.coachName.ifBlank { "Your coach" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (link.teamName.isNotBlank()) Text(link.teamName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+                Text("Your assignments, feedback history, and coaching questions are in your coach workspace.", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onMyCoach, modifier = Modifier.fillMaxWidth()) { Text("Open My coach") }
+            }
 
             // Figure 17: the upsell. Everything below this branch is Pro-only.
             !state.plan.isPro -> ProUpsellCard(onOpenUpgrade = { showUpgrade = true })
@@ -297,6 +301,10 @@ fun CoachLinkSection(
                 }
             }
         }
+    }
+
+    if (link?.isActive != true && (state.submissions.isNotEmpty() || state.notes.isNotEmpty())) {
+        TextButton(onClick = onMyCoach, modifier = modifier.fillMaxWidth()) { Text("View coaching history") }
     }
 
     if (showUpgrade) {
@@ -421,7 +429,7 @@ private fun PendingCard(link: CoachLink, onCancel: () -> Unit) {
 }
 
 @Composable
-private fun LinkedCard(
+internal fun LinkedCard(
     state: CoachLinkState,
     onSubmit: (String) -> Unit,
     onLeave: () -> Unit,
@@ -472,42 +480,26 @@ private fun LinkedCard(
                 else "This session sends a form summary without a video.", style = MaterialTheme.typography.bodySmall)
         }
 
-        if (state.assignments.isNotEmpty()) {
+        val coachAssignments = state.assignments.filter { it.coachUid == link.coachUid }
+        if (coachAssignments.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             Text(
                 text = stringResource(R.string.coach_link_assignments),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            state.assignments.forEach { assignment ->
+            coachAssignments.forEach { assignment ->
                 Spacer(Modifier.height(10.dp))
                 AssignmentRow(assignment, onOpen = { onOpenAssignment(assignment.id) })
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-        Text(
-            text = stringResource(R.string.coach_link_notes),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(8.dp))
-        if (state.notes.isEmpty()) {
-            Text(
-                text = stringResource(R.string.coach_link_no_notes),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            // Newest first, capped: a coach who has been writing for a season
-            // should not push the rest of the tab off the bottom of the screen.
-            state.notes.take(MAX_NOTES_SHOWN).forEach { note ->
-                Text(
-                    text = note.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
+        val generalNotes = state.notes.filter { it.sessionId == null && it.coachUid == link.coachUid }
+        if (generalNotes.isNotEmpty()) {
+            Spacer(Modifier.height(18.dp))
+            Text("General coach guidance", style = MaterialTheme.typography.titleSmall)
+            generalNotes.take(MAX_NOTES_SHOWN).forEach { note ->
+                Text(note.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp))
             }
         }
 

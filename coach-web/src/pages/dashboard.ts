@@ -34,8 +34,9 @@ import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
 import { wireCoachExperience } from "../lib/coach-experience";
+import { getCoachQuestions, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
 
-type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
+type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player" | "questions";
 
 interface DashData {
   roster: RosterMember[];
@@ -44,6 +45,7 @@ interface DashData {
   sessionsByPlayer: Map<string, TrainingSession[]>;
   profileName: string;
   profileTeam: string;
+  questions: CoachingQuestion[] | null;
 }
 
 let unsubscribers: (() => void)[] = [];
@@ -56,9 +58,12 @@ let disposeSidebar: (() => void) | null = null;
 let disposeAccount: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
 let disposeExplanations: (() => void) | null = null;
+let disposeHub: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
+  disposeHub?.();
+  disposeHub = null;
   dashboardVersion++;
   clearTimeout(statusTimer);
   stopLive();
@@ -131,11 +136,12 @@ function perSkillMeans(sessions: TrainingSession[]): { skill: Skill; mean: numbe
 }
 
 async function loadData(coachUid: string): Promise<DashData> {
-  const [roster, submissions, assignments, profile] = await Promise.all([
+  const [roster, submissions, assignments, profile, questions] = await Promise.all([
     getRoster(coachUid),
     getSubmissions(coachUid),
     getAssignments(coachUid),
     getProfile(coachUid),
+    getCoachQuestions(coachUid).catch(() => null),
   ]);
   const sessionsByPlayer = new Map<string, TrainingSession[]>();
   await Promise.all(
@@ -143,7 +149,7 @@ async function loadData(coachUid: string): Promise<DashData> {
       sessionsByPlayer.set(m.playerUid, await getSessionsFor(m.playerUid, coachUid));
     }),
   );
-  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name, profileTeam: profile.teamName };
+  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name, profileTeam: profile.teamName, questions };
 }
 
 const PAGE_LABELS: Record<Tab, string> = {
@@ -153,6 +159,7 @@ const PAGE_LABELS: Record<Tab, string> = {
   assignments: "Assignments",
   account: "Account",
   player: "Player profile",
+  questions: "Player questions",
 };
 
 function navIcon(paths: string): string {
@@ -172,6 +179,7 @@ function sidebarLinks(
   playerUid: string | null,
   pending = 0,
   requests = 0,
+  questions = 0,
 ): string {
   const link = (id: Tab, label: string, icon: string, href = appPath(id), badge = 0) =>
     `<a class="sidebar-link${tab === id ? " active" : ""}" href="${href}"${tab === id ? ' aria-current="page"' : ""} data-label="${esc(label)}" title="${esc(label)}">${navIcon(icon)}<span class="sidebar-label">${esc(label)}</span>${badge > 0 ? `<span class="sidebar-badge">${badge > 99 ? "99+" : badge}</span>` : ""}</a>`;
@@ -180,6 +188,7 @@ function sidebarLinks(
     ${link("roster", PAGE_LABELS.roster, '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>', appPath("roster"), requests)}
     ${link("assignments", PAGE_LABELS.assignments, '<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M9 12h6M9 16h4"/>')}
     ${link("account", PAGE_LABELS.account, '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>')}
+    ${link("questions", PAGE_LABELS.questions, '<path d="M4 4h16v13H9l-5 4V4Z"/><path d="M8 8h8m-8 4h5"/>', appPath("questions"), questions)}
     ${playerUid ? `<div class="sidebar-context"><p class="sidebar-label sidebar-context-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
 }
 
@@ -288,7 +297,7 @@ export async function renderDashboard(
   if (coachUid !== draftAccount) { noteDrafts.clear(); draftAccount = coachUid; }
   if (sessionId) expandedSessions.add(sessionId);
   const version = ++dashboardVersion;
-  const activeTab = (["overview", "queue", "roster", "assignments", "account", "player"] as Tab[]).includes(tab as Tab)
+  const activeTab = (["overview", "queue", "roster", "assignments", "account", "player", "questions"] as Tab[]).includes(tab as Tab)
     ? (tab as Tab)
     : "overview";
 
@@ -398,6 +407,7 @@ export async function renderDashboard(
           playerUid,
           data.submissions.filter((s) => s.reviewedAt === null).length,
           data.roster.filter((m) => m.status === "Pending").length,
+          data.questions?.filter((question) => question.answer === null).length ?? 0,
         );
       }
       if (live && editing()) return;
@@ -408,6 +418,7 @@ export async function renderDashboard(
       disposeExplanations?.();
       disposeExplanations = null;
       disposeExperience?.();
+      disposeHub?.();
       body.innerHTML = html;
       body.querySelectorAll<HTMLInputElement>("[data-coach-search]").forEach(field => {
         field.value = filterQueries.get(field.getAttribute("aria-label") ?? "") ?? "";
@@ -436,6 +447,7 @@ export async function renderDashboard(
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
       wireActions(root, coachUid, () => void render());
+      disposeHub = wireCoachingHub(root, coachUid, () => void render());
       disposeExplanations = wireSessionExplanations(root);
       disposeAccount = wireAccount(root, coachUid, () => {
         void getProfile(coachUid).then((profile) => {
@@ -467,6 +479,7 @@ export async function renderDashboard(
     subscribe(rosterQuery(coachUid), scheduleRefresh, () => undefined),
     subscribe(assignmentsQuery(coachUid), scheduleRefresh, () => undefined),
     subscribe(sharedSessionsQuery(coachUid), scheduleRefresh, () => undefined),
+    subscribe(questionsQuery(coachUid), scheduleRefresh, () => undefined),
     () => clearTimeout(liveRefresh),
   ];
   await render();
@@ -479,6 +492,8 @@ async function viewFor(
   playerUid: string | null,
 ): Promise<string> {
   switch (tab) {
+    case "questions":
+      return renderCoachQuestions(coachUid, data.questions, data.roster);
     case "queue":
       return viewQueue(data, playerUid);
     case "roster":

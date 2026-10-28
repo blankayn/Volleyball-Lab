@@ -247,6 +247,39 @@ and validation. This feature is separate from local Android report history.
 
 - **Pose landmarks / video.** Analysis stays on-device. Explicit coach submission uploads the recorded video and saved pose feedback privately for the player and shared coach. See `account-and-recording-services.md` for activation status and account deletion.
 
+## Coach workspace, training Q&A and verified reviews
+
+After approval, Android's **My coach** page contains assignments, feedback history,
+ratings, and contextual coaching questions. Players keep read access to their own
+question history after a connection ends; new questions and answers require an
+Active roster membership. The Coach tab is the entry card, not the full workspace.
+
+- `coachingQuestions/{coachUid}_{playerUid}_{sessionId|intro}` is participant-private.
+  A new player may ask one introductory question without a recording. Other questions
+  require that coach's reviewed submission. Topics are fixed, text is limited to
+  300 characters, and the coach has one response of up to 1,000 characters. URLs,
+  attachments, follow-up messages, changing question text, and a second response
+  are rejected by rules. All new timestamps use Firestore server timestamps.
+- `coachResponseTimes/{questionId}` contains only coach UID and question/answer
+  timestamps. It must be committed atomically with the genuine first answer.
+  Signed-in users may read it. Profiles display the median of the latest 20
+  answered questions after at least three samples; missing history is never an
+  invented estimate or a promised service level.
+- `coachReviews/{coachUid}_{playerUid}_{sessionId}` is visible to signed-in users.
+  One integer rating from 1 to 5 and an optional 500-character review are allowed
+  only after the coach has reviewed that player's submitted session. The player
+  sees the public-review disclosure before saving and may edit their own review;
+  the coach cannot alter ratings. No account email or player display name is copied.
+- `coachAvailability/{coachUid}` is a coach-controlled capacity indicator, not
+  automatically inferred presence. Values are Available, Busy, Offline, FullyBooked.
+  Unknown availability is displayed as not set. Existing connection permissions
+  remain authoritative; this status does not automatically end a team relationship.
+- Android coach mode and the website's **Player questions** queue can reply and
+  update availability. Firestore listeners drive in-app question/answer alerts.
+  No new Cloud Functions or paid billing plan are required for these interactions.
+  Account cleanup also removes questions, matching response records, availability,
+  and reviews belonging to either participant.
+
 ## Bring-up (both clients)
 
 1. Firebase console → use project `volleyball-lab` (the one

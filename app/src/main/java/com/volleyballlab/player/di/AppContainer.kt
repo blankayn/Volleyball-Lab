@@ -81,6 +81,7 @@ fun interface PoseDetectorFactory {
  * through a constructor, that migration is mechanical.
  */
 class AppContainer(private val context: Context) {
+    val coachingHubRepository by lazy { com.volleyballlab.player.data.coach.CoachingHubRepository(firestore, authRepository) }
     val videoReviewStore = VideoReviewCache(context)
     val accountDeletionService by lazy {
         com.volleyballlab.player.data.account.AccountDeletionService(context, authRepository, profileRepository, sessionRepository)
@@ -106,6 +107,8 @@ class AppContainer(private val context: Context) {
                     sessions.map(com.volleyballlab.player.domain.model.NotificationEvents::session) + com.volleyballlab.player.domain.model.NotificationEvents.milestones(sessions)) } }
                 launch { notificationRepository.connectionEvents(uid).collect { events -> notificationRepository.ingest(uid, events) } }
                 launch { coachRepository.notesForMe.collect { notes -> notificationRepository.ingest(uid, notes.map(com.volleyballlab.player.domain.model.NotificationEvents::feedback)) } }
+                launch { coachingHubRepository.coachQuestions.collect { questions -> notificationRepository.ingest(uid, questions.filter { it.answer == null && it.createdAt > 0 }.map(com.volleyballlab.player.domain.model.NotificationEvents::question)) } }
+                launch { coachingHubRepository.playerQuestions.collect { questions -> notificationRepository.ingest(uid, questions.mapNotNull(com.volleyballlab.player.domain.model.NotificationEvents::answer)) } }
                 launch { coachRepository.assignmentsForMe.collect { assignments -> notificationRepository.ingest(uid, assignments.map(com.volleyballlab.player.domain.model.NotificationEvents::assignment)) } }
                 launch { combine(coachRepository.coachProfile, coachRepository.submissions, ::Pair).collect { (profile, submissions) ->
                     notificationRepository.ingest(uid, submissions.map(com.volleyballlab.player.domain.model.NotificationEvents::submission), profile.notifySubmissions) } }

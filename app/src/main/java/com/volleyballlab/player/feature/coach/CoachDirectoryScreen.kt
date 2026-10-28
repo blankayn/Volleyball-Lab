@@ -149,6 +149,8 @@ fun CoachProfileScreen(
                     }
                 }
                 item {
+                    CoachPublicDetails(coachUid)
+                    Spacer(Modifier.height(20.dp))
                     Text("Coaching details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(12.dp))
                     StudentCard {

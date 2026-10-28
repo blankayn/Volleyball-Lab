@@ -21,9 +21,12 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
   await erase(db.collection('recordings').where('ownerUid', '==', uid));
   await erase(db.collection('pushTokens').where('uid', '==', uid));
   await erase(db.collection('coachEmailDeliveries').where('coachUid', '==', uid));
-  for (const collection of ['assignments', 'submissions', 'notes']) {
-    for (const field of ['playerUid', 'coachUid']) await erase(db.collection(collection).where(field, '==', uid));
+  for (const collection of ['assignments', 'submissions', 'notes', 'coachingQuestions', 'coachReviews']) {
+    for (const field of ['playerUid', 'coachUid']) await erase(db.collection(collection).where(field, '==', uid), async item => {
+      if (collection === 'coachingQuestions') await db.doc(`coachResponseTimes/${item.id}`).delete();
+    });
   }
+  await erase(db.collection('coachResponseTimes').where('coachUid', '==', uid));
   await erase(db.collectionGroup('members').where('playerUid', '==', uid));
   await db.recursiveDelete(db.doc(`roster/${uid}`));
   await db.recursiveDelete(db.doc(`coaches/${uid}`));
@@ -39,7 +42,7 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
     await erase(db.collection('billingSessions').where('orderId', '==', order.id));
     await erase(db.collection('billingPayments').where('orderId', '==', order.id));
   });
-  for (const collection of ['profiles', 'users', 'coachDirectory', 'entitlements', 'demoProAccess', 'billingPending'])
+  for (const collection of ['profiles', 'users', 'coachDirectory', 'coachAvailability', 'entitlements', 'demoProAccess', 'billingPending'])
     await db.doc(`${collection}/${uid}`).delete();
   await bucket.deleteFiles({ prefix: `recordings/${uid}/`, force: true });
   // The authentication identity is removed last, after all data operations succeed.

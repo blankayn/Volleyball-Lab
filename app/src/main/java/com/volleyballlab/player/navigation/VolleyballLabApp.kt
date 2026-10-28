@@ -227,6 +227,7 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
         AssessmentRoute::class,
         CoachDirectoryRoute::class,
         CoachProfileRoute::class,
+        MyCoachRoute::class,
     )
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
@@ -298,7 +299,7 @@ private fun CoachShell() {
     // The same rule as the athlete's shell, minus the camera: auth screens have
     // nothing to switch to. Detail screens keep their tabs, because a coach three
     // levels into a player's history should still be able to jump to their queue.
-    val hiddenBarRoutes = listOf(LoginRoute::class, SignUpRoute::class)
+    val hiddenBarRoutes = listOf(LoginRoute::class, SignUpRoute::class, CoachQuestionsRoute::class)
     val showBottomBar = hiddenBarRoutes.none { currentDestination?.hasRoute(it) == true }
 
     Scaffold(
@@ -459,6 +460,7 @@ private fun CoachNavHost(
                 onOpenRoster = { navController.navigateToCoachTab(CoachTabDestination.Roster) },
                 onOpenAssign = { navController.navigateToCoachTab(CoachTabDestination.Assign) },
                 onOpenAccount = { navController.navigateToCoachTab(CoachTabDestination.Account) },
+                onOpenQuestions = { navController.navigate(CoachQuestionsRoute) },
                 contentPadding = contentPadding,
             )
         }
@@ -468,6 +470,10 @@ private fun CoachNavHost(
                 onOpenPlayer = { navController.navigate(CoachPlayerRoute(it)) },
                 contentPadding = contentPadding,
             )
+        }
+
+        composable<CoachQuestionsRoute> {
+            com.volleyballlab.player.feature.coach.CoachQuestionsScreen({ navController.popBackStack() }, contentPadding)
         }
 
         composable<CoachPlayerRoute> { entry ->
@@ -823,6 +829,7 @@ private fun VbNavHost(
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
                 onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
+                onMyCoach = { navController.navigate(MyCoachRoute) },
                 contentPadding = contentPadding,
             )
         }
@@ -846,6 +853,14 @@ private fun VbNavHost(
             com.volleyballlab.player.feature.coach.CoachDirectoryScreen(
                 onBack = { navController.popBackStack() },
                 onOpenCoach = { navController.navigate(CoachProfileRoute(it)) },
+                contentPadding = contentPadding,
+            )
+        }
+        composable<MyCoachRoute> {
+            com.volleyballlab.player.feature.coach.MyCoachScreen(
+                onBack = { navController.popBackStack() },
+                onBrowse = { navController.navigate(CoachDirectoryRoute) },
+                onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 contentPadding = contentPadding,
             )
         }

@@ -350,6 +350,90 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/roster/$(coachUid)/members/$(playerUid)).data.status == 'Active';
     }
 
+    // A single question/answer per training context, never an unrestricted inbox.
+    function coachingText(value, maximum) {
+      return boundedString(value, maximum) && value.size() > 0
+        && !value.lower().matches('(?s).*(https?://|www[.]).*');
+    }
+    function validQuestion(data, id) {
+      return data.keys().hasAll(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
+        && data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
+        && validUid(data.coachUid) && validUid(data.playerUid)
+        && (data.sessionId == null || validUid(data.sessionId))
+        && data.id == id && id == data.coachUid + '_' + data.playerUid + '_' + (data.sessionId == null ? 'intro' : data.sessionId)
+        && coachingText(data.text, 300)
+        && data.createdAt is timestamp
+        && ((data.sessionId == null && data.topic in ['FirstDrill', 'TrainingFocus', 'RecordingHelp'])
+          || (data.sessionId != null && data.topic in ['Technique', 'DrillInstructions', 'FeedbackClarification']))
+        && ((data.answer == null && data.answeredAt == null)
+          || (coachingText(data.answer, 1000) && data.answeredAt is timestamp));
+    }
+    function reviewedSession(coachUid, playerUid, sessionId) {
+      let receipt = get(/databases/$(database)/documents/submissions/$(coachUid + '_' + sessionId)).data;
+      return receipt.coachUid == coachUid && receipt.playerUid == playerUid && receipt.sessionId == sessionId
+        && receipt.reviewedAt != null;
+    }
+    match /coachingQuestions/{questionId} {
+      allow read: if signedIn() && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.playerUid == request.auth.uid
+        && validQuestion(request.resource.data, questionId)
+        && isActiveMember(request.resource.data.coachUid, request.auth.uid)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.answer == null && request.resource.data.answeredAt == null
+        && (request.resource.data.sessionId == null || reviewedSession(request.resource.data.coachUid, request.auth.uid, request.resource.data.sessionId));
+      allow update: if signedIn() && resource.data.coachUid == request.auth.uid
+        && isActiveMember(request.auth.uid, resource.data.playerUid)
+        && validQuestion(request.resource.data, questionId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'answeredAt'])
+        && resource.data.answer == null && request.resource.data.answer != null
+        && request.resource.data.answeredAt == request.time
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.coachUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.askedAt == resource.data.createdAt
+        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.answeredAt == request.time;
+      allow delete: if false;
+    }
+    match /coachResponseTimes/{questionId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['coachUid', 'askedAt', 'answeredAt'])
+        && request.resource.data.coachUid == request.auth.uid
+        && request.resource.data.answeredAt == request.time
+        && request.resource.data.askedAt == getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.createdAt
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.coachUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.answer != null
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(questionId)).data.answeredAt == request.time;
+      allow update, delete: if false;
+    }
+    match /coachAvailability/{coachUid} {
+      allow read: if signedIn();
+      allow create, update: if isUser(coachUid)
+        && exists(/databases/$(database)/documents/coachDirectory/$(coachUid))
+        && request.resource.data.keys().hasOnly(['coachUid', 'status', 'updatedAt'])
+        && request.resource.data.coachUid == coachUid
+        && request.resource.data.status in ['Available', 'Busy', 'Offline', 'FullyBooked']
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    match /coachReviews/{reviewId} {
+      allow read: if signedIn();
+      allow get: if signedIn() && !exists(/databases/$(database)/documents/coachReviews/$(reviewId));
+      allow create, update: if signedIn() && request.resource.data.playerUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['id', 'coachUid', 'playerUid', 'sessionId', 'rating', 'text', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'rating', 'text', 'createdAt', 'updatedAt'])
+        && validUid(request.resource.data.coachUid) && validUid(request.resource.data.sessionId)
+        && request.resource.data.id == reviewId
+        && reviewId == request.resource.data.coachUid + '_' + request.auth.uid + '_' + request.resource.data.sessionId
+        && request.resource.data.rating is int && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && boundedString(request.resource.data.text, 500)
+        && reviewedSession(request.resource.data.coachUid, request.auth.uid, request.resource.data.sessionId)
+        && request.resource.data.updatedAt == request.time
+        && ((!exists(/databases/$(database)/documents/coachReviews/$(reviewId))
+              && isActiveMember(request.resource.data.coachUid, request.auth.uid) && request.resource.data.createdAt == request.time)
+          || (exists(/databases/$(database)/documents/coachReviews/$(reviewId))
+              && unchanged(['id', 'coachUid', 'playerUid', 'sessionId', 'createdAt'])));
+      allow delete: if false;
+    }
+
     match /submissions/{submissionId} {
       // Transactions must be able to check for a receipt before creating it.
       // This grants no access to existing submissions or collection lists.

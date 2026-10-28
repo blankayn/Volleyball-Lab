@@ -3,7 +3,7 @@ package com.volleyballlab.player.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class TrainingNotificationType { AnalysisComplete, FeedbackDelivered, ProgressMilestone, CoachAssignment, PlayerSubmission, WeeklyDigest, CoachConnection }
+enum class TrainingNotificationType { AnalysisComplete, FeedbackDelivered, ProgressMilestone, CoachAssignment, PlayerSubmission, WeeklyDigest, CoachConnection, CoachingQuestion, CoachingAnswer }
 
 @Serializable
 data class TrainingNotification(val id: String, val type: TrainingNotificationType, val title: String,
@@ -11,6 +11,12 @@ data class TrainingNotification(val id: String, val type: TrainingNotificationTy
     val delivered: Boolean = false)
 
 object NotificationEvents {
+    fun question(question: CoachingQuestion) = TrainingNotification("question:${question.id}", TrainingNotificationType.CoachingQuestion,
+        "Player coaching question", "A player asked for training guidance. Open Player questions to respond.", question.createdAt, question.id)
+    fun answer(question: CoachingQuestion): TrainingNotification? = question.answeredAt?.let { at ->
+        TrainingNotification("question-answer:${question.id}", TrainingNotificationType.CoachingAnswer,
+            "Your coach answered", "Your coaching question has a response. Open My coach to read it.", at, question.id)
+    }
     fun connection(coachUid: String, member: RosterMember): TrainingNotification? {
         val decidedAt = member.decidedAtEpochMs ?: return null
         if (member.isPending) return null
