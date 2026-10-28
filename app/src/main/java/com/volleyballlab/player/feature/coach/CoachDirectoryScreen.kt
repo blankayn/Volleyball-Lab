@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -105,6 +106,7 @@ fun CoachProfileScreen(
     onBack: () -> Unit,
     onRequestSent: () -> Unit,
     contentPadding: PaddingValues,
+    onOpenWorkspace: () -> Unit = {},
 ) {
     val model: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
@@ -112,89 +114,96 @@ fun CoachProfileScreen(
     val requesting by model.requesting.collectAsStateWithLifecycle()
     val requestedCoach by model.requestedCoach.collectAsStateWithLifecycle()
     val coach = state.directory.firstOrNull { it.coachUid == coachUid }
+    val current = state.link?.coachUid == coachUid
+    val connected = current && state.link?.isActive == true
+    val canViewProfile = state.plan.isPro || connected
+    val summary = if (state.loaded && canViewProfile && coach != null) rememberCoachSummary(coachUid).value else com.volleyballlab.player.domain.model.CoachPublicSummary()
     LaunchedEffect(requestedCoach) { if (requestedCoach == coachUid) onRequestSent() }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().studentBackground(),
-        contentPadding = pagePadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item { DiscoveryHeader("Coach profile", "Get to know your coach", onBack) }
-        item { CoachSyncBanner(coach = false) }
-        when {
-            !state.loaded -> item { LoadingCoaches() }
-            !state.plan.isPro -> item { ProPlanCard() }
-            coach == null -> item {
-                Text("This coach profile is no longer available.", style = MaterialTheme.typography.bodyLarge)
-                TextButton(onClick = onBack) { Text("Back to coaches") }
-            }
-            else -> {
-                item {
-                    StudentCard {
-                        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CoachInitials(coach, large = true)
-                            Text(coach.displayName(stringResource(R.string.coach_coach_default)),
-                                style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                            coach.profile.teamName.takeIf(String::isNotBlank)?.let {
-                                Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                            coach.profile.specialisation?.let {
-                                Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.secondaryContainer) {
-                                    Text(stringResource(it.displayName), Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+    Column(Modifier.fillMaxSize().coachPageBackground()) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = contentPadding.calculateTopPadding() + 12.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            item { Column { DiscoveryHeader("Coach profile", "The person behind the plan", onBack); CoachSyncBanner(coach = false) } }
+            when {
+                !state.loaded -> item { LoadingCoaches() }
+                !canViewProfile -> item { ProPlanCard() }
+                coach == null -> item { CoachEmptyState("Profile unavailable", "This coach may have removed their directory listing. Your existing feedback stays in My coach.") }
+                else -> {
+                    item { com.volleyballlab.player.ui.component.EntranceAnimation(index = 0) { CoachIdentityHero(coach, summary, connected) } }
+                    item { CoachMetrics(summary) }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            CoachSectionTitle("Coaching background", "A closer look at their experience and team")
+                            CoachSectionCard {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(coach.profile.yearsExperience?.toString() ?: "—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
+                                        Text("Years coaching", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(coach.rosterSize.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
+                                        Text("Players on the team", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                                CoachFact("School or club", coach.profile.organisation.ifBlank { "Not provided" })
+                                coach.profile.teamName.takeIf(String::isNotBlank)?.let { CoachFact("Team", it) }
+                                coach.profile.specialisation?.let { CoachFact("Coaching focus", stringResource(it.displayName)) }
                             }
                         }
                     }
-                }
-                item {
-                    CoachPublicDetails(coachUid)
-                    Spacer(Modifier.height(20.dp))
-                    Text("Coaching details", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(12.dp))
-                    StudentCard {
-                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            coach.profile.organisation.takeIf(String::isNotBlank)?.let { CoachFact("School or club", it) }
-                            coach.profile.specialisation?.let { CoachFact("Specialization", stringResource(it.displayName)) }
-                            coach.profile.yearsExperience?.let { CoachFact("Coaching experience", "$it ${if (it == 1) "year" else "years"}") }
-                            CoachFact("Team size", "${coach.rosterSize} ${if (coach.rosterSize == 1) "player" else "players"}")
+                    item { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { CoachReviews(coachUid, summary) } }
+                    if (!connected) item {
+                        CoachSectionCard {
+                            CoachEyebrow("Working together")
+                            Text("A clear path from practice to progress", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            CoachConnectionStep("01", "Request a place", "Choose a coach whose focus fits your training goals.")
+                            CoachConnectionStep("02", "Get approved", "Your coach accepts your request before training is shared.")
+                            CoachConnectionStep("03", "Practise with guidance", "Follow assignments, share sessions, and get focused feedback.")
                         }
                     }
+                    item {
+                        Text("Availability is set by the coach. Response estimates come from recent answered training questions.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                item {
-                    Text("How it works", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(12.dp))
-                    Text("1. Send a request to join this coach’s team.\n2. Your coach reviews and accepts your request.\n3. Share the sessions you choose and receive feedback.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                item {
-                    error?.let {
-                        Text(stringResource(it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    state.link?.let {
-                        Text(if (it.coachUid == coachUid) {
-                            if (it.isPending) "Your request is waiting for this coach’s approval." else "You are connected to this coach."
-                        } else "You already have a team connection. Manage it from the Coach tab before choosing another coach.",
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    Button(onClick = { model.sendRequest(coachUid) }, enabled = !requesting && state.link == null,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                        if (requesting) {
-                            CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                            Spacer(Modifier.width(10.dp))
-                        }
-                        Text(if (requesting) "Sending request…" else if (state.link?.coachUid == coachUid) {
-                            if (state.link?.isPending == true) "Request pending" else "Connected"
-                        } else "Send connection request")
-                    }
+            }
+        }
+        if (state.loaded && canViewProfile && coach != null) Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 8.dp,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = contentPadding.calculateBottomPadding() + 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                error?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                if (current && state.link?.isPending == true) Text("Request sent. Your coach will review it before you join.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else if (state.link != null && !current) Text("You already have a team connection. Manage it in My coach before choosing another.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = { if (connected) onOpenWorkspace() else model.sendRequest(coachUid) },
+                    enabled = connected || (!requesting && state.link == null),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(16.dp)) {
+                    if (requesting) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
+                    Text(if (connected) "Open My coach" else if (requesting) "Sending request…" else if (current && state.link?.isPending == true) "Awaiting approval" else if (state.link != null) "Already connected to a team" else "Request to join team", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                    if (!requesting && (connected || state.link == null)) Icon(Icons.Rounded.ChevronRight, contentDescription = null)
                 }
             }
         }
     }
 }
+
+@Composable
+private fun CoachConnectionStep(number: String, title: String, description: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .08f)) {
+            Text(number, Modifier.padding(horizontal = 11.dp, vertical = 9.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 
 private fun pagePadding(padding: PaddingValues) = PaddingValues(
     start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 12.dp,
@@ -203,11 +212,13 @@ private fun pagePadding(padding: PaddingValues) = PaddingValues(
 
 @Composable
 private fun DiscoveryHeader(title: String, subtitle: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-        Column(Modifier.padding(start = 8.dp)) {
-            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", modifier = Modifier.size(21.dp)) }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            CoachEyebrow(subtitle)
+            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         }
     }
 }

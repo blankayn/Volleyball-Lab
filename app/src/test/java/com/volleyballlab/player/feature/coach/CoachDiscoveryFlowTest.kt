@@ -72,6 +72,35 @@ class CoachDiscoveryFlowTest {
         assertNull(model.error.value)
     }
 
+    @Test fun failedSessionSharingKeepsAnActionableErrorAndCanRetry() = runTest(dispatcher) {
+        val coaches = FakeCoaches()
+        coaches.failSubmission = true
+        val model = CoachLinkViewModel(coaches, DrillTestPlans(UserPlan.Pro), sessions)
+        model.submit("session")
+        advanceUntilIdle()
+        assertNotNull(model.submitError.value)
+        assertFalse(model.sending.value)
+        coaches.failSubmission = false
+        model.submit("session")
+        advanceUntilIdle()
+        assertNull(model.submitError.value)
+        assertEquals(2, coaches.submissionAttempts)
+    }
+
+    @Test fun leavingFailureDoesNotCrashOrHideTheRetry() = runTest(dispatcher) {
+        val coaches = FakeCoaches()
+        coaches.failLeaving = true
+        val model = CoachLinkViewModel(coaches, DrillTestPlans(UserPlan.Pro), sessions)
+        model.leave()
+        advanceUntilIdle()
+        assertNotNull(model.leaveError.value)
+        assertFalse(model.leaving.value)
+        coaches.failLeaving = false
+        model.leave()
+        advanceUntilIdle()
+        assertNull(model.leaveError.value)
+    }
+
     private val sessions = object : SessionRepository {
         override val sessions = flowOf(emptyList<SessionResult>())
         override suspend fun save(session: SessionResult) = Unit
@@ -83,6 +112,9 @@ class CoachDiscoveryFlowTest {
     private class FakeCoaches : CoachRepository {
         var attempts = 0
         var fail = false
+        var failSubmission = false
+        var failLeaving = false
+        var submissionAttempts = 0
         var beforeRequest: suspend () -> Unit = {}
         override val coachProfile = flowOf(CoachProfile.Empty)
         override val roster = flowOf(emptyList<RosterMember>())
@@ -108,8 +140,8 @@ class CoachDiscoveryFlowTest {
         override suspend fun saveAssignment(assignment: CoachAssignment) = Unit
         override suspend fun deleteAssignment(id: String) = Unit
         override suspend fun postNote(note: CoachNote) = Unit
-        override suspend fun leaveCoach() = Unit
-        override suspend fun submitSession(sessionId: String) = Unit
+        override suspend fun leaveCoach() { if (failLeaving) error("Offline") }
+        override suspend fun submitSession(sessionId: String) { submissionAttempts++; if (failSubmission) error("Offline") }
         override suspend fun submitAssignmentSession(assignmentId: String, session: SessionResult) = Unit
         override suspend fun updateAssignmentStatus(id: String, status: AssignmentStatus) = Unit
     }

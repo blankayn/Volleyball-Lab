@@ -862,6 +862,7 @@ private fun VbNavHost(
                 onBrowse = { navController.navigate(CoachDirectoryRoute) },
                 onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 contentPadding = contentPadding,
+                onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
             )
         }
         composable<CoachProfileRoute> { entry ->
@@ -873,6 +874,9 @@ private fun VbNavHost(
                         popUpTo<CoachDirectoryRoute> { inclusive = true }
                         launchSingleTop = true
                     }
+                },
+                onOpenWorkspace = {
+                    if (!navController.popBackStack<MyCoachRoute>(inclusive = false)) navController.navigate(MyCoachRoute)
                 },
                 contentPadding = contentPadding,
             )

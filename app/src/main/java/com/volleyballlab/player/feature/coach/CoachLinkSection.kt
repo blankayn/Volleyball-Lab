@@ -62,7 +62,6 @@ import com.volleyballlab.player.domain.repository.JoinFailure
 import com.volleyballlab.player.domain.repository.JoinOutcome
 import com.volleyballlab.player.domain.repository.PlanRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
-import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.component.GhostLoadingCard
 import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
@@ -137,6 +136,9 @@ class CoachLinkViewModel(
     private val _error = MutableStateFlow<Int?>(null)
     val error: StateFlow<Int?> = _error.asStateFlow()
     val sending = MutableStateFlow(false)
+    val submitError = MutableStateFlow<String?>(null)
+    val leaving = MutableStateFlow(false)
+    val leaveError = MutableStateFlow<String?>(null)
 
     fun clearError() {
         _error.value = null
@@ -177,14 +179,28 @@ class CoachLinkViewModel(
     }
 
     fun leave() {
-        viewModelScope.launch { coachRepository.leaveCoach() }
+        if (leaving.value) return
+        leaving.value = true
+        leaveError.value = null
+        viewModelScope.launch {
+            try { coachRepository.leaveCoach() }
+            catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                leaveError.value = "Could not end the connection. Check your connection and try again."
+            } finally { leaving.value = false }
+        }
     }
 
     fun submit(sessionId: String) {
         if (sending.value) return
         sending.value = true
+        submitError.value = null
         viewModelScope.launch {
             try { coachRepository.submitSession(sessionId) }
+            catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                submitError.value = "Your session was not confirmed as sent. Check your connection and try again."
+            }
             finally { sending.value = false }
         }
     }
@@ -429,128 +445,6 @@ private fun PendingCard(link: CoachLink, onCancel: () -> Unit) {
 }
 
 @Composable
-internal fun LinkedCard(
-    state: CoachLinkState,
-    onSubmit: (String) -> Unit,
-    onLeave: () -> Unit,
-    onOpenAssignment: (String) -> Unit,
-    sending: Boolean,
-) {
-    val link = state.link ?: return
-
-    LinkSurface {
-        Text(
-            text = stringResource(
-                R.string.coach_link_active_title,
-                link.coachName.ifBlank {
-                    link.teamName.ifBlank { stringResource(R.string.coach_coach_default) }
-                },
-            ),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Spacer(Modifier.height(14.dp))
-        when {
-            state.latestSession == null -> Text(
-                text = stringResource(R.string.coach_link_nothing_to_send),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            state.latestIsSubmitted -> Text(
-                text = stringResource(R.string.coach_link_awaiting),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            else -> Button(
-                enabled = !sending,
-                onClick = { onSubmit(state.latestSession.id) },
-                shape = VbButtonShape,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(if (sending) "Sending recording and feedback…" else stringResource(R.string.coach_link_submit))
-            }
-        }
-
-        if (state.latestSession != null && !state.latestIsSubmitted) {
-            Text(if (state.latestSession.videoPath != null)
-                "Sending shares your video, skeleton, and error markers privately with this coach."
-                else "This session sends a form summary without a video.", style = MaterialTheme.typography.bodySmall)
-        }
-
-        val coachAssignments = state.assignments.filter { it.coachUid == link.coachUid }
-        if (coachAssignments.isNotEmpty()) {
-            Spacer(Modifier.height(18.dp))
-            Text(
-                text = stringResource(R.string.coach_link_assignments),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            coachAssignments.forEach { assignment ->
-                Spacer(Modifier.height(10.dp))
-                AssignmentRow(assignment, onOpen = { onOpenAssignment(assignment.id) })
-            }
-        }
-
-        val generalNotes = state.notes.filter { it.sessionId == null && it.coachUid == link.coachUid }
-        if (generalNotes.isNotEmpty()) {
-            Spacer(Modifier.height(18.dp))
-            Text("General coach guidance", style = MaterialTheme.typography.titleSmall)
-            generalNotes.take(MAX_NOTES_SHOWN).forEach { note ->
-                Text(note.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp))
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        TextButton(onClick = onLeave, shape = VbButtonShape) {
-            Text(
-                text = stringResource(R.string.coach_link_leave),
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
-@Composable
-private fun AssignmentRow(assignment: CoachAssignment, onOpen: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        SkillAccentRule(skill = assignment.skill, height = 40)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = assignment.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(
-                    R.string.coach_assign_target,
-                    assignment.targetSets,
-                    assignment.targetReps,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (assignment.summary.isNotBlank()) {
-                Text(
-                    text = assignment.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        TextButton(onClick = onOpen) {
-            Text("View task")
-        }
-    }
-}
-
-@Composable
 private fun LinkSurface(content: @Composable () -> Unit) {
     StudentCard(
         modifier = Modifier.fillMaxWidth(),
@@ -560,5 +454,3 @@ private fun LinkSurface(content: @Composable () -> Unit) {
         Column(Modifier.padding(20.dp)) { content() }
     }
 }
-
-private const val MAX_NOTES_SHOWN = 5
