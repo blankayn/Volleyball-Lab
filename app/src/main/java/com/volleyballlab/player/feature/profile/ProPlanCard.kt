@@ -31,7 +31,7 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
     val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
     val today by dayFlow.collectAsStateWithLifecycle(java.time.LocalDate.now())
     val usage = ReportAllowance.usage(reports, plan, today)
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = AccountMenuSurface) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(if (plan.isPro) "Pro account" else "Free account", style = MaterialTheme.typography.titleMedium)
             if (account?.uid == ProEntitlement.OWNER_UID) Text("Owner Pro access", style = MaterialTheme.typography.bodySmall)

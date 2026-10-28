@@ -1,5 +1,10 @@
 package com.volleyballlab.player.feature.coachmode
 
+import com.volleyballlab.player.feature.profile.AccountSection
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ColumnScope
@@ -189,96 +194,75 @@ class CoachAccountViewModel(
 /** Account identity and settings grouped into Profile, Preferences and Security. */
 @Composable
 fun CoachAccountScreen(
-    onSignedOut: () -> Unit,
-    onEditAccount: () -> Unit = {},
-    contentPadding: PaddingValues,
-    modifier: Modifier = Modifier,
+    onSignedOut: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier,
 ) {
-    val viewModel: CoachAccountViewModel = viewModel(factory = CoachAccountViewModel.Factory)
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var tab by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(0) }
-    if (!state.loaded) {
-        GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier)
-        return
-    }
+    val model: CoachAccountViewModel = viewModel(factory = CoachAccountViewModel.Factory)
+    val state by model.uiState.collectAsStateWithLifecycle()
+    if (!state.loaded) { GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier); return }
+    com.volleyballlab.player.feature.profile.AccountMenuScreen(coach = true,
+        onLogout = { model.signOut(onSignedOut) }, contentPadding = contentPadding, modifier = modifier,
+        banner = {
+            CoachWorkspaceIdentity(state.identity.name.ifBlank { state.profile.name }.ifBlank { "Coach" },
+                state.profile.teamName.ifBlank { "Your coaching workspace" }, state.profile.initials(), "Coach profile",
+                portrait = state.identity.photoPath?.let { path -> { com.volleyballlab.player.feature.profile.ProfilePhoto(path, Modifier.fillMaxSize()) } })
+        },
+        sectionContent = { section -> CoachAccountSectionContent(section, state, model, onSignedOut) },
+    )
+}
+
+@Composable
+private fun CoachAccountSectionContent(section: AccountSection, state: CoachAccountUiState, model: CoachAccountViewModel, onSignedOut: () -> Unit) {
+    var editing by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val profile = state.profile
-    LazyColumn(modifier.fillMaxSize().coachWorkspaceBackground().imePadding(), contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item(key = "header") { CoachPageHeader("Your account", "Make it yours") }
-        item(key = "identity") {
-            EntranceAnimation(index = 0) {
-                CoachWorkspaceIdentity(
-                    name = state.identity.name.ifBlank { profile.name }.ifBlank { stringResource(R.string.coach_coach_default) },
-                    subtitle = listOfNotNull(profile.teamName.takeIf { it.isNotBlank() }, state.account?.email?.takeIf { it.isNotBlank() }).joinToString(" · "),
-                    initials = profile.initials(), eyebrow = "Coach profile", modifier = Modifier.padding(horizontal = CoachGutter),
-                    portrait = state.identity.photoPath?.takeIf { it.isNotBlank() }?.let { path ->
-                        { com.volleyballlab.player.feature.profile.ProfilePhoto(path, Modifier.fillMaxSize()) }
-                    },
-                    action = {
-                        HorizontalDivider(color = androidx.compose.ui.graphics.Color.White.copy(alpha = .15f))
-                        TextButton(onClick = onEditAccount, modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.textButtonColors(contentColor = androidx.compose.ui.graphics.Color.White)) {
-                            Text("Edit account details", modifier = Modifier.weight(1f))
-                            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.ChevronRight, null)
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        when (section) {
+            AccountSection.Personal -> {
+                com.volleyballlab.player.feature.profile.PersonalInformationSummary(state.identity.name.ifBlank { profile.name }.ifBlank { "Coach" }, state.account?.email) { editing = !editing }
+                if (editing) com.volleyballlab.player.feature.profile.AccountIdentityEditor(onDone = { editing = false })
+                com.volleyballlab.player.feature.profile.ProfileTrainingTools(section = com.volleyballlab.player.feature.profile.ProfileToolSection.Photo)
+                com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
+            }
+            AccountSection.Team -> {
+                AccountSectionCard("Your team") {
+                    AccountField(stringResource(R.string.coach_account_team_name), profile.teamName, model::onTeam)
+                    Spacer(Modifier.height(14.dp))
+                    AccountField(stringResource(R.string.coach_account_organisation), profile.organisation, model::onOrganisation)
+                }
+                AccountSectionCard("Coaching background") {
+                    Text(stringResource(R.string.coach_account_specialisation), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CoachSpecialisation.All.forEach { candidate ->
+                            FilterChip(profile.specialisation == candidate, { model.onSpecialisation(candidate) },
+                                label = { Text(stringResource(candidate.displayName)) }, shape = CoachPillShape)
                         }
-                    },
-                )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    AccountField(stringResource(R.string.coach_account_experience), profile.yearsExperience?.toString().orEmpty(), model::onExperience, KeyboardType.Number)
+                    Spacer(Modifier.height(14.dp))
+                    AccountField(stringResource(R.string.coach_account_licence), profile.licenceNumber, model::onLicence)
+                }
+                com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
             }
+            AccountSection.Settings -> com.volleyballlab.player.feature.profile.InlineAccountSettings(coach = true) { selected ->
+                CoachAccountSectionContent(selected, state, model, onSignedOut)
+            }
+            AccountSection.Notifications -> {
+                AccountSectionCard("Training notifications") {
+                    SwitchRow(stringResource(R.string.coach_account_notify_submissions), profile.notifySubmissions, model::onNotifySubmissions)
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+                    SwitchRow(stringResource(R.string.coach_account_notify_digest), profile.notifyWeeklyDigest, model::onNotifyDigest)
+                }
+                com.volleyballlab.player.feature.profile.NotificationInboxEntry()
+            }
+            AccountSection.Security -> AccountSecurityCard()
+            AccountSection.Privacy -> {
+                com.volleyballlab.player.feature.profile.PrivacyCard()
+                com.volleyballlab.player.feature.profile.DeleteAccountCard(onSignedOut)
+            }
+            AccountSection.Help -> com.volleyballlab.player.feature.profile.AccountHelpContent(coach = true)
+            else -> Unit
         }
-        item(key = "account-tabs") {
-            CoachFilterTabs(listOf("Profile", "Preferences", "Security"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
-        }
-        when (tab) {
-            0 -> {
-                item(key = "team") {
-                    AccountSectionCard("Your team", Modifier.padding(horizontal = CoachGutter)) {
-                        AccountField(stringResource(R.string.coach_account_team_name), profile.teamName, viewModel::onTeam)
-                        Spacer(Modifier.height(14.dp))
-                        AccountField(stringResource(R.string.coach_account_organisation), profile.organisation, viewModel::onOrganisation)
-                    }
-                }
-                item(key = "credentials") {
-                    AccountSectionCard("Coaching background", Modifier.padding(horizontal = CoachGutter)) {
-                        Text(stringResource(R.string.coach_account_specialisation), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CoachSpecialisation.All.forEach { candidate ->
-                                FilterChip(profile.specialisation == candidate, { viewModel.onSpecialisation(candidate) },
-                                    label = { Text(stringResource(candidate.displayName)) }, shape = CoachPillShape)
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        AccountField(stringResource(R.string.coach_account_experience), profile.yearsExperience?.toString().orEmpty(), viewModel::onExperience, KeyboardType.Number)
-                        Spacer(Modifier.height(14.dp))
-                        AccountField(stringResource(R.string.coach_account_licence), profile.licenceNumber, viewModel::onLicence)
-                    }
-                }
-                item(key = "profile-sync") { com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.padding(horizontal = CoachGutter)) }
-            }
-            1 -> {
-                item(key = "notifications") {
-                    AccountSectionCard("Training notifications", Modifier.padding(horizontal = CoachGutter)) {
-                        SwitchRow(stringResource(R.string.coach_account_notify_submissions), profile.notifySubmissions, viewModel::onNotifySubmissions)
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
-                        SwitchRow(stringResource(R.string.coach_account_notify_digest), profile.notifyWeeklyDigest, viewModel::onNotifyDigest)
-                        Spacer(Modifier.height(12.dp))
-                        Text("Manage Android delivery from the notification bell.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            else -> {
-                item(key = "security") { AccountSecurityCard(Modifier.padding(horizontal = CoachGutter)) }
-                item(key = "privacy") { com.volleyballlab.player.feature.profile.PrivacyCard(Modifier.padding(horizontal = CoachGutter)) }
-                item(key = "sign-out") {
-                    AccountSectionCard("Session", Modifier.padding(horizontal = CoachGutter)) {
-                        TextButton(onClick = { viewModel.signOut(onSignedOut) }, modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.profile_sign_out)) }
-                    }
-                }
-                item(key = "delete-account") { com.volleyballlab.player.feature.profile.DeleteAccountCard(onSignedOut, Modifier.padding(horizontal = CoachGutter)) }
-            }
-        }
-        item(key = "bottom-space") { Spacer(Modifier.height(24.dp)) }
     }
 }
 

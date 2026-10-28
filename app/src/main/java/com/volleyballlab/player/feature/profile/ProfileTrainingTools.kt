@@ -43,8 +43,10 @@ fun ProfilePhoto(path: String?, modifier: Modifier = Modifier) {
     bitmap?.let { Image(it.asImageBitmap(), "Profile photo", modifier.clip(CircleShape), contentScale = ContentScale.Crop) }
 }
 
+enum class ProfileToolSection { Photo, Training }
+
 @Composable
-fun ProfileTrainingTools(modifier: Modifier = Modifier) {
+fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSection = ProfileToolSection.Training) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val profile by graph.profileRepository.profile.collectAsStateWithLifecycle(AthleteProfile.Anonymous)
@@ -131,12 +133,16 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier) {
     }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { export(it, false) }
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { export(it, true) }
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = AccountMenuSurface) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (section == ProfileToolSection.Training) {
             Text("Training goals & data", style = MaterialTheme.typography.titleMedium)
             Text(profile.goalSkill?.let { "Focus: ${stringResource(it.displayName)}" } ?: "Focus follows your assessment")
             if (profile.goalText.isNotBlank()) Text(profile.goalText, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(enabled = !busy, onClick = { editing = true }) { Text("Edit training goal") }
+            }
+            if (section == ProfileToolSection.Photo) {
+            Text("Profile photo", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(enabled = !busy && pickingUid == null, onClick = { pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
                 if (profile.photoPath != null) TextButton(enabled = !busy, onClick = {
@@ -150,10 +156,13 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier) {
                     }
                 }) { Text("Remove photo") }
             }
+            }
+            if (section == ProfileToolSection.Training) {
             Text("Export your stored sessions, final scores, cue measurements, and guided-angle estimates.", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = !busy, onClick = { exportCsv.launch("volleyball-progress.csv") }) { Text("Export CSV") }
                 OutlinedButton(enabled = !busy, onClick = { exportJson.launch("volleyball-progress.json") }) { Text("Export JSON") }
+            }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())

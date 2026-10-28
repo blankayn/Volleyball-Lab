@@ -541,7 +541,6 @@ private fun CoachNavHost(
         }
         composable<CoachAccountRoute> {
             CoachAccountScreen(
-                onEditAccount = { navController.navigate(EditAccountRoute) },
                 // Signing out rebuilds the shell at the login screen.
                 onSignedOut = {},
                 contentPadding = contentPadding,
@@ -898,7 +897,6 @@ private fun VbNavHost(
         }
         composable<ProfileRoute> {
             ProfileScreen(
-                onEditAccount = { navController.navigate(EditAccountRoute) },
                 onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.
