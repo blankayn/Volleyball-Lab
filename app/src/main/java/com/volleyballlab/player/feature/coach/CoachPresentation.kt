@@ -4,8 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -22,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -140,21 +137,6 @@ internal val CoachInk = Color(0xFF242925)
 }
 
 internal enum class CoachWorkspaceTab(val label: String) { Overview("Overview"), Training("Training"), Feedback("Feedback") }
-
-@Composable internal fun CoachWorkspaceTabs(selected: CoachWorkspaceTab, onSelect: (CoachWorkspaceTab) -> Unit) {
-    Row(Modifier.fillMaxWidth().selectableGroup().clip(RoundedCornerShape(15.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(4.dp)) {
-        CoachWorkspaceTab.entries.forEach { tab ->
-            val active = tab == selected
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp))
-                .background(if (active) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent)
-                .selectable(selected = active, onClick = { onSelect(tab) }, role = Role.Tab)
-                .padding(horizontal = 6.dp, vertical = 13.dp), contentAlignment = Alignment.Center) {
-                Text(tab.label, style = MaterialTheme.typography.labelLarge, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
 
 @Composable internal fun CoachSectionTitle(title: String, subtitle: String? = null, count: Int? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

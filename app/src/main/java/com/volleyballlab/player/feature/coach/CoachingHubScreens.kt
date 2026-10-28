@@ -105,7 +105,6 @@ fun MyCoachScreen(
                 } }
                 item(key = "metrics") { CoachMetrics(summary) }
             }
-            if (selected != null) item(key = "tabs") { CoachWorkspaceTabs(selected) { onOpenSection(it.name) } }
             when (selected) {
                 null -> item(key = "workspace-sections") { MyCoachHubSections(state) { onOpenSection(it.name) } }
                 CoachWorkspaceTab.Overview -> {
