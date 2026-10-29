@@ -5,6 +5,10 @@
 -keep class com.google.protobuf.** { *; }
 -dontwarn com.google.mediapipe.**
 
+# Flogger discovers the caller from the runtime stack. Inlining its factory
+# methods removes the expected frame and prevents MediaPipe Graph initialization.
+-keep class com.google.common.flogger.** { *; }
+
 # AutoValue types used across the MediaPipe Tasks API surface.
 -keep class * extends com.google.auto.value.AutoValue { *; }
 
