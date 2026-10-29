@@ -2,6 +2,8 @@ package com.volleyballlab.player.feature.coachmode
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -40,6 +42,9 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -433,6 +438,7 @@ fun CoachFeatureCard(
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    @DrawableRes backgroundPhoto: Int? = null,
     art: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     Surface(
@@ -442,42 +448,51 @@ fun CoachFeatureCard(
         shadowElevation = CoachCardElevation,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f)),
     ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (art != null) {
-                Box(
-                    modifier = Modifier.size(76.dp),
-                    contentAlignment = Alignment.Center,
-                    content = art,
-                )
-                Spacer(Modifier.width(16.dp))
+        Box {
+            if (backgroundPhoto != null) {
+                Image(painterResource(backgroundPhoto), contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+                Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(
+                    CoachFeatureSurface.copy(alpha = .88f), CoachFeatureSurface.copy(alpha = .68f),
+                ))))
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = eyebrow.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp,
-                    color = CoachFeatureEyebrow,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = body,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CoachFeatureBody,
-                )
-                if (actionLabel != null && onAction != null) {
-                    Spacer(Modifier.height(14.dp))
-                    CoachPillButton(label = actionLabel, onClick = onAction)
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (art != null) {
+                    Box(
+                        modifier = Modifier.size(76.dp),
+                        contentAlignment = Alignment.Center,
+                        content = art,
+                    )
+                    Spacer(Modifier.width(16.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = eyebrow.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        color = CoachFeatureEyebrow,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CoachFeatureBody,
+                    )
+                    if (actionLabel != null && onAction != null) {
+                        Spacer(Modifier.height(14.dp))
+                        CoachPillButton(label = actionLabel, onClick = onAction)
+                    }
                 }
             }
         }

@@ -737,4 +737,12 @@
     <string name="session_ai_rate_limit">Please wait before trying again, or try tomorrow if your daily limit was reached.</string>
     <string name="session_ai_measured_reps">%1$d measured reps</string>
     <string name="session_ai_unsupported">This session cannot be explained yet. Try a shorter practice set with measurable reps.</string>
+    <string name="coach_workspace_eyebrow">Your coaching workspace</string>
+    <string name="coach_workspace_title">Keep your team moving</string>
+    <string name="coach_workspace_players">Manage your roster and player requests</string>
+    <string name="coach_workspace_assignments_title">Assignments</string>
+    <string name="coach_workspace_assignments">Plan drills and follow training progress</string>
+    <string name="coach_workspace_questions_title">Player questions</string>
+    <string name="coach_workspace_questions">Answer introductions and training questions</string>
+    <string name="coach_workspace_account">Manage coach profile</string>
 </resources>
