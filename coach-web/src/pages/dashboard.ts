@@ -34,7 +34,7 @@ import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
 import { wireCoachExperience } from "../lib/coach-experience";
-import { getCoachQuestions, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
+import { getCoachQuestions, questionPending, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player" | "questions";
 
@@ -407,7 +407,7 @@ export async function renderDashboard(
           playerUid,
           data.submissions.filter((s) => s.reviewedAt === null).length,
           data.roster.filter((m) => m.status === "Pending").length,
-          data.questions?.filter((question) => question.answer === null).length ?? 0,
+          data.questions?.filter(questionPending).length ?? 0,
         );
       }
       if (live && editing()) return;

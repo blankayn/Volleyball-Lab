@@ -254,12 +254,16 @@ ratings, and contextual coaching questions. Players keep read access to their ow
 question history after a connection ends; new questions and answers require an
 Active roster membership. The Coach tab is the entry card, not the full workspace.
 
-- `coachingQuestions/{coachUid}_{playerUid}_{sessionId|intro}` is participant-private.
-  A new player may ask one introductory question without a recording. Other questions
-  require that coach's reviewed submission. Topics are fixed, text is limited to
-  300 characters, and the coach has one response of up to 1,000 characters. URLs,
-  attachments, follow-up messages, changing question text, and a second response
-  are rejected by rules. All new timestamps use Firestore server timestamps.
+- `coachingQuestions/{questionId}` is participant-private. New questions use generated
+  IDs; historical context-derived IDs remain readable. A new player can ask about
+  getting started without a recording; session topics require a reviewed submission.
+  One open question per connection is enforced by an atomic `coachingLocks` record.
+  The exchange permits the initial question/answer and two alternating follow-ups.
+  Questions are limited to 300 characters and responses to 1,000. Resolved or ended
+  connections are read only. Links, contact patterns, attachments and message edits
+  are rejected by rules. Incoming-message read markers belong to each participant.
+  See [the restricted inbox contract](coaching-inbox-contract.md) for field shapes,
+  legacy history behavior, unread ordering and deployment status.
 - `coachResponseTimes/{questionId}` contains only coach UID and question/answer
   timestamps. It must be committed atomically with the genuine first answer.
   Signed-in users may read it. Profiles display the median of the latest 20

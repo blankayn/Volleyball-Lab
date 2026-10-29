@@ -21,7 +21,7 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
   await erase(db.collection('recordings').where('ownerUid', '==', uid));
   await erase(db.collection('pushTokens').where('uid', '==', uid));
   await erase(db.collection('coachEmailDeliveries').where('coachUid', '==', uid));
-  for (const collection of ['assignments', 'submissions', 'notes', 'coachingQuestions', 'coachReviews']) {
+  for (const collection of ['assignments', 'submissions', 'notes', 'coachingQuestions', 'coachingLocks', 'coachReviews']) {
     for (const field of ['playerUid', 'coachUid']) await erase(db.collection(collection).where(field, '==', uid), async item => {
       if (collection === 'coachingQuestions') await db.doc(`coachResponseTimes/${item.id}`).delete();
     });

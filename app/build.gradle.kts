@@ -38,8 +38,8 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 13
-        versionName = "0.1.12"
+        versionCode = 14
+        versionName = "0.1.13"
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

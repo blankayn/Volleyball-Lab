@@ -28,6 +28,7 @@ internal fun CoachDashboardWorkspace(
     onOpenQuestions: () -> Unit,
     onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    unread: Int = 0,
 ) {
     CoachCard(modifier) {
         WorkspaceEyebrow(stringResource(R.string.coach_workspace_eyebrow))
@@ -44,7 +45,7 @@ internal fun CoachDashboardWorkspace(
         })
         Spacer(Modifier.height(12.dp))
         WorkspaceDestination(stringResource(R.string.coach_workspace_questions_title), stringResource(R.string.coach_workspace_questions),
-            Icons.Rounded.QuestionAnswer, CoachAccent.Indigo, onOpenQuestions)
+            Icons.Rounded.QuestionAnswer, CoachAccent.Indigo, onOpenQuestions, unread)
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onOpenAccount, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
             Text(stringResource(R.string.coach_workspace_account))
@@ -73,6 +74,7 @@ private fun WorkspaceTaskCard(
 @Composable
 private fun WorkspaceDestination(
     title: String, body: String, icon: ImageVector, accent: CoachAccent, onClick: () -> Unit,
+    unread: Int = 0,
 ) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick)
         .heightIn(min = 80.dp).padding(horizontal = 4.dp, vertical = 12.dp),
@@ -82,6 +84,7 @@ private fun WorkspaceDestination(
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        com.volleyballlab.player.feature.coach.CoachingUnreadBadge(unread)
         Icon(Icons.Rounded.ChevronRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

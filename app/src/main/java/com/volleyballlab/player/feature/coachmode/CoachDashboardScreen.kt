@@ -138,6 +138,9 @@ fun CoachDashboardScreen(
 ) {
     val viewModel: CoachDashboardViewModel = viewModel(factory = CoachDashboardViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
+    val questions by graph.coachingHubRepository.coachQuestions.collectAsStateWithLifecycle(emptyList())
 
     // Both clock reads are sampled once per composition rather than at the point
     // of use. A clock read inside a list item makes the item's output depend on
@@ -203,6 +206,7 @@ fun CoachDashboardScreen(
                 CoachDashboardWorkspace(
                     onOpenRoster, onOpenAssign, onOpenQuestions, onOpenAccount,
                     Modifier.padding(horizontal = CoachGutter),
+                    unread = questions.sumOf { it.unread(true) },
                 )
             }
         }

@@ -20,6 +20,8 @@ internal fun CoachQuestionsPage(
     onBack: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    title: String = "Player questions",
+    unread: Int = 0,
     content: LazyListScope.() -> Unit,
 ) {
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest)
@@ -29,14 +31,15 @@ internal fun CoachQuestionsPage(
             IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.size(26.dp))
             }
-            Text("Player questions", Modifier.weight(1f).padding(horizontal = 8.dp),
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center)
-            Spacer(Modifier.width(48.dp))
+            Text(title, Modifier.weight(1f).padding(horizontal = 8.dp),
+                style = if (title == "Inbox") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = if (title == "Inbox") TextAlign.Start else TextAlign.Center)
+            if (unread > 0) CoachingUnreadBadge(unread, summary = true) else Spacer(Modifier.width(48.dp))
         }
         LazyColumn(modifier = Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth()
             .align(Alignment.CenterHorizontally),
             contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp), content = content)
+            verticalArrangement = Arrangement.spacedBy(if (title == "Inbox") 0.dp else 24.dp), content = content)
     }
 }
