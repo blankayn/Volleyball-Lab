@@ -46,4 +46,15 @@ class CoachingInboxTest {
             "DM @player", "Call +63 917 123 4567", "Message on WhatsApp").forEach { assertTrue(it, hasCoachingContact(it)) }
         listOf("3 sets of 10 reps", "Hold for 30 seconds", "Should my elbow be at 90 degrees?").forEach { assertFalse(it, hasCoachingContact(it)) }
     }
+    @Test fun upgradingPreservesExistingNotificationIdsAndNewFollowUpsHaveDistinctIds() {
+        val initial = question()
+        assertEquals("question:q", NotificationEvents.question(initial).id)
+        val answered = initial.copy(answer = "Ready position", answeredAt = 200)
+        assertEquals("question-answer:q", NotificationEvents.answer(answered)?.id)
+        val waiting = answered.copy(followUp1 = CoachingFollowUp("How low?", 300))
+        assertEquals("question:q:1", NotificationEvents.question(waiting).id)
+        assertEquals("question-answer:q", NotificationEvents.answer(waiting)?.id)
+        val replied = waiting.copy(followUp1 = CoachingFollowUp("How low?", 300, "Comfortable stance", 400))
+        assertEquals("question-answer:q:reply-0", NotificationEvents.answer(replied)?.id)
+    }
 }

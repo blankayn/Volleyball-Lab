@@ -48,4 +48,6 @@ Android builds cannot create new questions without locks and must be updated.
 The account-cleanup function update was blocked by the project's closed billing
 account; no billing plan was enabled. Core messaging uses Firestore directly.
 
-Verification: final Firestore regression suite 57/57, inbox-model unit tests 5/5, Android layout/interaction checks 5/5. Native screenshots reviewed; web production build passed. Storage-only tests were outside this change and require their separate emulator.
+Verification: final Firestore regression suite 57/57, inbox-model unit tests 6/6, Android layout/interaction checks 5/5. Native screenshots reviewed; web production build passed. Storage-only tests were outside this change and require their separate emulator.
+
+Upgrade regression: initial question/answer notification IDs remain stable, so existing messages are not announced again. Follow-up questions and responses have separate IDs. Starting a new resolved-context question clears the previous sent text; failed active drafts remain intact.

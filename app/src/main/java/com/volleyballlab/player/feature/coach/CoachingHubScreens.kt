@@ -311,7 +311,7 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
             onSend = { value -> actions.perform(current.id) { actions.hub.followUp(current, value) } },
             onResolve = { actions.perform(current.id) { actions.hub.resolve(current) } },
             onRead = { actions.perform("read-${current.id}") { actions.hub.markRead(current, false) } })
-        if (connected && current.resolvedAt != null) OutlinedButton(onClick = { startNew = true; open = true }, modifier = Modifier.fillMaxWidth()) {
+        if (connected && current.resolvedAt != null) OutlinedButton(onClick = { text = ""; startNew = true; open = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Start a new training question")
         }
     } else if (connected) {
