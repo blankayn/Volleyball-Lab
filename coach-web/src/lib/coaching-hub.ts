@@ -66,6 +66,7 @@ export async function renderCoachQuestions(uid: string, questions: CoachingQuest
 export function wireCoachingHub(root: HTMLElement, uid: string, refresh: () => void): () => void {
   const disposers: (() => void)[] = [];
   const observer = new IntersectionObserver((entries) => {
+    if (document.visibilityState !== "visible") return;
     entries.filter(entry => entry.isIntersecting).forEach(entry => {
       const marker = entry.target as HTMLElement;
       const at = Number(marker.dataset.readAt);
@@ -77,8 +78,13 @@ export function wireCoachingHub(root: HTMLElement, uid: string, refresh: () => v
       }).catch(() => { if (marker.isConnected) observer.observe(marker); });
     });
   });
-  root.querySelectorAll<HTMLElement>("[data-question-read]").forEach(marker => observer.observe(marker));
-  disposers.push(() => observer.disconnect());
+  const observeVisibleThreads = () => {
+    observer.disconnect();
+    if (document.visibilityState === "visible") root.querySelectorAll<HTMLElement>("[data-question-read]").forEach(marker => observer.observe(marker));
+  };
+  observeVisibleThreads();
+  document.addEventListener("visibilitychange", observeVisibleThreads);
+  disposers.push(() => { observer.disconnect(); document.removeEventListener("visibilitychange", observeVisibleThreads); });
   root.querySelectorAll<HTMLFormElement>("[data-question-answer]").forEach((form) => {
     const id = form.dataset.questionAnswer!;
     const field = form.querySelector<HTMLTextAreaElement>("textarea")!;
