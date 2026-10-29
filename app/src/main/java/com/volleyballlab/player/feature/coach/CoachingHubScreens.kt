@@ -413,24 +413,15 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val context = LocalContext.current
     val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
     val roster by graph.coachRepository.roster.collectAsStateWithLifecycle(emptyList())
-    val user by graph.authRepository.currentUser.collectAsStateWithLifecycle(null)
+    val syncError by actions.hub.error.collectAsStateWithLifecycle(null)
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val pending = questions.filter { it.answer == null }
     val visible = if (tab == 0) pending.sortedBy { it.createdAt } else questions.filter { it.answer != null }.sortedByDescending { it.answeredAt ?: it.createdAt }
-    LazyColumn(Modifier.fillMaxSize().coachWorkspaceBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { HubHeader("Player questions", onBack, "Coach workspace") }
-        item { HubSync(actions.hub) }
-        user?.uid?.let { uid -> item {
-            val summaryFlow = remember(uid) { actions.hub.summary(uid) }
-            val summary by summaryFlow.collectAsStateWithLifecycle(CoachPublicSummary())
-            com.volleyballlab.player.feature.coachmode.CoachCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your status")
-                        Text("Updates automatically with your coaching activity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    AvailabilityTag(summary.availability)
-                }
+    CoachQuestionsPage(onBack, contentPadding) {
+        syncError?.let { message -> item(key = "sync-error") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(message, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = actions.hub::retry) { Text("Retry coaching sync") }
             }
         } }
         item {
@@ -451,7 +442,7 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
                 graph.coachPresenceReporter.writing(question.id, replying && active)
                 onDispose { graph.coachPresenceReporter.writing(question.id, false) }
             }
-            com.volleyballlab.player.feature.coachmode.CoachCard(padding = 22.dp) {
+            com.volleyballlab.player.feature.coachmode.CoachCard(modifier = Modifier.heightIn(min = 180.dp), padding = 24.dp) {
                 com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow(if (question.sessionId == null) "Getting started" else "Session question")
                 Spacer(Modifier.height(10.dp))
                 Text(roster.firstOrNull { it.playerUid == question.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
