@@ -75,7 +75,7 @@ class PoseDetectorUnavailableException(
         /** The .task bundle is not packaged in assets. */
         ModelMissing,
 
-        /** The model is present but MediaPipe refused to initialise with it. */
+        /** The asset could not be accessed, or MediaPipe could not initialise it. */
         InitialisationFailed,
     }
 }

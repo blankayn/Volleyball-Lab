@@ -3,6 +3,7 @@ package com.volleyballlab.player.pose
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import java.io.FileNotFoundException
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
@@ -165,10 +166,19 @@ class MediaPipePoseDetector private constructor(
             minTrackingConfidence: Float = MIN_PERSON_CONFIDENCE,
             minPresenceConfidence: Float = MIN_PERSON_CONFIDENCE,
         ): MediaPipePoseDetector {
-            if (!context.hasAsset(modelAsset)) {
+            try {
+                context.assets.open(modelAsset).use { }
+            } catch (missing: FileNotFoundException) {
                 throw PoseDetectorUnavailableException(
                     message = "Missing pose model asset: $modelAsset",
                     reason = PoseDetectorUnavailableException.Reason.ModelMissing,
+                    cause = missing,
+                )
+            } catch (failure: Exception) {
+                throw PoseDetectorUnavailableException(
+                    message = "Could not access the pose model asset",
+                    reason = PoseDetectorUnavailableException.Reason.InitialisationFailed,
+                    cause = failure,
                 )
             }
 
@@ -220,9 +230,6 @@ class MediaPipePoseDetector private constructor(
             @Volatile
             var instance: MediaPipePoseDetector? = null
         }
-
-        private fun Context.hasAsset(name: String): Boolean =
-            runCatching { assets.open(name).close() }.isSuccess
 
         private fun MpImageLandmark.toLandmark() = Landmark(
             x = x(),

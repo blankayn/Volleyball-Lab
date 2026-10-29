@@ -197,7 +197,9 @@
 
     <!-- Errors -->
     <string name="error_model_missing_title">Pose model not installed</string>
-    <string name="error_model_missing_body">pose_landmarker_full.task is missing from the app assets. See app/src/main/assets/README.md for the one-line download.</string>
+    <string name="error_pose_initialization_title">Couldn’t start pose tracking</string>
+    <string name="error_pose_initialization_body">Tracking couldn’t start. Try again or restart the app.</string>
+    <string name="error_model_missing_body">Update to the latest version of Volleyball Lab and try again.</string>
     <string name="error_camera_title">Camera unavailable</string>
     <string name="error_generic_retry">Try again</string>
 

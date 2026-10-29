@@ -106,7 +106,7 @@ fun MyCoachScreen(
                 item(key = "metrics") { CoachMetrics(summary) }
             }
             when (selected) {
-                null -> item(key = "workspace-sections") { MyCoachHubSections(state) { onOpenSection(it.name) } }
+                null -> item(key = "workspace-sections") { MyCoachHubSections(state, onManageConnection = { showLeave = true }) { onOpenSection(it.name) } }
                 CoachWorkspaceTab.Overview -> {
                     if (active) {
                         item(key = "intro") {
@@ -129,11 +129,6 @@ fun MyCoachScreen(
                                 Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } }
-                        item(key = "connection") {
-                            TextButton(onClick = { showLeave = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                                Text("Manage coach connection", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
                     } else item(key = "no-connection") {
                         CoachSectionCard {
                             CoachEyebrow(if (link?.isPending == true) "Request sent" else "Your next chapter")

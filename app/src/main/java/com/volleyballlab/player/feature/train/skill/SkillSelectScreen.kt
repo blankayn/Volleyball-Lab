@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -144,10 +145,10 @@ internal fun SkillCard(
 ) {
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth < 340.dp || fontScale > 1.15f) {
+        if (maxWidth < 270.dp || fontScale > 1.15f) {
             CompactSkillCard(skill, position, progress, progressLoaded, onClick)
         } else {
-            IllustratedSkillCard(skill, position, progress, progressLoaded, onClick)
+            IllustratedSkillCard(skill, position, progress, progressLoaded, onClick, artworkAlpha = if (maxWidth < 380.dp) .18f else 1f)
         }
     }
 }
@@ -186,6 +187,7 @@ private fun IllustratedSkillCard(
     progress: SkillFormProgress?,
     progressLoaded: Boolean,
     onClick: () -> Unit,
+    artworkAlpha: Float,
 ) {
     val palette = paletteFor(skill)
     val interactionSource = remember { MutableInteractionSource() }
@@ -204,11 +206,12 @@ private fun IllustratedSkillCard(
         shadowElevation = 2.dp,
     ) {
         Box(Modifier.fillMaxWidth()) {
-            CourtCardArtwork(Modifier.matchParentSize(), ink = palette.accent)
+            CourtCardArtwork(Modifier.matchParentSize().testTag("skill-card-background"), ink = palette.accent)
             Image(
                 painter = painterResource(palette.illustration),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
+                alpha = artworkAlpha,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()

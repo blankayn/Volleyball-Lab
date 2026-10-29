@@ -142,6 +142,14 @@ class ResponsiveLayoutDeviceTest {
         capture("skill-card-large-text.png")
     }
 
+    @Test fun normalPhoneWidthKeepsTheOriginalIllustratedBackground() {
+        show(width = 320, scale = 1f) { Column(Modifier.padding(horizontal = 20.dp)) { SkillCard(Skill.Receiving, 2, null, true, {}) } }
+        compose.onNodeWithTag("skill-card-background", useUnmergedTree = true).assertIsDisplayed().assertHeightIsEqualTo(164.dp)
+        assertInsidePage(compose.activity.getString(Skill.Receiving.displayName))
+        assertInsidePage(compose.activity.getString(Skill.Receiving.description))
+        capture("skill-card-restored.png")
+    }
+
     @Test fun profileExportActionsStayAlignedAndUsableAtLargeText() {
         var exports = 0
         show { Column(Modifier.padding(40.dp)) { ProfileExportActions(false, { exports++ }, { exports++ }) } }
