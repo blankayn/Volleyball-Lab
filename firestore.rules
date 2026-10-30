@@ -366,14 +366,18 @@ service cloud.firestore {
     // A single question/answer per training context, never an unrestricted inbox.
     function coachingText(value, maximum) {
       return boundedString(value, maximum) && value.size() > 0
-        && !value.lower().matches('(?s).*(https?://|www[.]).*');
+        && !value.matches('\\s*')
+        && !value.lower().matches('(?s).*(https?://|www[.]|@[a-z0-9_]|[a-z0-9-]+[.][a-z]{2,}\\b|[+]?[0-9][0-9 ()-]{6,}[0-9]|instagram|snapchat|telegram|whatsapp|tiktok|discord|facebook).*');
     }
     function validQuestion(data, id) {
       return data.keys().hasAll(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
-        && data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt'])
+        && data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'topic', 'text', 'createdAt', 'answer', 'answeredAt', 'followUp1', 'followUp2', 'resolvedAt', 'coachReadAt', 'playerReadAt'])
         && validUid(data.coachUid) && validUid(data.playerUid)
+        && data.coachUid != data.playerUid
         && (data.sessionId == null || validUid(data.sessionId))
-        && data.id == id && id == data.coachUid + '_' + data.playerUid + '_' + (data.sessionId == null ? 'intro' : data.sessionId)
+        && data.id == id && validUid(id)
+        && validFollowUp(data.get('followUp1', null)) && validFollowUp(data.get('followUp2', null))
+        && (data.get('followUp2', null) == null || (data.get('followUp1', null) != null && data.followUp1.answer != null))
         && coachingText(data.text, 300)
         && data.createdAt is timestamp
         && ((data.sessionId == null && data.topic in ['FirstDrill', 'TrainingFocus', 'RecordingHelp'])
@@ -386,6 +390,54 @@ service cloud.firestore {
       return receipt.coachUid == coachUid && receipt.playerUid == playerUid && receipt.sessionId == sessionId
         && receipt.reviewedAt != null;
     }
+    function validFollowUp(turn) {
+      return turn == null || (turn is map
+        && turn.keys().hasAll(['text', 'createdAt', 'answer', 'answeredAt'])
+        && turn.keys().hasOnly(['text', 'createdAt', 'answer', 'answeredAt'])
+        && coachingText(turn.text, 300) && turn.createdAt is timestamp
+        && ((turn.answer == null && turn.answeredAt == null)
+          || (coachingText(turn.answer, 1000) && turn.answeredAt is timestamp)));
+    }
+    function awaitingCoach(data) {
+      return data.answer == null
+        || (data.get('followUp1', null) != null && data.followUp1.answer == null)
+        || (data.get('followUp2', null) != null && data.followUp2.answer == null);
+    }
+    function newFollowUp(old, data, field) {
+      return data.diff(old).affectedKeys().hasOnly([field]) && old.get(field, null) == null
+        && data.get(field, null) != null && validFollowUp(data[field]) && data[field].createdAt == request.time
+        && data[field].answer == null && data[field].answeredAt == null;
+    }
+    function followUpAnswer(old, data, field) {
+      return data.diff(old).affectedKeys().hasOnly([field]) && old.get(field, null) != null
+        && old[field].answer == null && data[field].answer != null
+        && coachingText(data[field].answer, 1000)
+        && data[field].answeredAt == request.time
+        && data[field].diff(old[field]).affectedKeys().hasOnly(['answer', 'answeredAt']);
+    }
+    function readMarker(old, data, field) {
+      return data.diff(old).affectedKeys().hasOnly([field]) && data[field] is timestamp
+        && data[field] <= request.time
+        && (old.get(field, null) == null || data[field] >= old[field]);
+    }
+    match /coachingLocks/{pairId} {
+      allow read: if signedIn() && (!exists(/databases/$(database)/documents/coachingLocks/$(pairId))
+        || resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasAll(['coachUid', 'playerUid', 'questionId'])
+        && request.resource.data.keys().hasOnly(['coachUid', 'playerUid', 'questionId'])
+        && request.resource.data.playerUid == request.auth.uid
+        && pairId == request.resource.data.coachUid + '_' + request.auth.uid
+        && isActiveMember(request.resource.data.coachUid, request.auth.uid)
+        && (!exists(/databases/$(database)/documents/coachingLocks/$(pairId))
+          || (resource.data.coachUid == request.resource.data.coachUid
+            && resource.data.playerUid == request.resource.data.playerUid
+            && get(/databases/$(database)/documents/coachingQuestions/$(resource.data.questionId)).data.get('resolvedAt', null) != null))
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(request.resource.data.questionId)).data.coachUid == request.resource.data.coachUid
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(request.resource.data.questionId)).data.playerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/coachingQuestions/$(request.resource.data.questionId)).data.createdAt == request.time;
+      allow delete: if false;
+    }
     match /coachingQuestions/{questionId} {
       allow read: if signedIn() && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
       allow create: if signedIn() && request.resource.data.playerUid == request.auth.uid
@@ -393,16 +445,34 @@ service cloud.firestore {
         && isActiveMember(request.resource.data.coachUid, request.auth.uid)
         && request.resource.data.createdAt == request.time
         && request.resource.data.answer == null && request.resource.data.answeredAt == null
+        && request.resource.data.get('followUp1', null) == null && request.resource.data.get('followUp2', null) == null
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('coachReadAt', null) == null && request.resource.data.get('playerReadAt', null) == null
+        && getAfter(/databases/$(database)/documents/coachingLocks/$(request.resource.data.coachUid + '_' + request.auth.uid)).data.questionId == questionId
         && (request.resource.data.sessionId == null || reviewedSession(request.resource.data.coachUid, request.auth.uid, request.resource.data.sessionId));
-      allow update: if signedIn() && resource.data.coachUid == request.auth.uid
-        && isActiveMember(request.auth.uid, resource.data.playerUid)
-        && validQuestion(request.resource.data, questionId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'answeredAt'])
-        && resource.data.answer == null && request.resource.data.answer != null
-        && request.resource.data.answeredAt == request.time
-        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.coachUid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.askedAt == resource.data.createdAt
-        && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.answeredAt == request.time;
+      allow update: if signedIn()
+        && notDeleting(resource.data.coachUid) && notDeleting(resource.data.playerUid)
+        && ((resource.data.coachUid == request.auth.uid && readMarker(resource.data, request.resource.data, 'coachReadAt'))
+          || (resource.data.playerUid == request.auth.uid && readMarker(resource.data, request.resource.data, 'playerReadAt'))
+          || (isActiveMember(resource.data.coachUid, resource.data.playerUid)
+            && resource.data.get('resolvedAt', null) == null
+            && ((resource.data.playerUid == request.auth.uid && !awaitingCoach(resource.data)
+                && (newFollowUp(resource.data, request.resource.data, 'followUp1')
+                  || (resource.data.get('followUp1', null) != null && newFollowUp(resource.data, request.resource.data, 'followUp2'))))
+              || (resource.data.coachUid == request.auth.uid
+                && (followUpAnswer(resource.data, request.resource.data, 'followUp1')
+                  || followUpAnswer(resource.data, request.resource.data, 'followUp2')
+                  || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answer', 'answeredAt'])
+                    && resource.data.answer == null && request.resource.data.answer != null
+                    && coachingText(request.resource.data.answer, 1000)
+                    && request.resource.data.answeredAt == request.time
+                    && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.coachUid == request.auth.uid
+                    && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.askedAt == resource.data.createdAt
+                    && getAfter(/databases/$(database)/documents/coachResponseTimes/$(questionId)).data.answeredAt == request.time)))
+              || ((resource.data.playerUid == request.auth.uid || resource.data.coachUid == request.auth.uid)
+                && !awaitingCoach(resource.data)
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolvedAt'])
+                && request.resource.data.resolvedAt == request.time))));
       allow delete: if false;
     }
     match /coachResponseTimes/{questionId} {

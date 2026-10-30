@@ -25,14 +25,8 @@ Requires Android Studio 2026.1 or newer and an Android 8.0 (API 26) device.
 
 1. Open the project in Android Studio and let it sync. The Gradle wrapper is
    configured for **Gradle 9.7.1** and will be fetched automatically.
-2. **Install the pose model.** It is ~9 MB of binary weights and is not committed:
-
-   ```bash
-   curl -L -o "app/src/main/assets/pose_landmarker_full.task" https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
-   ```
-
-   Without it the app still builds and runs; the capture screen reports the
-   missing model instead of crashing. See
+2. The first online Android build automatically downloads and checks the full pose
+   model if needed. Later builds can run offline. See
    [`app/src/main/assets/README.md`](app/src/main/assets/README.md).
 3. Run on a **physical device**. The emulator has no usable camera feed and no
    GPU delegate. In debug builds, if the detector fails to start, the capture

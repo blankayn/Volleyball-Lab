@@ -197,7 +197,9 @@
 
     <!-- Errors -->
     <string name="error_model_missing_title">Pose model not installed</string>
-    <string name="error_model_missing_body">pose_landmarker_full.task is missing from the app assets. See app/src/main/assets/README.md for the one-line download.</string>
+    <string name="error_pose_initialization_title">Couldn’t start pose tracking</string>
+    <string name="error_pose_initialization_body">Tracking couldn’t start. Try again or restart the app.</string>
+    <string name="error_model_missing_body">Update to the latest version of Volleyball Lab and try again.</string>
     <string name="error_camera_title">Camera unavailable</string>
     <string name="error_generic_retry">Try again</string>
 
@@ -737,4 +739,12 @@
     <string name="session_ai_rate_limit">Please wait before trying again, or try tomorrow if your daily limit was reached.</string>
     <string name="session_ai_measured_reps">%1$d measured reps</string>
     <string name="session_ai_unsupported">This session cannot be explained yet. Try a shorter practice set with measurable reps.</string>
+    <string name="coach_workspace_eyebrow">Your coaching workspace</string>
+    <string name="coach_workspace_title">Keep your team moving</string>
+    <string name="coach_workspace_players">Manage your roster and player requests</string>
+    <string name="coach_workspace_assignments_title">Assignments</string>
+    <string name="coach_workspace_assignments">Plan drills and follow training progress</string>
+    <string name="coach_workspace_questions_title">Player questions</string>
+    <string name="coach_workspace_questions">Answer introductions and training questions</string>
+    <string name="coach_workspace_account">Manage coach profile</string>
 </resources>

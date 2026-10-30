@@ -11,7 +11,8 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "login") return { name: "login" };
   if (parts[0] === "register") return { name: "register" };
   if (parts[0] === "app") {
-    const tab = parts[1] ?? "overview";
+    // Older question links open the conversations now included in Player roster.
+    const tab = parts[1] === "questions" ? "roster" : parts[1] ?? "overview";
     const playerUid = parts[2] ?? null;
     const sessionId = parts[3] ?? null;
     return { name: "app", tab, playerUid, sessionId };

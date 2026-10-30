@@ -213,7 +213,7 @@ fun CoachReviewScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize().imePadding(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {

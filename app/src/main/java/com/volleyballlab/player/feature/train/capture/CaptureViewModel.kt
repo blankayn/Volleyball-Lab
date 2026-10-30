@@ -343,6 +343,7 @@ class CaptureViewModel(
         val created = try {
             if (useDemo) demoDetectorFactory.create() else detectorFactory.create()
         } catch (unavailable: PoseDetectorUnavailableException) {
+            Log.e("CaptureViewModel", "Pose detector unavailable: ${unavailable.reason}", unavailable)
             _uiState.value = CaptureUiState.Unavailable(
                 reason = unavailable.reason,
                 canUseDemoDetector = allowDemoDetector,

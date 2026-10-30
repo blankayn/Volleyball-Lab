@@ -4,8 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -22,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,38 +120,24 @@ internal val CoachInk = Color(0xFF242925)
 
 @Composable internal fun CoachMetrics(summary: CoachPublicSummary) {
     Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(summary.averageRating?.let { "★ ${String.format(Locale.getDefault(), "%.1f", it)}" } ?: "—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("Coach rating", style = MaterialTheme.typography.labelMedium)
-                Text(if (summary.reviews.isEmpty()) "No reviews yet" else "${summary.reviews.size} session reviews", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Box(Modifier.width(1.dp).height(75.dp).background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)))
-            Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(summary.typicalResponseMs?.let(::coachingResponseLabel) ?: "—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("Typical response", style = MaterialTheme.typography.labelMedium)
-                Text(if (summary.typicalResponseMs == null) "History building" else "From recent replies", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        com.volleyballlab.player.ui.component.ResponsivePair(Modifier.padding(20.dp), minItemWidth = 120.dp, spacing = 20.dp,
+            first = { CoachMetricText(summary.averageRating?.let { "★ ${String.format(Locale.getDefault(), "%.1f", it)}" } ?: "—",
+                "Coach rating", if (summary.reviews.isEmpty()) "No reviews yet" else "${summary.reviews.size} session reviews", it) },
+            second = { CoachMetricText(summary.typicalResponseMs?.let(::coachingResponseLabel) ?: "—",
+                "Typical response", if (summary.typicalResponseMs == null) "History building" else "From recent replies", it) })
+    }
+}
+
+@Composable
+private fun CoachMetricText(value: String, label: String, caption: String, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(caption, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 internal enum class CoachWorkspaceTab(val label: String) { Overview("Overview"), Training("Training"), Feedback("Feedback") }
-
-@Composable internal fun CoachWorkspaceTabs(selected: CoachWorkspaceTab, onSelect: (CoachWorkspaceTab) -> Unit) {
-    Row(Modifier.fillMaxWidth().selectableGroup().clip(RoundedCornerShape(15.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(4.dp)) {
-        CoachWorkspaceTab.entries.forEach { tab ->
-            val active = tab == selected
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(11.dp))
-                .background(if (active) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent)
-                .selectable(selected = active, onClick = { onSelect(tab) }, role = Role.Tab)
-                .padding(horizontal = 6.dp, vertical = 13.dp), contentAlignment = Alignment.Center) {
-                Text(tab.label, style = MaterialTheme.typography.labelLarge, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
 
 @Composable internal fun CoachSectionTitle(title: String, subtitle: String? = null, count: Int? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

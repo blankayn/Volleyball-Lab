@@ -154,8 +154,8 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
             }
             if (section == ProfileToolSection.Photo) {
             Text("Profile photo", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(enabled = !busy && pickingUid == null, onClick = { pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(enabled = !busy && pickingUid == null, modifier = Modifier.heightIn(min = 48.dp), onClick = { pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
                 if (profile.photoPath != null) TextButton(enabled = !busy, onClick = {
                     scope.launch {
                         val uid = graph.authRepository.currentUid ?: return@launch
@@ -175,15 +175,12 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
                             message = "Could not remove the photo. Check your connection and try again."
                         } finally { busy = false }
                     }
-                }) { Text("Remove photo") }
+                }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove photo") }
             }
             }
             if (section == ProfileToolSection.Training) {
             Text("Export your stored sessions, final scores, cue measurements, and guided-angle estimates.", style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !busy, onClick = { exportCsv.launch("volleyball-progress.csv") }) { Text("Export CSV") }
-                OutlinedButton(enabled = !busy, onClick = { exportJson.launch("volleyball-progress.json") }) { Text("Export JSON") }
-            }
+            ProfileExportActions(busy, { exportCsv.launch("volleyball-progress.csv") }, { exportJson.launch("volleyball-progress.json") })
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -192,6 +189,13 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
     if (editing) GoalDialog(profile, onDismiss = { editing = false }, onSave = { skill, text ->
         scope.launch { graph.profileRepository.update { it.copy(goalSkill = skill, goalText = text) }; editing = false }
     })
+}
+
+@Composable
+internal fun ProfileExportActions(busy: Boolean, onCsv: () -> Unit, onJson: () -> Unit) {
+    com.volleyballlab.player.ui.component.ResponsivePair(
+        first = { OutlinedButton(enabled = !busy, onClick = onCsv, modifier = it.heightIn(min = 48.dp)) { Text("Export CSV") } },
+        second = { OutlinedButton(enabled = !busy, onClick = onJson, modifier = it.heightIn(min = 48.dp)) { Text("Export JSON") } })
 }
 
 @Composable

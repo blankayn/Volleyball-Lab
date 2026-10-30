@@ -594,7 +594,7 @@ private fun SaveFailedCard(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun UnavailableCard(
+internal fun UnavailableCard(
     state: CaptureUiState.Unavailable,
     onRetry: () -> Unit,
     onUseDemo: () -> Unit,
@@ -609,7 +609,8 @@ private fun UnavailableCard(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(R.string.error_model_missing_title),
+                text = stringResource(if (state.reason == PoseDetectorUnavailableException.Reason.ModelMissing)
+                    R.string.error_model_missing_title else R.string.error_pose_initialization_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -620,7 +621,7 @@ private fun UnavailableCard(
                         stringResource(R.string.error_model_missing_body)
 
                     PoseDetectorUnavailableException.Reason.InitialisationFailed ->
-                        stringResource(R.string.error_camera_title)
+                        stringResource(R.string.error_pose_initialization_body)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

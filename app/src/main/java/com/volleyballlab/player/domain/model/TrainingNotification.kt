@@ -11,11 +11,11 @@ data class TrainingNotification(val id: String, val type: TrainingNotificationTy
     val delivered: Boolean = false)
 
 object NotificationEvents {
-    fun question(question: CoachingQuestion) = TrainingNotification("question:${question.id}", TrainingNotificationType.CoachingQuestion,
-        "Player coaching question", "A player asked for training guidance. Open Player questions to respond.", question.createdAt, question.id)
-    fun answer(question: CoachingQuestion): TrainingNotification? = question.answeredAt?.let { at ->
-        TrainingNotification("question-answer:${question.id}", TrainingNotificationType.CoachingAnswer,
-            "Your coach answered", "Your coaching question has a response. Open My coach to read it.", at, question.id)
+    fun question(question: CoachingQuestion) = TrainingNotification(if (question.followUpCount == 0) "question:${question.id}" else "question:${question.id}:${question.followUpCount}", TrainingNotificationType.CoachingQuestion,
+        "Player coaching question", "A player asked for training guidance. Open Player questions to respond.", question.messages.last { !it.fromCoach }.at, question.id)
+    fun answer(question: CoachingQuestion): TrainingNotification? = question.messages.lastOrNull { it.fromCoach && it.at > 0 }?.let { message ->
+        TrainingNotification(if (message.id == "answer") "question-answer:${question.id}" else "question-answer:${question.id}:${message.id}", TrainingNotificationType.CoachingAnswer,
+            "Your coach answered", "Your coaching question has a response. Open My coach to read it.", message.at, question.id)
     }
     fun connection(coachUid: String, member: RosterMember): TrainingNotification? {
         val decidedAt = member.decidedAtEpochMs ?: return null
