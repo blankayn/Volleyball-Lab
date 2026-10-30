@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 
 /** Read-only previews: forms and submission actions remain in their full sections. */
 @Composable
-internal fun MyCoachHubSections(state: CoachLinkState, onOpen: (CoachWorkspaceTab) -> Unit) {
+internal fun MyCoachHubSections(state: CoachLinkState, onManageConnection: (() -> Unit)? = null, onOpen: (CoachWorkspaceTab) -> Unit) {
     val active = state.link?.isActive == true
     val assignments = state.assignments.filter { it.coachUid == state.link?.coachUid && it.isOpen }
     val reviewed = state.submissions.count { !it.isPending }
@@ -40,6 +40,11 @@ internal fun MyCoachHubSections(state: CoachLinkState, onOpen: (CoachWorkspaceTa
             "$reviewed reviewed · $pending awaiting feedback",
             latestNote?.text?.take(180)?.takeIf { it.isNotBlank() }
                 ?: "See session feedback, revisit coaching questions and review completed sessions.", onOpen)
+        if (active && onManageConnection != null) {
+            TextButton(onClick = onManageConnection, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Manage coach connection", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

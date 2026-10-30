@@ -11,6 +11,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalLayoutDirection
 
 /** Shared page treatment for the coach workspace; cards carry the content. */
 @Composable
@@ -59,6 +62,28 @@ internal fun CoachFilterTabs(
             }
         }
     }
+}
+
+@Composable
+internal fun CoachSearchField(
+    value: String, onValueChange: (String) -> Unit, label: String,
+    modifier: Modifier = Modifier, supportingText: String? = null,
+) {
+    OutlinedTextField(value, onValueChange, label = { Text(label) },
+        leadingIcon = { Icon(Icons.Rounded.Search, null) },
+        trailingIcon = { if (value.isNotEmpty()) IconButton(onClick = { onValueChange("") }) {
+            Icon(Icons.Rounded.Close, "Clear search")
+        } },
+        supportingText = if (supportingText != null) { { Text(supportingText) } } else null,
+        singleLine = true, shape = CoachInnerShape, modifier = modifier.fillMaxWidth())
+}
+
+/** Cards own horizontal gutters; every coach list has the same safe bottom clearance. */
+@Composable
+internal fun coachListPadding(padding: PaddingValues): PaddingValues {
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(start = padding.calculateStartPadding(direction), end = padding.calculateEndPadding(direction),
+        top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp)
 }
 
 @Composable

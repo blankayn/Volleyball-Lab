@@ -12,16 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AssignmentTurnedIn
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.QuestionAnswer
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Insights
-import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -142,6 +138,9 @@ fun CoachDashboardScreen(
 ) {
     val viewModel: CoachDashboardViewModel = viewModel(factory = CoachDashboardViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
+    val questions by graph.coachingHubRepository.coachQuestions.collectAsStateWithLifecycle(emptyList())
 
     // Both clock reads are sampled once per composition rather than at the point
     // of use. A clock read inside a list item makes the item's output depend on
@@ -161,7 +160,7 @@ fun CoachDashboardScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item(key = "hero") {
@@ -202,9 +201,14 @@ fun CoachDashboardScreen(
             }
         }
 
-        item(key = "questions") {
-            CoachNavigationRow("Player questions", "Review introductions and answer training questions", Icons.Rounded.QuestionAnswer,
-                onOpenQuestions, Modifier.padding(horizontal = CoachGutter))
+        item(key = "workspace") {
+            EntranceAnimation(index = 3) {
+                CoachDashboardWorkspace(
+                    onOpenRoster, onOpenAssign, onOpenQuestions, onOpenAccount,
+                    Modifier.padding(horizontal = CoachGutter),
+                    unread = questions.sumOf { it.unread(true) },
+                )
+            }
         }
 
         // The queue is a heading over free-standing rows rather than a
@@ -283,38 +287,6 @@ fun CoachDashboardScreen(
                             else stringResource(R.string.coach_reviews_show_all, state.pendingQueue.size))
                     }
                 }
-            }
-        }
-
-        item(key = "quick-actions") {
-            EntranceAnimation(index = 5) {
-                CoachActionRow(
-                    actions = listOf(
-                        CoachAction(
-                            title = stringResource(R.string.coach_dash_requests_action),
-                            subtitle = stringResource(R.string.coach_quick_add_sub),
-                            icon = Icons.Rounded.PersonAdd,
-                            accent = CoachAccent.Rust,
-                            onClick = onOpenRoster,
-                        ),
-                        CoachAction(
-                            title = stringResource(R.string.coach_assign_new),
-                            subtitle = stringResource(R.string.coach_quick_assign_sub),
-                            icon = Icons.Rounded.AssignmentTurnedIn,
-                            accent = CoachAccent.Violet,
-                            onClick = onOpenAssign,
-                        ),
-                        CoachAction(
-                            title = stringResource(R.string.coach_account_title),
-                            subtitle = stringResource(R.string.coach_quick_account_sub),
-                            icon = Icons.Rounded.Settings,
-                            accent = CoachAccent.Indigo,
-                            onClick = onOpenAccount,
-                        ),
-                    ),
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                    title = stringResource(R.string.coach_quick_title),
-                )
             }
         }
 
@@ -432,6 +404,7 @@ private fun DashboardFocusCard(
         // one prompt a coach with no squad actually needs - leaving them looking at
         // two athletes they cannot act on and no way to get a real one.
         state.isSample || state.roster.isEmpty() -> CoachFeatureCard(
+            backgroundPhoto = R.drawable.coach_dashboard_court,
             eyebrow = stringResource(R.string.coach_focus_setup_eyebrow),
             title = stringResource(R.string.coach_focus_setup_title),
             body = stringResource(R.string.coach_focus_setup_body),
@@ -441,6 +414,7 @@ private fun DashboardFocusCard(
         )
 
         state.pendingRequests.isNotEmpty() -> CoachFeatureCard(
+            backgroundPhoto = R.drawable.coach_dashboard_court,
             eyebrow = stringResource(R.string.coach_roster_requests),
             title = stringResource(R.string.coach_dash_requests, state.pendingRequests.size),
             body = stringResource(R.string.coach_requests_focus_body),
@@ -450,6 +424,7 @@ private fun DashboardFocusCard(
         )
 
         safety > 0 -> CoachFeatureCard(
+            backgroundPhoto = R.drawable.coach_dashboard_court,
             eyebrow = stringResource(R.string.coach_focus_safety_eyebrow),
             // Counts *players*, not flags, because a coach acts on people. The
             // singular and plural are separate strings rather than a plural
@@ -468,6 +443,7 @@ private fun DashboardFocusCard(
         )
 
         pending > 0 -> CoachFeatureCard(
+            backgroundPhoto = R.drawable.coach_dashboard_court,
             eyebrow = stringResource(R.string.coach_focus_review_eyebrow),
             title = if (pending == 1) {
                 stringResource(R.string.coach_focus_review_title, pending)
@@ -483,6 +459,7 @@ private fun DashboardFocusCard(
         )
 
         else -> CoachFeatureCard(
+            backgroundPhoto = R.drawable.coach_dashboard_court,
             eyebrow = stringResource(R.string.coach_focus_clear_eyebrow),
             title = stringResource(R.string.coach_focus_clear_title),
             body = stringResource(R.string.coach_focus_clear_body),

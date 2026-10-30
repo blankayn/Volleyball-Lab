@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -137,12 +140,54 @@ fun SkillSelectScreen(
  * the two occupy the same rectangle without either needing a scrim.
  */
 @Composable
-private fun SkillCard(
+internal fun SkillCard(
+    skill: Skill, position: Int, progress: SkillFormProgress?, progressLoaded: Boolean, onClick: () -> Unit,
+) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth < 270.dp || fontScale > 1.15f) {
+            CompactSkillCard(skill, position, progress, progressLoaded, onClick)
+        } else {
+            IllustratedSkillCard(skill, position, progress, progressLoaded, onClick, artworkAlpha = if (maxWidth < 380.dp) .18f else 1f)
+        }
+    }
+}
+
+/** Text and artwork get separate space when a fixed-height illustration would crowd the labels. */
+@Composable
+private fun CompactSkillCard(skill: Skill, position: Int, progress: SkillFormProgress?, progressLoaded: Boolean, onClick: () -> Unit) {
+    val palette = paletteFor(skill)
+    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(CARD_CORNER_DP.dp),
+        color = palette.wash, contentColor = SkillCardInk,
+        border = BorderStroke(1.dp, palette.accent.copy(alpha = .18f)), shadowElevation = 2.dp) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                NumberBadge(position, palette.accent)
+                Text(stringResource(skill.displayName), style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold, color = SkillCardInk, modifier = Modifier.weight(1f))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(skill.description), style = MaterialTheme.typography.bodySmall,
+                    color = SkillCardMutedInk, modifier = Modifier.weight(1f))
+                Image(painterResource(palette.illustration), null, Modifier.size(72.dp), contentScale = ContentScale.Fit)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (progressLoaded) SkillProgressLine(progress, true, palette.accent, Modifier.weight(1f), maxLines = Int.MAX_VALUE)
+                else Spacer(Modifier.weight(1f))
+                ForwardButton(palette.accent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun IllustratedSkillCard(
     skill: Skill,
     position: Int,
     progress: SkillFormProgress?,
     progressLoaded: Boolean,
     onClick: () -> Unit,
+    artworkAlpha: Float,
 ) {
     val palette = paletteFor(skill)
     val interactionSource = remember { MutableInteractionSource() }
@@ -156,16 +201,17 @@ private fun SkillCard(
             .pressScale(interactionSource),
         shape = RoundedCornerShape(CARD_CORNER_DP.dp),
         color = palette.wash,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = SkillCardInk,
         border = BorderStroke(1.dp, palette.accent.copy(alpha = .18f)),
         shadowElevation = 2.dp,
     ) {
         Box(Modifier.fillMaxWidth()) {
-            CourtCardArtwork(Modifier.matchParentSize(), ink = palette.accent)
+            CourtCardArtwork(Modifier.matchParentSize().testTag("skill-card-background"), ink = palette.accent)
             Image(
                 painter = painterResource(palette.illustration),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
+                alpha = artworkAlpha,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()
@@ -185,7 +231,7 @@ private fun SkillCard(
                         text = stringResource(skill.displayName),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = SkillCardInk,
                     )
                     Spacer(Modifier.height(6.dp))
                     // The rule under the title, in the skill's own colour. It is
@@ -202,7 +248,7 @@ private fun SkillCard(
                     Text(
                         text = stringResource(skill.description),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SkillCardMutedInk,
                         modifier = Modifier.width(DESCRIPTION_WIDTH_DP.dp),
                     )
                     Spacer(Modifier.height(6.dp))
@@ -225,6 +271,8 @@ private fun SkillProgressLine(
     progress: SkillFormProgress?,
     loaded: Boolean,
     accent: Color,
+    modifier: Modifier = Modifier.width(DESCRIPTION_WIDTH_DP.dp),
+    maxLines: Int = 2,
 ) {
     if (!loaded) return
     val text = when {
@@ -238,7 +286,7 @@ private fun SkillProgressLine(
         else -> stringResource(R.string.skill_progress_many, progress.sessionCount, progress.meanScore)
     }
     Row(
-        modifier = Modifier.width(DESCRIPTION_WIDTH_DP.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(5.dp).clip(CircleShape).background(
@@ -248,8 +296,9 @@ private fun SkillProgressLine(
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = if (progress != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
+            color = SkillCardMutedInk,
+            modifier = Modifier.weight(1f),
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -344,6 +393,8 @@ private fun paletteFor(skill: Skill): SkillPalette = when (skill) {
 }
 
 private const val CARD_HEIGHT_DP = 164
+private val SkillCardInk = Color(0xFF22302A)
+private val SkillCardMutedInk = Color(0xFF47534B)
 private const val CARD_CORNER_DP = 24
 private const val BADGE_SIZE_DP = 38
 private const val BADGE_CORNER_DP = 11

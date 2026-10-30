@@ -1,4 +1,6 @@
 import java.net.URI
+import java.security.MessageDigest
+import java.nio.file.Files
 
 plugins {
     // Brings Kotlin with it: AGP 9 has built-in Kotlin support, so
@@ -22,6 +24,52 @@ val sessionAiUrl = providers.gradleProperty("sessionAiUrl")
     .orElse(providers.environmentVariable("SESSION_AI_URL"))
     .orElse("")
     .get().trim()
+
+// Keep clean checkouts from silently producing an APK without live pose tracking.
+abstract class VerifyPoseModel : DefaultTask() {
+    @get:org.gradle.api.tasks.Internal abstract val model: org.gradle.api.file.RegularFileProperty
+    @get:org.gradle.api.tasks.Internal abstract val temporaryDirectory: org.gradle.api.file.DirectoryProperty
+    @get:org.gradle.api.tasks.Input abstract val offline: org.gradle.api.provider.Property<Boolean>
+
+    @org.gradle.api.tasks.TaskAction
+    fun verify() {
+        val expected = "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1"
+        val source = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+        val target = model.get().asFile
+        fun sha256(file: java.io.File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+        if (!target.isFile) {
+            check(!offline.get()) { "The pose model is missing. Run an online build once to download it, then offline builds will work." }
+            val directory = temporaryDirectory.get().asFile.toPath()
+            Files.createDirectories(directory)
+            val temporary = Files.createTempFile(directory, "pose-landmarker-", ".part")
+            try {
+                val connection = URI(source).toURL().openConnection().apply { connectTimeout = 30_000; readTimeout = 60_000 }
+                connection.getInputStream().use { input -> Files.newOutputStream(temporary).use { input.copyTo(it) } }
+                check(sha256(temporary.toFile()) == expected) { "The downloaded pose model checksum did not match." }
+                Files.move(temporary, target.toPath())
+            } finally { Files.deleteIfExists(temporary) }
+        }
+        check(sha256(target) == expected) { "The pose model checksum did not match. Restore the official full model before building." }
+    }
+}
+val verifyPoseModel = tasks.register<VerifyPoseModel>("verifyPoseModel") {
+    model.set(layout.projectDirectory.file("src/main/assets/pose_landmarker_full.task"))
+    temporaryDirectory.set(layout.buildDirectory.dir("pose-model-download"))
+    offline.set(gradle.startParameter.isOffline)
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") && !it.name.contains("AndroidTest") }
+    .configureEach { dependsOn(verifyPoseModel) }
 if (sessionAiUrl.isNotEmpty()) {
     val endpoint = URI(sessionAiUrl)
     require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
@@ -38,8 +86,8 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 9
-        versionName = "0.1.8"
+        versionCode = 16
+        versionName = "0.1.15"
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

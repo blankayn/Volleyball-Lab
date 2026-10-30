@@ -34,6 +34,7 @@ import org.junit.Test
 class MyCoachHubDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private lateinit var controller: NavHostController
+    private var connectionClicks = 0
 
     private fun showHub(scale: Float = 1f) {
         compose.setContent {
@@ -44,7 +45,7 @@ class MyCoachHubDeviceTest {
                     NavHost(controller, startDestination = MyCoachRoute) {
                         composable<MyCoachRoute> {
                             LazyColumn(Modifier.width(360.dp), contentPadding = PaddingValues(20.dp)) {
-                                item { MyCoachHubSections(CoachLinkState(link = CoachLink("coach", "TeamYose", "Yose", MembershipStatus.Active, 1))) { controller.openMyCoachSection(it.name) } }
+                                item { MyCoachHubSections(CoachLinkState(link = CoachLink("coach", "TeamYose", "Yose", MembershipStatus.Active, 1)), onManageConnection = { connectionClicks++ }) { controller.openMyCoachSection(it.name) } }
                             }
                         }
                         composable<MyCoachSectionRoute> { entry ->
@@ -57,6 +58,15 @@ class MyCoachHubDeviceTest {
                 }
             }
         }
+    }
+
+    @Test fun manageConnectionIsOnTheHubAndNotInsideOverview() {
+        showHub()
+        compose.onNodeWithText("Manage coach connection").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, connectionClicks) }
+        compose.onNodeWithText("Open overview").performScrollTo().performClick()
+        compose.onNodeWithText("Full Overview").assertIsDisplayed()
+        compose.onNodeWithText("Manage coach connection").assertDoesNotExist()
     }
 
     @Test fun allSectionsAreTogetherAndEachOpensItsPageThenReturnsToTheHub() {

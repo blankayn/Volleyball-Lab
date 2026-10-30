@@ -1,8 +1,15 @@
-.hub-page { display: grid; gap: 22px; }
+.hub-page { display: grid; gap: 22px; margin-top: 28px; }
+.message-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; background: #be185d; color: #fff; font-size: 12px; font-weight: 700; line-height: 1; }
+.player-profile-toolbar { position: relative; margin-top: 14px; padding-top: 12px; min-height: 52px; }
+.player-messages > summary { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; gap: 9px; cursor: pointer; list-style: none; }
+.player-messages > summary::-webkit-details-marker { display: none; }
+.player-messages[open] > summary { background: var(--portal-subtle); }
+.player-message-content { margin-top: 24px; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface, #fff); }
+.player-message-content > h2 { margin: 0; font-size: 20px; }
+@media(max-width:540px) { .player-message-content { padding: 16px; } .player-messages > summary { padding: 10px; } }
 .hub-page p[role="status"]:empty { display: none; }
 .hub-page h2 { margin: 8px 0 12px; }
 .hub-page h3 { margin: 0 0 10px; }
-.hub-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
 .hub-page .panel { padding: 24px; }
 .hub-question-heading { display:flex; justify-content:space-between; align-items:start; gap:16px; }
 .hub-question-heading p { margin: 0 0 12px; font-size:13px; }
@@ -14,7 +21,7 @@
 .hub-review { padding:18px 0; border-top:1px solid var(--line); }
 .hub-page small { color:var(--ink-faint); }
 .hub-page textarea { min-height:110px; }
-@media(max-width:740px) { .hub-summary { grid-template-columns:1fr; } .hub-question-heading { flex-direction:column; } .hub-page .panel { padding:20px; } }
+@media(max-width:740px) { .hub-question-heading { flex-direction:column; } .hub-page .panel { padding:20px; } }
 .hub-presence-status { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 14px; background: var(--surface-soft, #f1f2ee); font-weight: 700; }
 .hub-presence-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .hub-presence-status[data-presence="Online"] { color: #245b3b; background: #e8f4eb; }

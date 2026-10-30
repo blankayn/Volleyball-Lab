@@ -102,7 +102,7 @@ class CoachPlayerViewModel(
     }
 }
 
-/** Player overview, shared-session history and training plan as separate views. */
+/** Player overview, shared-session history and training plan. */
 @Composable
 fun CoachPlayerScreen(
     playerUid: String,
@@ -114,6 +114,17 @@ fun CoachPlayerScreen(
 ) {
     val viewModel: CoachPlayerViewModel = viewModel(factory = CoachPlayerViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    CoachPlayerContent(state, playerUid, onBack, onOpenReview, onAssignDrill,
+        onRemovePlayer = { viewModel.remove(playerUid); onBack() }, contentPadding = contentPadding, modifier = modifier)
+}
+
+/** The profile keeps overview, shared sessions and assignments on one scrollable page. */
+@Composable
+internal fun CoachPlayerContent(
+    state: CoachTeamState, playerUid: String, onBack: () -> Unit,
+    onOpenReview: (String, String) -> Unit, onAssignDrill: (String) -> Unit,
+    onRemovePlayer: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier,
+) {
     val now = remember { System.currentTimeMillis() }
 
     if (!state.loaded) {
@@ -121,12 +132,11 @@ fun CoachPlayerScreen(
         return
     }
     val snapshot = state.snapshotOf(playerUid)
-    var tab by rememberSaveable(playerUid) { mutableStateOf(0) }
     var confirmRemoval by rememberSaveable(playerUid) { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        contentPadding = coachListPadding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(key = "header") {
@@ -173,30 +183,13 @@ fun CoachPlayerScreen(
             return@LazyColumn
         }
 
-        item(key = "player-tabs") {
-            CoachFilterTabs(listOf("Overview", "Sessions", "Plan"), tab, { tab = it }, Modifier.padding(horizontal = CoachGutter))
-        }
-        if (tab == 0) item(key = "stats") {
+        item(key = "stats") {
             EntranceAnimation(index = 1) {
                 PlayerStatStrip(snapshot, Modifier.padding(horizontal = CoachGutter))
             }
         }
 
-        if (tab == 0 && !snapshot.hasTraining) {
-            item(key = "no-training") {
-                EntranceAnimation(index = 2) {
-                    CoachEmptyCard(
-                        title = stringResource(R.string.coach_player_no_training_title),
-                        body = stringResource(R.string.coach_player_no_training_body),
-                        modifier = Modifier.padding(horizontal = CoachGutter),
-                        icon = Icons.Rounded.CalendarMonth,
-                        accent = CoachAccent.Green,
-                        actionLabel = stringResource(R.string.coach_player_new_assignment),
-                        onAction = { onAssignDrill(playerUid) },
-                    )
-                }
-            }
-        } else if (tab == 0) {
+        if (snapshot.hasTraining) {
             snapshot.weakestCue?.let { cue ->
                 item(key = "focus") {
                     val cueLabel = stringResource(cue.label)
@@ -241,13 +234,38 @@ fun CoachPlayerScreen(
             }
         }
 
-        if (tab != 1) item(key = "actions") {
+        if (snapshot.recentSessions.isNotEmpty()) {
+            item(key = "history") {
+                CoachSectionCard(
+                    title = stringResource(R.string.coach_player_history),
+                    icon = Icons.Rounded.CalendarMonth,
+                    accent = CoachAccent.Green,
+                    modifier = Modifier.padding(horizontal = CoachGutter),
+                ) {
+                    snapshot.recentSessions.forEach { session ->
+                        SessionRow(
+                            session = session,
+                            pending = state.queue.any {
+                                it.submission.sessionId == session.id && it.submission.isPending
+                            },
+                            onClick = { onOpenReview(playerUid, session.id) },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (snapshot.recentSessions.isEmpty()) item(key = "empty-sessions") {
+            CoachEmptyCard("No shared sessions yet", "The player’s shared sessions will appear here when they send one for review.",
+                icon = Icons.Rounded.CalendarMonth, modifier = Modifier.padding(horizontal = CoachGutter))
+        }
+        item(key = "actions") {
             CoachPillButton(stringResource(R.string.coach_player_new_assignment), { onAssignDrill(playerUid) },
                 Modifier.fillMaxWidth().padding(horizontal = CoachGutter))
         }
 
         val assignments = state.assignmentsFor(playerUid)
-        if (tab == 2) item(key = "assignments") {
+        item(key = "assignments") {
             CoachSectionCard(
                 title = stringResource(R.string.coach_player_assignments),
                 icon = Icons.Rounded.AssignmentTurnedIn,
@@ -270,37 +288,12 @@ fun CoachPlayerScreen(
             }
         }
 
-        if (tab == 1 && snapshot.recentSessions.isNotEmpty()) {
-            item(key = "history") {
-                CoachSectionCard(
-                    title = stringResource(R.string.coach_player_history),
-                    icon = Icons.Rounded.CalendarMonth,
-                    accent = CoachAccent.Green,
-                    modifier = Modifier.padding(horizontal = CoachGutter),
-                ) {
-                    snapshot.recentSessions.forEach { session ->
-                        SessionRow(
-                            session = session,
-                            pending = state.queue.any {
-                                it.submission.sessionId == session.id && it.submission.isPending
-                            },
-                            onClick = { onOpenReview(playerUid, session.id) },
-                        )
-                    }
-                }
-            }
-        }
-
-        if (tab == 1 && snapshot.recentSessions.isEmpty()) item(key = "empty-sessions") {
-            CoachEmptyCard("No shared sessions yet", "The player’s shared sessions will appear here when they send one for review.",
-                icon = Icons.Rounded.CalendarMonth, modifier = Modifier.padding(horizontal = CoachGutter))
-        }
-        if (tab == 2 && snapshot.member.isActive) item(key = "manage-player") {
+        if (snapshot.member.isActive) item(key = "manage-player") {
             TextButton(onClick = { confirmRemoval = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = CoachGutter)) {
                 Text("Remove from team", color = MaterialTheme.colorScheme.error)
             }
         }
-        if (tab == 0) item(key = "footnote") {
+        item(key = "footnote") {
             CoachFootnote(
                 text = stringResource(R.string.coach_player_focus_source),
                 modifier = Modifier.padding(horizontal = CoachGutter + 4.dp, vertical = 6.dp),
@@ -310,7 +303,7 @@ fun CoachPlayerScreen(
     if (confirmRemoval) AlertDialog(
         onDismissRequest = { confirmRemoval = false }, title = { Text("Remove this player?") },
         text = { Text("They will need a new approved request to send you sessions again. Previous feedback stays available.") },
-        confirmButton = { TextButton(onClick = { confirmRemoval = false; viewModel.remove(playerUid); onBack() }) { Text("Remove player", color = MaterialTheme.colorScheme.error) } },
+        confirmButton = { TextButton(onClick = { confirmRemoval = false; onRemovePlayer() }) { Text("Remove player", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmRemoval = false }) { Text("Keep player") } },
     )
 }

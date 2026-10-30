@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.volleyballlab.player.feature.notifications.NotificationBellButton
+import com.volleyballlab.player.R
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VolleyballLabTheme
 import java.io.File
@@ -30,6 +31,48 @@ import org.junit.Test
 /** Native checks for the detached-badge regression and large-text dashboard layout. */
 class CoachWorkspaceDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun dashboardPhotoAndWorkspaceFitAtNormalTextSize() {
+        compose.setContent {
+            VolleyballLabTheme {
+                Column(Modifier.width(360.dp).coachWorkspaceBackground().verticalScroll(rememberScrollState())
+                    .testTag("dashboard-proof").padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    CoachFeatureCard("Review queue", "1 session waiting for you",
+                        "Open a session to review your player’s training.", actionLabel = "Review session",
+                        onAction = {}, backgroundPhoto = R.drawable.coach_dashboard_court)
+                    CoachDashboardWorkspace({}, {}, {}, {})
+                }
+            }
+        }
+        compose.onNodeWithText("Keep your team moving").assertIsDisplayed()
+        compose.onNodeWithText("Player questions").assertIsDisplayed()
+        screenshot("dashboard-proof", "coach-dashboard-workspace.png")
+    }
+
+    @Test fun dashboardWorkspaceDestinationsRemainReachableWithPhotoBannerAndLargeText() {
+        val opened = mutableListOf<String>()
+        compose.setContent {
+            VolleyballLabTheme {
+                val density = LocalDensity.current.density
+                CompositionLocalProvider(LocalDensity provides Density(density, 1.6f), LocalReduceMotion provides true) {
+                    Column(Modifier.width(320.dp).coachWorkspaceBackground().verticalScroll(rememberScrollState())
+                        .testTag("workspace-proof").padding(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        CoachFeatureCard("Review queue", "1 session waiting for you",
+                            "Open a session to review your player’s training.", actionLabel = "Review session",
+                            onAction = { opened += "review" }, backgroundPhoto = R.drawable.coach_dashboard_court)
+                        CoachDashboardWorkspace({ opened += "players" }, { opened += "assignments" },
+                            { opened += "questions" }, { opened += "account" })
+                    }
+                }
+            }
+        }
+        listOf("Review session", "Players", "Assignments", "Player questions", "Manage coach profile").forEach {
+            compose.onNodeWithText(it).performScrollTo().assertHasClickAction().performClick()
+        }
+        compose.runOnIdle { assertEquals(listOf("review", "players", "assignments", "questions", "account"), opened) }
+        compose.onNodeWithText("Review session").performScrollTo()
+        screenshot("workspace-proof", "coach-dashboard-workspace-large-text.png")
+    }
 
     @Test fun bellKeepsAccessibleCountAndClickTargetForSingleAndCappedBadges() {
         var clicks = 0

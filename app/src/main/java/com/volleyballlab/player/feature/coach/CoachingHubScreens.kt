@@ -105,9 +105,8 @@ fun MyCoachScreen(
                 } }
                 item(key = "metrics") { CoachMetrics(summary) }
             }
-            if (selected != null) item(key = "tabs") { CoachWorkspaceTabs(selected) { onOpenSection(it.name) } }
             when (selected) {
-                null -> item(key = "workspace-sections") { MyCoachHubSections(state) { onOpenSection(it.name) } }
+                null -> item(key = "workspace-sections") { MyCoachHubSections(state, onManageConnection = { showLeave = true }) { onOpenSection(it.name) } }
                 CoachWorkspaceTab.Overview -> {
                     if (active) {
                         item(key = "intro") {
@@ -119,10 +118,9 @@ fun MyCoachScreen(
                             }
                         }
                         item(key = "overview-counts") {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, Modifier.weight(1f))
-                                CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, Modifier.weight(1f))
-                            }
+                            com.volleyballlab.player.ui.component.ResponsivePair(
+                                first = { CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, it) },
+                                second = { CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, it) })
                         }
                         state.notes.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null }?.let { note -> item(key = "general-note") {
                             CoachSectionCard {
@@ -131,11 +129,6 @@ fun MyCoachScreen(
                                 Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } }
-                        item(key = "connection") {
-                            TextButton(onClick = { showLeave = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                                Text("Manage coach connection", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
                     } else item(key = "no-connection") {
                         CoachSectionCard {
                             CoachEyebrow(if (link?.isPending == true) "Request sent" else "Your next chapter")
@@ -300,38 +293,21 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
     var text by rememberSaveable(key) { mutableStateOf("") }
     val topics = CoachingTopic.entries.filter { it.introductory == (sessionId == null) }
     var topic by rememberSaveable(key) { mutableStateOf(topics.first()) }
-    if (question != null) {
-        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Coaching question", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text(if (question.answer == null) "Pending" else "Answered", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-                Text(question.topic.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(question.text, style = MaterialTheme.typography.bodyMedium, lineHeight = 23.sp)
-                if (question.answer == null) Text("Your coach will respond here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else {
-                    TextButton(onClick = { answerOpen = !answerOpen }, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 44.dp)) {
-                        Text(if (answerOpen) "Hide response" else "Read coach response", fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.ChevronRight, null, Modifier.size(18.dp))
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = answerOpen,
-                        enter = androidx.compose.animation.fadeIn(com.volleyballlab.player.ui.theme.vbTween()) +
-                            androidx.compose.animation.expandVertically(com.volleyballlab.player.ui.theme.vbTween()),
-                        exit = androidx.compose.animation.fadeOut(com.volleyballlab.player.ui.theme.vbTween()) +
-                            androidx.compose.animation.shrinkVertically(com.volleyballlab.player.ui.theme.vbTween()),
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-                            CoachEyebrow("Coach response")
-                            Text(question.answer, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                            question.answeredAt?.let { Text(dateLabel(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        }
-                    }
-                }
-            }
+    val allQuestions by actions.hub.playerQuestions.collectAsStateWithLifecycle(emptyList())
+    val current = allQuestions.firstOrNull { it.coachUid == coachUid && it.resolvedAt == null } ?: question
+    var startNew by rememberSaveable(key) { mutableStateOf(false) }
+    LaunchedEffect(question?.id) { startNew = false; open = false }
+    if (current != null && !startNew) {
+        TextButton(onClick = { answerOpen = !answerOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text(if (answerOpen) "Hide training conversation" else "Open training conversation")
+            Spacer(Modifier.width(8.dp)); CoachingUnreadBadge(current.unread(false))
+        }
+        if (answerOpen) RestrictedCoachingThread(current, false, connected, current.id in busy, errors[current.id],
+            onSend = { value -> actions.perform(current.id) { actions.hub.followUp(current, value) } },
+            onResolve = { actions.perform(current.id) { actions.hub.resolve(current) } },
+            onRead = { actions.perform("read-${current.id}") { actions.hub.markRead(current, false) } })
+        if (connected && current.resolvedAt != null) OutlinedButton(onClick = { text = ""; startNew = true; open = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Start a new training question")
         }
     } else if (connected) {
         if (!open) OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
@@ -344,12 +320,12 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
                 topics.forEach { option -> FilterChip(selected = option == topic, onClick = { topic = option }, label = { Text(option.label) }, enabled = key !in busy) }
             }
             OutlinedTextField(text, { text = it.take(300) }, label = { Text("What would you like to understand?") },
-                minLines = 3, shape = RoundedCornerShape(16.dp), isError = hasCoachingLink(text),
-                supportingText = { Text(if (hasCoachingLink(text)) "Text only; links are not supported." else "${text.length}/300 · one question for this ${if (sessionId == null) "introduction" else "session"}") },
+                minLines = 3, shape = RoundedCornerShape(16.dp), isError = hasCoachingContact(text),
+                supportingText = { Text(if (hasCoachingContact(text)) "No links or contact details." else "${text.length}/300 · one open training question at a time") },
                 enabled = key !in busy, modifier = Modifier.fillMaxWidth())
             errors[key]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Button(onClick = { actions.perform(key) { actions.hub.ask(coachUid, sessionId, topic, text) } },
-                enabled = text.isNotBlank() && !hasCoachingLink(text) && key !in busy,
+                enabled = text.isNotBlank() && !hasCoachingContact(text) && key !in busy,
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 if (key in busy) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
                 Text(if (key in busy) "Sending question…" else "Send coaching question")
@@ -415,88 +391,48 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val context = LocalContext.current
     val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
     val roster by graph.coachRepository.roster.collectAsStateWithLifecycle(emptyList())
-    val user by graph.authRepository.currentUser.collectAsStateWithLifecycle(null)
-    var tab by rememberSaveable { mutableIntStateOf(0) }
-    val pending = questions.filter { it.answer == null }
-    val visible = if (tab == 0) pending.sortedBy { it.createdAt } else questions.filter { it.answer != null }.sortedByDescending { it.answeredAt ?: it.createdAt }
-    LazyColumn(Modifier.fillMaxSize().coachWorkspaceBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { HubHeader("Player questions", onBack, "Coach workspace") }
-        item { HubSync(actions.hub) }
-        user?.uid?.let { uid -> item {
-            val summaryFlow = remember(uid) { actions.hub.summary(uid) }
-            val summary by summaryFlow.collectAsStateWithLifecycle(CoachPublicSummary())
-            com.volleyballlab.player.feature.coachmode.CoachCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your status")
-                        Text("Updates automatically with your coaching activity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    AvailabilityTag(summary.availability)
-                }
-            }
+    val syncError by actions.hub.error.collectAsStateWithLifecycle(null)
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(selected != null) { selected = null }
+    val inbox = coachingInbox(questions)
+    val conversation = inbox.firstOrNull { it.playerUid == selected }
+    val playerName = roster.firstOrNull { it.playerUid == selected }?.playerName?.ifBlank { "Player" } ?: "Player"
+    CoachQuestionsPage(onBack = { if (selected != null) selected = null else onBack() }, contentPadding = contentPadding,
+        title = if (selected == null) "Inbox" else playerName, unread = if (selected == null) inbox.sumOf { it.unread } else 0) {
+        syncError?.let { message -> item(key = "sync-error") {
+            Column { Text(message, color = MaterialTheme.colorScheme.error); TextButton(onClick = actions.hub::retry) { Text("Retry coaching sync") } }
         } }
-        item {
-            com.volleyballlab.player.feature.coachmode.CoachFilterTabs(
-                listOf("Needs reply ${pending.size}", "Answered ${questions.size - pending.size}"), tab, { tab = it })
-        }
-        if (visible.isEmpty()) item {
-            com.volleyballlab.player.feature.coachmode.CoachEmptyCard(
-                title = if (tab == 0) "You’re up to date" else "No responses yet",
-                body = if (tab == 0) "New player introductions and session questions will appear here." else "Your answered coaching questions will stay here for reference.",
-                icon = Icons.Rounded.QuestionAnswer)
-        }
-        items(visible, key = { it.id }) { question ->
-            val active = roster.any { it.playerUid == question.playerUid && it.isActive }
-            var replying by rememberSaveable(question.id) { mutableStateOf(false) }
-            var reply by rememberSaveable(question.id) { mutableStateOf("") }
-            DisposableEffect(question.id, replying, active) {
-                graph.coachPresenceReporter.writing(question.id, replying && active)
-                onDispose { graph.coachPresenceReporter.writing(question.id, false) }
+        if (selected == null) {
+            if (inbox.isEmpty()) item { Text("Player training questions will appear here after a player starts a conversation.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(inbox, key = { it.playerUid }) { entry ->
+                CoachingInboxRow(entry, roster.firstOrNull { it.playerUid == entry.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player") { selected = entry.playerUid }
             }
-            com.volleyballlab.player.feature.coachmode.CoachCard(padding = 22.dp) {
-                com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow(if (question.sessionId == null) "Getting started" else "Session question")
-                Spacer(Modifier.height(10.dp))
-                Text(roster.firstOrNull { it.playerUid == question.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Text("${question.topic.label} · ${dateLabel(question.createdAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(16.dp))
-                Text(question.text, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
-                Spacer(Modifier.height(12.dp))
-                if (question.answer != null) {
-                    com.volleyballlab.player.feature.coachmode.WorkspaceEyebrow("Your response")
-                    Spacer(Modifier.height(8.dp))
-                    Text(question.answer, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                } else if (active) {
-                    if (!replying) com.volleyballlab.player.feature.coachmode.CoachPillButton("Write a response", { replying = true }, Modifier.fillMaxWidth())
-                    else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(reply, { graph.coachPresenceReporter.interact(); reply = it.take(1000) }, label = { Text("Training guidance") }, minLines = 4,
-                            shape = RoundedCornerShape(16.dp), isError = hasCoachingLink(reply),
-                            supportingText = { Text(if (hasCoachingLink(reply)) "Text only; links are not supported." else "${reply.length}/1000") },
-                            enabled = question.id !in busy, modifier = Modifier.fillMaxWidth())
-                        errors[question.id]?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        com.volleyballlab.player.feature.coachmode.CoachPillButton(
-                            if (question.id in busy) "Sending…" else "Send coach response",
-                            { actions.perform(question.id) { actions.hub.answer(question, reply) } },
-                            Modifier.fillMaxWidth(), enabled = reply.isNotBlank() && !hasCoachingLink(reply) && question.id !in busy)
-                        TextButton(onClick = { replying = false }, enabled = question.id !in busy, modifier = Modifier.fillMaxWidth()) { Text("Keep for later") }
-                    }
-                } else Text("This player is no longer on your active roster.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            item { Text("Training questions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+            items(conversation?.questions?.sortedByDescending { it.createdAt }.orEmpty(), key = { it.id }) { question ->
+                val active = roster.any { it.playerUid == question.playerUid && it.isActive }
+                RestrictedCoachingThread(question, true, active, question.id in busy, errors[question.id],
+                    onSend = { text -> actions.perform(question.id) { actions.hub.respond(question, text) } },
+                    onResolve = { actions.perform(question.id) { actions.hub.resolve(question) } },
+                    onRead = { actions.perform("read-${question.id}") { actions.hub.markRead(question, true) } },
+                    onWriting = { graph.coachPresenceReporter.writing(question.id, it) },
+                    onInteract = graph.coachPresenceReporter::interact)
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
 }
-
 @Composable private fun HubSync(hub: CoachingHubRepository) {
     val error by hub.error.collectAsStateWithLifecycle(null)
     error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = hub::retry) { Text("Retry coaching sync") } }
 }
 @Composable private fun HubHeader(title: String, onBack: () -> Unit, eyebrow: String = "Your training space") {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.size(21.dp)) }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             CoachEyebrow(eyebrow)
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         }

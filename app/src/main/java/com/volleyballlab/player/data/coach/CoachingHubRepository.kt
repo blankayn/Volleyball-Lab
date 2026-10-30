@@ -59,20 +59,29 @@ class CoachingHubRepository(private val db: FirebaseFirestore, private val auth:
     suspend fun ask(coachUid: String, sessionId: String?, topic: CoachingTopic, text: String) {
         val uid = requireNotNull(auth.currentUid) { "Sign in again to ask a question." }
         require(text.trim().length in 1..300) { "Keep your question between 1 and 300 characters." }
-        require(!hasCoachingLink(text)) { "Links are not supported in coaching questions." }
+        require(!hasCoachingContact(text)) { "Keep questions about training; contact details and links are not supported." }
         require(topic.introductory == (sessionId == null)) { "Choose a topic for this training context." }
-        val id = coachingContextId(coachUid, uid, sessionId)
-        db.collection("coachingQuestions").document(id).set(mapOf(
+        val ref = db.collection("coachingQuestions").document()
+        val id = ref.id
+        val lock = db.collection("coachingLocks").document("${coachUid}_$uid")
+        db.runTransaction { tx ->
+            val current = tx.get(lock).getString("questionId")
+            if (current != null) require(tx.get(db.collection("coachingQuestions").document(current)).getTimestamp("resolvedAt") != null) {
+                "Resolve your current training question before starting another."
+            }
+            tx.set(lock, mapOf("coachUid" to coachUid, "playerUid" to uid, "questionId" to id))
+            tx.set(ref, mapOf(
             "id" to id, "coachUid" to coachUid, "playerUid" to uid, "sessionId" to sessionId,
             "topic" to topic.name, "text" to text.trim(), "createdAt" to FieldValue.serverTimestamp(),
-            "answer" to null, "answeredAt" to null,
-        )).awaitCloud()
+            "answer" to null, "answeredAt" to null, "followUp1" to null, "followUp2" to null,
+            "resolvedAt" to null, "coachReadAt" to null, "playerReadAt" to null,
+        )) }.awaitCloud()
     }
 
     suspend fun answer(question: CoachingQuestion, text: String) {
         require(auth.currentUid == question.coachUid) { "Only this coach can answer." }
         require(text.trim().length in 1..1000) { "Keep your answer between 1 and 1,000 characters." }
-        require(!hasCoachingLink(text)) { "Links are not supported in coaching answers." }
+        require(!hasCoachingContact(text)) { "Contact details and links are not supported." }
         require(question.answer == null && question.createdAt > 0) { "This question has already been answered or is still syncing." }
         db.runTransaction { transaction ->
             val ref = db.collection("coachingQuestions").document(question.id)
@@ -82,6 +91,47 @@ class CoachingHubRepository(private val db: FirebaseFirestore, private val auth:
             transaction.set(db.collection("coachResponseTimes").document(question.id), mapOf(
                 "coachUid" to question.coachUid, "askedAt" to requireNotNull(existing.getTimestamp("createdAt")), "answeredAt" to FieldValue.serverTimestamp(),
             ))
+        }.awaitCloud()
+    }
+
+    suspend fun followUp(question: CoachingQuestion, text: String) {
+        require(auth.currentUid == question.playerUid)
+        require(text.trim().length in 1..300 && !hasCoachingContact(text))
+        db.runTransaction { tx ->
+            val ref = db.collection("coachingQuestions").document(question.id)
+            val row = requireNotNull(this.question(tx.get(ref)))
+            require(row.resolvedAt == null && !row.awaitingCoach && row.followUpCount < 2)
+            tx.update(ref, "followUp${row.followUpCount + 1}", mapOf("text" to text.trim(),
+                "createdAt" to FieldValue.serverTimestamp(), "answer" to null, "answeredAt" to null))
+        }.awaitCloud()
+    }
+
+    suspend fun respond(question: CoachingQuestion, text: String) {
+        if (question.followUpCount == 0) { answer(question, text); return }
+        require(auth.currentUid == question.coachUid)
+        require(text.trim().length in 1..1000 && !hasCoachingContact(text))
+        db.runTransaction { tx ->
+            val ref = db.collection("coachingQuestions").document(question.id)
+            val row = requireNotNull(this.question(tx.get(ref)))
+            require(row.resolvedAt == null && row.awaitingCoach)
+            val field = "followUp${row.followUpCount}"
+            tx.update(ref, mapOf("$field.answer" to text.trim(), "$field.answeredAt" to FieldValue.serverTimestamp()))
+        }.awaitCloud()
+    }
+
+    suspend fun resolve(question: CoachingQuestion) {
+        db.collection("coachingQuestions").document(question.id)
+            .update("resolvedAt", FieldValue.serverTimestamp()).awaitCloud()
+    }
+
+    suspend fun markRead(question: CoachingQuestion, forCoach: Boolean) {
+        val at = question.messages.filter { it.fromCoach != forCoach }.maxOfOrNull { it.at } ?: return
+        if (at <= ((if (forCoach) question.coachReadAt else question.playerReadAt) ?: 0L)) return
+        val field = if (forCoach) "coachReadAt" else "playerReadAt"
+        db.runTransaction { tx ->
+            val ref = db.collection("coachingQuestions").document(question.id)
+            val current = tx.get(ref).getTimestamp(field)?.toDate()?.time ?: 0L
+            if (at > current) tx.update(ref, field, com.google.firebase.Timestamp(java.util.Date(at)))
         }.awaitCloud()
     }
 
@@ -129,8 +179,17 @@ class CoachingHubRepository(private val db: FirebaseFirestore, private val auth:
     private fun question(doc: DocumentSnapshot): CoachingQuestion? = runCatching {
         CoachingQuestion(doc.id, doc.getString("coachUid")!!, doc.getString("playerUid")!!, doc.getString("sessionId"),
             CoachingTopic.valueOf(doc.getString("topic")!!), doc.getString("text")!!, doc.getTimestamp("createdAt")?.toDate()?.time ?: 0,
-            doc.getString("answer"), doc.getTimestamp("answeredAt")?.toDate()?.time)
+            doc.getString("answer"), doc.getTimestamp("answeredAt")?.toDate()?.time,
+            followUp(doc, "followUp1"), followUp(doc, "followUp2"),
+            doc.getTimestamp("resolvedAt")?.toDate()?.time, doc.getTimestamp("coachReadAt")?.toDate()?.time,
+            doc.getTimestamp("playerReadAt")?.toDate()?.time)
     }.getOrNull()
+    private fun followUp(doc: DocumentSnapshot, field: String): CoachingFollowUp? {
+        val data = doc.get(field) as? Map<*, *> ?: return null
+        fun time(key: String) = (data[key] as? com.google.firebase.Timestamp)?.toDate()?.time
+        return CoachingFollowUp(data["text"] as? String ?: return null, time("createdAt") ?: 0L,
+            data["answer"] as? String, time("answeredAt"))
+    }
     private fun review(doc: DocumentSnapshot): CoachReview? = runCatching {
         CoachReview(doc.id, doc.getString("coachUid")!!, doc.getString("playerUid")!!, doc.getString("sessionId")!!,
             doc.getLong("rating")!!.toInt(), doc.getString("text").orEmpty(), doc.getTimestamp("createdAt")?.toDate()?.time ?: 0)

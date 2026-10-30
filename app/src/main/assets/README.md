@@ -6,21 +6,16 @@ The app expects a MediaPipe Pose Landmarker task bundle at:
 app/src/main/assets/pose_landmarker_full.task
 ```
 
-It is **not committed**. The file is around 9 MB of binary weights, which does not
-belong in a git history, so `.gitignore` excludes `*.task` from this directory.
-Without it the capture screen shows "Pose model not installed" rather than
-crashing.
+The roughly 9 MB model is not committed to Git. Android builds run
+`:app:verifyPoseModel` before merging assets. When the file is absent, an online
+build downloads Google’s versioned full model and verifies its SHA-256 before
+placing it in this directory. Offline builds require the already verified file.
+An invalid or missing model fails the build instead of silently shipping a broken
+live-session screen.
 
-## Install it
+Official source: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task
 
-From the repository root:
-
-```bash
-curl -L -o "app/src/main/assets/pose_landmarker_full.task" https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
-```
-
-Then rebuild. No code change is needed — `MediaPipePoseDetector` checks for the
-asset at startup and reports its absence as a specific, actionable error.
+SHA-256: `5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1`
 
 ## Which variant to use
 
@@ -44,8 +39,8 @@ tracking, so the app keeps `full` until a real-device video benchmark supports
 a switch. A second run using this exact Android asset reproduced every primary
 metric exactly, including a direct recomputation from all detected joint rows.
 
-Swap the variant by changing `full` to `lite` or `heavy` in both the URL above and
-the filename, then pass the new filename to `MediaPipePoseDetector.create(...)`,
+To deliberately benchmark a different variant, change the pinned URL, checksum,
+and filename in `app/build.gradle.kts`; pass the new filename to `MediaPipePoseDetector.create(...)`,
 whose `modelAsset` parameter defaults to `DEFAULT_MODEL_ASSET`.
 
 If you benchmark more than one variant for the paper, record which one produced
