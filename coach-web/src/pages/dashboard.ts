@@ -34,9 +34,10 @@ import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
 import { wireCoachExperience } from "../lib/coach-experience";
-import { getCoachQuestions, questionPending, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
+import { messageBadge, playerUnreadCount, unreadCount } from "../lib/coaching-unread";
+import { getCoachQuestions, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
 
-type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player" | "questions";
+type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
 interface DashData {
   roster: RosterMember[];
@@ -50,6 +51,7 @@ interface DashData {
 
 let unsubscribers: (() => void)[] = [];
 const expandedSessions = new Set<string>();
+const expandedConversations = new Set<string>();
 const noteDrafts = new Map<string, string>();
 let draftAccount = "";
 let disposeExperience: (() => void) | null = null;
@@ -78,6 +80,7 @@ export function disposeDashboard(): void {
   disposeExperience?.();
   disposeExperience = null;
   expandedSessions.clear();
+  expandedConversations.clear();
 }
 
 function stopLive(): void {
@@ -155,11 +158,10 @@ async function loadData(coachUid: string): Promise<DashData> {
 const PAGE_LABELS: Record<Tab, string> = {
   overview: "Overview",
   queue: "Review queue",
-  roster: "Roster",
+  roster: "Player roster",
   assignments: "Assignments",
   account: "Account",
   player: "Player profile",
-  questions: "Player questions",
 };
 
 function navIcon(paths: string): string {
@@ -179,7 +181,6 @@ function sidebarLinks(
   playerUid: string | null,
   pending = 0,
   requests = 0,
-  questions = 0,
 ): string {
   const link = (id: Tab, label: string, icon: string, href = appPath(id), badge = 0) =>
     `<a class="sidebar-link${tab === id ? " active" : ""}" href="${href}"${tab === id ? ' aria-current="page"' : ""} data-label="${esc(label)}" title="${esc(label)}">${navIcon(icon)}<span class="sidebar-label">${esc(label)}</span>${badge > 0 ? `<span class="sidebar-badge">${badge > 99 ? "99+" : badge}</span>` : ""}</a>`;
@@ -188,7 +189,6 @@ function sidebarLinks(
     ${link("roster", PAGE_LABELS.roster, '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>', appPath("roster"), requests)}
     ${link("assignments", PAGE_LABELS.assignments, '<rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M9 12h6M9 16h4"/>')}
     ${link("account", PAGE_LABELS.account, '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>')}
-    ${link("questions", PAGE_LABELS.questions, '<path d="M4 4h16v13H9l-5 4V4Z"/><path d="M8 8h8m-8 4h5"/>', appPath("questions"), questions)}
     ${playerUid ? `<div class="sidebar-context"><p class="sidebar-label sidebar-context-label">Selected player</p>${link("player", memberShort(playerUid), '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>', appPath("player", playerUid))}</div>` : ""}`;
 }
 
@@ -295,9 +295,10 @@ export async function renderDashboard(
 ): Promise<void> {
   stopLive();
   if (coachUid !== draftAccount) { noteDrafts.clear(); draftAccount = coachUid; }
-  if (sessionId) expandedSessions.add(sessionId);
+  if (sessionId === "messages" && playerUid) expandedConversations.add(playerUid);
+  else if (sessionId) expandedSessions.add(sessionId);
   const version = ++dashboardVersion;
-  const activeTab = (["overview", "queue", "roster", "assignments", "account", "player", "questions"] as Tab[]).includes(tab as Tab)
+  const activeTab = (["overview", "queue", "roster", "assignments", "account", "player"] as Tab[]).includes(tab as Tab)
     ? (tab as Tab)
     : "overview";
 
@@ -334,7 +335,7 @@ export async function renderDashboard(
           <div class="app-title-line"><h1 id="page-heading" tabindex="-1">${PAGE_LABELS[activeTab]}</h1><span class="dash-team-name" id="team-name">Your team</span></div>
         </div>
         <div class="app-topbar-actions">
-          <span class="sync-pill"><i></i>Live</span>
+          <span class="sync-pill"><i></i>Online</span>
           ${notificationBell()}
           <a class="btn btn-primary btn-sm topbar-cta" href="${appPath("assignments")}" aria-label="Set a new drill">${navIcon('<path d="M12 5v14M5 12h14"/>')}<span>New drill</span></a>
         </div>
@@ -386,6 +387,10 @@ export async function renderDashboard(
   body.addEventListener("change", (event) => { if (!(event.target as Element).matches("[data-coach-search]")) dirty = true; });
   body.addEventListener("toggle", (event) => {
     const details = event.target;
+    if (details instanceof HTMLDetailsElement && details.dataset.messageThread) {
+      if (details.open) expandedConversations.add(details.dataset.messageThread);
+      else expandedConversations.delete(details.dataset.messageThread);
+    }
     if (details instanceof HTMLDetailsElement && details.dataset.sessionDetails) {
       restoreDrafts();
       if (details.open) expandedSessions.add(details.dataset.sessionDetails);
@@ -406,8 +411,7 @@ export async function renderDashboard(
           activeTab,
           playerUid,
           data.submissions.filter((s) => s.reviewedAt === null).length,
-          data.roster.filter((m) => m.status === "Pending").length,
-          data.questions?.filter(questionPending).length ?? 0,
+          data.roster.filter((m) => m.status === "Pending").length + (data.questions?.reduce((total, q) => total + unreadCount(q), 0) ?? 0),
         );
       }
       if (live && editing()) return;
@@ -427,7 +431,7 @@ export async function renderDashboard(
       disposeExperience = wireCoachExperience(body, firstRender);
       restoreDrafts();
       hasRendered = true;
-      if (firstRender && sessionId) requestAnimationFrame(() => {
+      if (firstRender && sessionId && sessionId !== "messages") requestAnimationFrame(() => {
         if (version !== dashboardVersion || !body.isConnected) return;
         const selected = body.querySelector<HTMLDetailsElement>(`[data-session-details="${CSS.escape(sessionId)}"]`);
         selected?.scrollIntoView({ block: "start", behavior: "auto" });
@@ -492,8 +496,6 @@ async function viewFor(
   playerUid: string | null,
 ): Promise<string> {
   switch (tab) {
-    case "questions":
-      return renderCoachQuestions(coachUid, data.questions, data.roster);
     case "queue":
       return viewQueue(data, playerUid);
     case "roster":
@@ -693,7 +695,7 @@ function playerRow(data: DashData, m: RosterMember): string {
   return `<a class="row-item" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player")}
     <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
     <span class="muted">${sessions.length} set${sessions.length === 1 ? "" : "s"}${form !== null ? ` · form ${form}` : ""}</span></span>
-    <span class="row-arrow">${icon("chevronRight")}</span></a>`;
+    ${messageBadge(playerUnreadCount(data.questions, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
 }
 
 // ---- Queue ------------------------------------------------------------------
@@ -768,7 +770,13 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     ? emptyState("session", "No shared sessions", "This player has not submitted a session yet.")
     : sessions.map((s) => sessionCard(coachUid, playerUid, s, notes)).join("");
 
-  return `<div style="margin-top:14px"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">${icon("chevronLeft")} Back to roster</a></div>
+  const conversation = await renderCoachQuestions(coachUid,
+    data.questions === null ? null : data.questions.filter(q => q.playerUid === playerUid), [member]);
+  return `<div class="player-profile-toolbar"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">${icon("chevronLeft")} Back to roster</a>
+    <details class="player-messages" data-message-thread="${esc(playerUid)}"${expandedConversations.has(playerUid) ? " open" : ""}>
+      <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(playerUnreadCount(data.questions, playerUid))}</summary>
+      <div class="player-message-content"><h2>Messages with ${esc(member.playerName || "Player")}</h2>${conversation}</div>
+    </details></div>
   <div class="card" style="margin-top:10px"><div class="chip-row">${avatar(member.playerName || "Player")}
     <div style="flex:1"><h2 style="font-size:22px">${esc(member.playerName || "Unnamed player")}</h2>
     <p class="muted" style="margin:2px 0 0">${esc(member.position ?? "Position not set")} · <span class="pill${member.status === "Active" ? "-green" : ""}" style="margin-left:4px">${member.status}</span></p></div>

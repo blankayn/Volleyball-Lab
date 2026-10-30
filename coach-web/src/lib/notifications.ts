@@ -2,6 +2,8 @@ import type { Assignment, RosterMember, Submission, TrainingSession } from "./cl
 import { esc, timeAgo } from "./format";
 import { icon } from "./icons";
 import { appPath } from "./router";
+import type { CoachingQuestion } from "./coaching-hub";
+import { incomingTimes, unreadCount } from "./coaching-unread";
 import { getPreferences, PREFERENCES_EVENT, type PortalPreferences } from "./preferences";
 
 export interface NotificationData {
@@ -9,7 +11,7 @@ export interface NotificationData {
   submissions: Submission[];
   assignments: Assignment[];
   sessionsByPlayer: Map<string, TrainingSession[]>;
-  questions?: { id: string; playerUid: string; createdAt: number; answer: string | null }[] | null;
+  questions?: CoachingQuestion[] | null;
 }
 export interface CoachAlert { id: string; title: string; body: string; href: string; at: number; }
 
@@ -17,7 +19,10 @@ export function coachAlerts(data: NotificationData, preferences: PortalPreferenc
   const alerts: CoachAlert[] = [];
   const name = (uid: string) => data.roster.find((member) => member.playerUid === uid)?.playerName || "A player";
   for (const question of data.questions ?? []) {
-    if (question.answer === null) alerts.push({ id: `question-${question.id}`, title: "Coaching question", body: `${name(question.playerUid)} asked for training guidance.`, href: appPath("questions"), at: question.createdAt });
+    if (unreadCount(question) > 0) {
+      const at = Math.max(...incomingTimes(question));
+      alerts.push({ id: `question-${question.id}-${at}`, title: "Unread player message", body: `${name(question.playerUid)} sent a training message.`, href: appPath("player", question.playerUid, "messages"), at });
+    }
   }
   if (preferences.submissionAlerts) {
     for (const submission of data.submissions.filter((entry) => entry.reviewedAt === null)) {
