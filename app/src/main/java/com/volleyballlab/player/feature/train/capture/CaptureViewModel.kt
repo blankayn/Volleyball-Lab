@@ -365,7 +365,8 @@ class CaptureViewModel(
 
     /** Called from the CameraX analyzer. Must stay cheap; it only forwards. */
     fun onCameraFrame(bitmap: Bitmap, timestampMs: Long, mirrored: Boolean) {
-        detector?.submit(bitmap, timestampMs, mirrored)
+        val activeDetector = detector
+        if (activeDetector == null) bitmap.recycle() else activeDetector.submit(bitmap, timestampMs, mirrored)
     }
 
     private fun onPose(frame: PoseFrame) {

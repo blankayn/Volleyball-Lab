@@ -52,7 +52,8 @@ class SyntheticPoseDetector(
     override val poses: SharedFlow<PoseFrame> = _poses.asSharedFlow()
 
     override fun submit(bitmap: Bitmap, timestampMs: Long, mirrored: Boolean) {
-        _poses.tryEmit(frameAt(timestampMs, bitmap.width, bitmap.height, mirrored))
+        try { _poses.tryEmit(frameAt(timestampMs, bitmap.width, bitmap.height, mirrored)) }
+        finally { bitmap.recycle() }
     }
 
     override fun close() = Unit

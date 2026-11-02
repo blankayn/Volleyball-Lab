@@ -64,7 +64,7 @@ class MyCoachHubDeviceTest {
         showHub()
         compose.onNodeWithText("Manage coach connection").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, connectionClicks) }
-        compose.onNodeWithText("Open overview").performScrollTo().performClick()
+        compose.onNodeWithText("Overview").performScrollTo().performClick()
         compose.onNodeWithText("Full Overview").assertIsDisplayed()
         compose.onNodeWithText("Manage coach connection").assertDoesNotExist()
     }
@@ -72,7 +72,7 @@ class MyCoachHubDeviceTest {
     @Test fun allSectionsAreTogetherAndEachOpensItsPageThenReturnsToTheHub() {
         showHub()
         CoachWorkspaceTab.entries.forEach { section ->
-            compose.onNodeWithText("Open ${section.label.lowercase()}").performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText(section.label).performScrollTo().assertIsDisplayed().performClick()
             compose.onNodeWithText("Full ${section.name}").assertIsDisplayed()
             compose.onNodeWithText("Back to My coach").performClick()
             compose.runOnIdle { assertTrue(controller.currentDestination?.hasRoute<MyCoachRoute>() == true) }
@@ -89,7 +89,7 @@ class MyCoachHubDeviceTest {
 
     @Test fun largeTextCanReachFeedbackWithoutHidingTheOtherSections() {
         showHub(1.6f)
-        compose.onNodeWithText("Open feedback").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Feedback").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Full Feedback").assertIsDisplayed()
     }
 

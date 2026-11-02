@@ -24,10 +24,11 @@ def main() -> int:
     parser.add_argument("--skill", required=True)
     parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--min-usable", type=float, default=0.5)
+    parser.add_argument("--quality-field", choices=("usable_frac", "feature_usable_frac"), default="usable_frac")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
-    X, y, groups, _ = train.load(Path(args.data), args.skill, args.min_usable)
+    X, y, groups, _ = train.load(Path(args.data), args.skill, args.min_usable, args.quality_field)
     classes = sorted(set(y.tolist()))
     if len(classes) < 2:
         raise SystemExit("Need at least two label classes.")
@@ -91,6 +92,7 @@ def main() -> int:
         "label_scope": "Agreement with provisional demonstration labels. Labels and athlete independence need independent review.",
         "skill": args.skill,
         "min_usable": args.min_usable,
+        "quality_field": args.quality_field,
         "epochs_per_fold": args.epochs,
         "samples": int(len(X)),
         "class_counts": dict(Counter(y.tolist())),

@@ -1,6 +1,7 @@
 package com.volleyballlab.player.pose.analysis
 
 import com.volleyballlab.player.domain.model.RepPhase
+import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.SyntheticPoseDetector
 import com.volleyballlab.player.pose.TestPoses
@@ -20,6 +21,43 @@ import org.junit.Test
 class RepSegmenterTest {
 
     private val segmenter = RepSegmenter()
+
+    @Test
+    fun `a recording that starts at the peak rejects the falling tail and retains the next complete action`() {
+        val signal = listOf(1f, .9f, .7f, .4f, .1f, 0f, 0f, .2f, .5f, .9f, 1f, .7f, .3f, .1f, 0f)
+        val frames = signal.indices.map { TestPoses.wellFramedStanding(it * 100L) }
+        val analyzer = object : SkillAnalyzer {
+            override val skill = Skill.Blocking
+            override fun segmentationSignal(frame: PoseFrame) = signal[(frame.timestampMs / 100L).toInt()]
+            override fun measure(cue: FormCue, window: RepWindow): Float? = null
+        }
+        val reps = RepSegmenter(RepSegmenter.Config(smoothingWindow = 1)).segment(frames, analyzer)
+        assertEquals(1, reps.size)
+        assertTrue(reps.single().startMs > 0L)
+        assertTrue(reps.single().contactMs > reps.single().startMs)
+        assertTrue(reps.single().endMs > reps.single().contactMs)
+    }
+
+    @Test
+    fun `tracking gaps do not stitch two partial actions into one repetition`() {
+        val original = syntheticFrames(cycles = 4)
+        val before = original.filter { it.timestampMs < 900 }
+        val after = original.filter { it.timestampMs >= 1900 }
+        val reps = segmenter.segment(before + after, SetAnalyzer())
+        assertTrue(reps.none { it.startMs < 900 && it.endMs >= 1900 })
+        assertEquals(reps.indices.toList(), reps.map { it.index })
+    }
+
+    @Test
+    fun `complete cycles on either side of a gap retain their own repetitions`() {
+        val original = syntheticFrames(cycles = 4)
+        val separated = original.map { frame ->
+            if (frame.timestampMs >= 4800) frame.copy(timestampMs = frame.timestampMs + 2000) else frame
+        }
+        val reps = segmenter.segment(separated, SetAnalyzer())
+        assertEquals(4, reps.size)
+        assertTrue(reps.none { it.startMs < 4800 && it.endMs >= 6800 })
+    }
 
     /** Four full cycles sampled at roughly 30 fps. */
     private fun syntheticFrames(

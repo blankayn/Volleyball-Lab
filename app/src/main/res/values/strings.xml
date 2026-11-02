@@ -747,4 +747,26 @@
     <string name="coach_workspace_questions_title">Player questions</string>
     <string name="coach_workspace_questions">Answer introductions and training questions</string>
     <string name="coach_workspace_account">Manage coach profile</string>
+    <string name="coach_assessment_title">Technique assessment</string>
+    <string name="coach_assessment_score">Visible technique</string>
+    <string name="coach_assessment_scope">An estimate from repeated visible body positions and reference ranges. Timing, coordination and landing quality are not graded.</string>
+    <string name="coach_assessment_positioning">Body positioning: %1$s</string>
+    <string name="coach_assessment_coverage">Measured technique coverage: %1$d%%</string>
+    <string name="coach_assessment_coordination">Movement coordination: %1$s</string>
+    <string name="coach_assessment_timing">Timing quality: %1$s</string>
+    <string name="coach_assessment_confidence">Validated model confidence: %1$s</string>
+    <string name="coach_assessment_unavailable">Not established</string>
+    <string name="coach_assessment_duration">Mean detected movement window: %1$.2f s</string>
+    <string name="coach_assessment_mpjpe">3D joint error (MPJPE): not independently measured</string>
+    <string name="coach_assessment_more_evidence">Record at least three clear repetitions with your arms and legs visible for an overall estimate.</string>
+    <string name="coach_assessment_evidence">Median observed position: %1$s across %2$d measurable repetitions</string>
+    <string name="coach_assessment_reference">Reference range: %1$s–%2$s</string>
+    <string name="coach_assessment_drill">Suggested drill: %1$s</string>
+    <string name="coach_assessment_change">%1$s, %2$s view: %3$s → %4$s, closer to the reference than your previous comparable session</string>
+    <string name="coach_assessment_front">front</string>
+    <string name="coach_assessment_side">side</string>
+    <string name="coach_assessment_rear">rear</string>
+    <string name="coach_assessment_peak">Estimated movement peak: %1$.2f s after detected start</string>
+    <string name="coach_assessment_stance">Estimated stance width: %1$.2f shoulder widths across %2$d reps</string>
+    <string name="coach_assessment_motion_lag">Knee-bend peak → arm-reach peak: %1$+.2f s across %2$d reps</string>
 </resources>

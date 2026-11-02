@@ -61,6 +61,8 @@ class RepSegmenter(private val config: Config = Config()) {
          * dozens of reps from nothing.
          */
         val minSignalRange: Float = 1e-3f,
+        /** Never stitch movement across lost tracking or a camera timestamp reset. */
+        val maxFrameGapMs: Long = 500L,
     )
 
     private data class Sample(val frame: PoseFrame, val signal: Float)
@@ -70,8 +72,20 @@ class RepSegmenter(private val config: Config = Config()) {
         // zero-filled. They are frames where tracking failed, and a zero would be
         // a synthetic trough that could split one rep into two.
         val samples = frames.mapNotNull { frame ->
-            analyzer.segmentationSignal(frame)?.let { Sample(frame, it) }
+            analyzer.segmentationSignal(frame)?.takeIf(Float::isFinite)?.let { Sample(frame, it) }
         }
+        val chunks = mutableListOf<MutableList<Sample>>()
+        samples.forEach { sample ->
+            val previous = chunks.lastOrNull()?.lastOrNull()
+            if (previous == null || sample.frame.timestampMs <= previous.frame.timestampMs ||
+                sample.frame.timestampMs - previous.frame.timestampMs > config.maxFrameGapMs) {
+                chunks += mutableListOf(sample)
+            } else chunks.last() += sample
+        }
+        return chunks.flatMap(::segmentContinuous).mapIndexed { index, window -> window.copy(index = index) }
+    }
+
+    private fun segmentContinuous(samples: List<Sample>): List<RepWindow> {
         if (samples.size < config.smoothingWindow * 2) return emptyList()
 
         val smoothed = smooth(samples.map { it.signal })
@@ -133,6 +147,10 @@ class RepSegmenter(private val config: Config = Config()) {
         for (i in startIndex..endIndex) {
             if (smoothed[i] > smoothed[contactIndex]) contactIndex = i
         }
+
+        // Recording or tracking can resume after the action has already peaked.
+        // A falling tail has no observed preparation; do not score it as a full rep.
+        if (contactIndex == startIndex || contactIndex == endIndex) return null
 
         // Loading is the deepest point before contact: the bottom of the squat,
         // the cocked arm. If contact lands on the very first frame there is no

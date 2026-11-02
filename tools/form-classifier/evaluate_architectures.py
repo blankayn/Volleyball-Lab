@@ -47,19 +47,25 @@ def main() -> int:
     parser.add_argument("--skill", default="pass")
     parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--min-usable", type=float, default=0.5)
+    parser.add_argument("--quality-field", choices=("usable_frac", "feature_usable_frac"), default="usable_frac")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
-    X, y, groups, _ = train.load(Path(args.data), args.skill, args.min_usable)
+    X, y, groups, _ = train.load(Path(args.data), args.skill, args.min_usable, args.quality_field)
     classes = sorted(set(y.tolist()))
+    if classes != ["fault", "ok"]:
+        raise SystemExit("Form comparison requires both fault and ok labels.")
     y_index = np.array([classes.index(label) for label in y])
     group_names = sorted(set(groups.tolist()))
+    if len(group_names) < 3:
+        raise SystemExit("Need at least three source groups. Use train_coach_system.py for explicit partial-coverage development audits.")
     architectures = ("gap-linear", "gap-dense8", "conv8", "conv12x8", "flat-dense16")
     results = []
 
     for architecture in architectures:
         aggregate = np.zeros((len(classes), len(classes)), dtype=int)
         folds = []
+        parameters = None
         for held_group in group_names:
             keras.backend.clear_session()
             seed_text = f"{architecture}:{held_group}".encode()
@@ -67,6 +73,10 @@ def main() -> int:
             keras.utils.set_random_seed(seed)
             test_mask = groups == held_group
             train_mask = ~test_mask
+            if set(y_index[train_mask].tolist()) != set(range(len(classes))):
+                folds.append({"held_source": held_group, "status": "skipped",
+                              "reason": "Training fold lacks a label class"})
+                continue
             (X_train, X_test), _, _ = train.standardise(X[train_mask], X[test_mask])
             y_train, y_test = y_index[train_mask], y_index[test_mask]
             weights = {
@@ -74,6 +84,7 @@ def main() -> int:
                 for index in range(len(classes))
             }
             model = build(architecture, X.shape[1], X.shape[2], len(classes))
+            parameters = int(model.count_params())
             model.compile(
                 optimizer=keras.optimizers.Adam(1e-3),
                 loss="sparse_categorical_crossentropy",
@@ -109,9 +120,10 @@ def main() -> int:
         results.append(
             {
                 "architecture": architecture,
-                "parameters": int(model.count_params()),
-                "accuracy": round(float(np.trace(aggregate) / aggregate.sum()), 4),
-                "balanced_accuracy": round(float(np.mean(recalls)), 4),
+                "parameters": parameters,
+                "accuracy": round(float(np.trace(aggregate) / aggregate.sum()), 4) if aggregate.sum() else None,
+                "balanced_accuracy": round(float(np.mean(recalls)), 4) if recalls else None,
+                "evaluated_coverage": float(aggregate.sum()) / len(X),
                 "confusion": aggregate.tolist(),
                 "folds": folds,
             }
@@ -126,7 +138,10 @@ def main() -> int:
         "class_counts": dict(Counter(y.tolist())),
         "source_groups": group_names,
         "epochs_per_fold": args.epochs,
-        "results": sorted(results, key=lambda item: item["balanced_accuracy"], reverse=True),
+        "selected_production_model": None,
+        "quality_field": args.quality_field,
+        "current_protocol": "Use train_coach_system.py --mode locked for separate tuning, calibration and player-held-out test partitions.",
+        "results": sorted(results, key=lambda item: item["balanced_accuracy"] if item["balanced_accuracy"] is not None else -1, reverse=True),
     }
     destination = Path(args.out)
     destination.parent.mkdir(parents=True, exist_ok=True)

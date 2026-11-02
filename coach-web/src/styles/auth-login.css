@@ -52,11 +52,14 @@
 .auth-page .auth-layout-login .auth-form-panel {
   width: 100%;
   max-width: 420px;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 0;
 }
 .auth-page .auth-layout-login .auth-card {
   width: 100%;
+  margin: 0 auto;
   padding: 40px;
   border: 1px solid #e7ebf1;
   border-radius: 20px;
@@ -141,6 +144,10 @@
 .login-options input { width: 17px; height: 17px; margin: 0; accent-color: #bf4619; }
 .login-options a { display: inline-flex; align-items: center; min-height: 44px; color: #a83b17; font-weight: 600; text-underline-offset: 3px; }
 .auth-page .auth-layout-login .auth-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   min-height: 52px;
   margin: 0;
   padding: 0 18px;

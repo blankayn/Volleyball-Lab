@@ -50,7 +50,7 @@ SEED = 1337
 
 
 def load(data_dir: Path, skill: str | None,
-         min_usable: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+         min_usable: float, quality_field: str = "usable_frac") -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     """Gathers every labelled, long-enough segment across a pipeline run.
 
     Returns X, y (string labels), groups (source clip per sample), and the
@@ -100,9 +100,9 @@ def load(data_dir: Path, skill: str | None,
             tags = bundle["skill"] if "skill" in bundle else np.array(["unknown"] * len(seq))
             keep &= (tags == skill)
         if min_usable > 0:
-            if "usable_frac" not in bundle:
-                raise SystemExit(f"Missing usable_frac in {path.name}; regenerate features.")
-            keep &= (bundle["usable_frac"] >= min_usable)
+            if quality_field not in bundle:
+                raise SystemExit(f"Missing {quality_field} in {path.name}; regenerate features.")
+            keep &= (bundle[quality_field] >= min_usable)
         if not keep.any():
             continue
         sequences.append(seq[keep])
@@ -224,13 +224,14 @@ def main() -> int:
     parser.add_argument("--min-usable", type=float, default=0.5,
                         help="drop segments whose fraction of clean frames is below this "
                              "(default 0.5); close-up detail shots score near zero")
+    parser.add_argument("--quality-field", choices=("usable_frac", "feature_usable_frac"), default="usable_frac")
     parser.add_argument("--train-all", action="store_true",
                         help="fit the export model on every eligible sample after a separate "
                              "source-separated evaluation has been completed")
     args = parser.parse_args()
 
     data_dir = Path(args.data).resolve()
-    X, y, groups, feature_names = load(data_dir, args.skill, args.min_usable)
+    X, y, groups, feature_names = load(data_dir, args.skill, args.min_usable, args.quality_field)
 
     if not len(X):
         print(f"No labelled segments in {data_dir}.\n"
@@ -294,6 +295,8 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metrics = {
+        "quality_field": args.quality_field,
+        "min_usable": args.min_usable,
         "deployment_approved": False,
         "label_scope": "Agreement with supplied segment labels; not independently verified coaching accuracy.",
         "athlete_independence_verified": False,

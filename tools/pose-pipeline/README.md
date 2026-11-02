@@ -4,7 +4,7 @@ Turns a folder of volleyball clips into labelled, camera-independent pose
 sequences you can train a form classifier on.
 
 It runs the **same pose model the Android app runs** —
-`app/src/main/assets/pose_landmarker_full.task`, up to three poses, 0.5 confidences — and
+`app/src/main/assets/pose_landmarker_full.task`, one pose, 0.65 person confidences — and
 computes its features with a **direct port of the app's `Angles.kt`**, in the same
 world coordinate space. A threshold derived here is therefore expressible as a
 `FormCue` target range without translation.

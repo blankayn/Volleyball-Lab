@@ -10,6 +10,7 @@ import com.volleyballlab.player.domain.model.CoachSpecialisation
 import com.volleyballlab.player.domain.model.CourtPosition
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.CueScore
+import com.volleyballlab.player.domain.model.RepMotionEvidence
 import com.volleyballlab.player.domain.model.DrillLevel
 import com.volleyballlab.player.domain.model.MembershipStatus
 import com.volleyballlab.player.domain.model.RepResult
@@ -305,6 +306,11 @@ object CloudSchema {
                     "startMs" to rep.startMs,
                     "contactMs" to rep.contactMs,
                     "endMs" to rep.endMs,
+                    "motion" to rep.motion?.let { motion -> mapOf(
+                        "kneeLoadToArmPeakMs" to motion.kneeLoadToArmPeakMs,
+                        "stanceWidthShoulderRatio" to motion.stanceWidthShoulderRatio,
+                        "reliableFrameFraction" to motion.reliableFrameFraction,
+                    ) },
                     "cueScores" to rep.cueScores.map { cs ->
                         mapOf(
                             "cueId" to cs.cueId.name,
@@ -339,6 +345,14 @@ object CloudSchema {
                 contactMs = num(rep, "contactMs"),
                 endMs = num(rep, "endMs"),
                 cueScores = cues,
+                motion = (rep["motion"] as? Map<String, Any?>)?.let { motion ->
+                    val coverage = floatOrNull(motion, "reliableFrameFraction")?.takeIf { it.isFinite() && it in 0f..1f }
+                        ?: return@let null
+                    val lag = (motion["kneeLoadToArmPeakMs"] as? Number)?.toDouble()
+                        ?.takeIf { it.isFinite() && it in -6000.0..6000.0 }?.toLong()
+                    RepMotionEvidence(lag,
+                        floatOrNull(motion, "stanceWidthShoulderRatio")?.takeIf { it.isFinite() && it in .01f..10f }, coverage)
+                },
             )
         }
         return SessionResult(

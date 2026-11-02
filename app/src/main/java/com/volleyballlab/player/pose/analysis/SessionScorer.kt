@@ -96,6 +96,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
             startMs = window.startMs,
             contactMs = window.contactMs,
             endMs = window.endMs,
+            motion = MovementEvidence.observe(window),
             cueScores = cues.map { cue ->
                 val measured = measurements[cue.id]
                 val readinessCue = cue.id == CueId.PassKneeFlexion || cue.id == CueId.PassTrunkAngle

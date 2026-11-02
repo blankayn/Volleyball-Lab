@@ -8,6 +8,8 @@ data class AiCoachRequest(
     val measuredReps: Int,
     val sessionCount: Int,
     val unmeasuredPercent: Int,
+    /** Deterministic, evidence-selected instruction; language generation cannot reverse it. */
+    val approvedNextAction: String? = null,
 )
 
 /** Short, validated copy shown beside the deterministic coaching result. */

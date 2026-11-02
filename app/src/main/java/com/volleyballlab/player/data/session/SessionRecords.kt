@@ -4,6 +4,7 @@ import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.CueScore
 import com.volleyballlab.player.domain.model.RepResult
+import com.volleyballlab.player.domain.model.RepMotionEvidence
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.model.Skill
@@ -60,6 +61,14 @@ internal data class RepRecord(
     val contactMs: Long,
     val endMs: Long,
     val cueScores: List<CueScoreRecord>,
+    val motion: RepMotionRecord? = null,
+)
+
+@Serializable
+internal data class RepMotionRecord(
+    val kneeLoadToArmPeakMs: Long? = null,
+    val stanceWidthShoulderRatio: Float? = null,
+    val reliableFrameFraction: Float,
 )
 
 @Serializable
@@ -92,6 +101,7 @@ private fun RepResult.toRecord(): RepRecord = RepRecord(
     contactMs = contactMs,
     endMs = endMs,
     cueScores = cueScores.map { CueScoreRecord(it.cueId.name, it.measured, it.score) },
+    motion = motion?.let { RepMotionRecord(it.kneeLoadToArmPeakMs, it.stanceWidthShoulderRatio, it.reliableFrameFraction) },
 )
 
 /**
@@ -131,6 +141,7 @@ private fun RepRecord.toDomain(): RepResult = RepResult(
     startMs = startMs,
     contactMs = contactMs,
     endMs = endMs,
+    motion = motion?.let { RepMotionEvidence(it.kneeLoadToArmPeakMs, it.stanceWidthShoulderRatio, it.reliableFrameFraction) },
     cueScores = cueScores.mapNotNull { record ->
         val cueId = enumOrNull<CueId>(record.cueId) ?: return@mapNotNull null
         CueScore(cueId = cueId, measured = record.measured, score = record.score)

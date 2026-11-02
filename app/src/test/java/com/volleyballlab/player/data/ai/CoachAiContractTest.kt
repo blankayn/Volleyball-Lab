@@ -9,6 +9,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoachAiContractTest {
+    @Test fun `generated copy cannot reverse the evidence selected correction`() {
+        val constrained = request.copy(approvedNextAction = "Rise slightly from the deep crouch.")
+        val reversed = """{"focusCueId":"PassKneeFlexion","headline":"Ready position","explanation":"Keep a controlled base.","nextAction":"Bend your knees more."}"""
+        assertNull(CoachAiContract.parseAndValidate(reversed, constrained))
+        val supported = reversed.replace("Bend your knees more.", constrained.approvedNextAction!!)
+        assertEquals(constrained.approvedNextAction, CoachAiContract.parseAndValidate(supported, constrained)?.nextAction)
+    }
+
+    @Test fun `posture evidence cannot justify invented timing or session improvement claims`() {
+        for (claim in listOf("Your timing is early.", "Your landing improved.", "You improved since last session.")) {
+            val raw = """{"focusCueId":"PassKneeFlexion","headline":"Ready position","explanation":"$claim","nextAction":"Keep a controlled base."}"""
+            assertNull(CoachAiContract.parseAndValidate(raw, request))
+        }
+    }
 
     private val request = AiCoachRequest(
         focusCueId = CueId.PassKneeFlexion,
