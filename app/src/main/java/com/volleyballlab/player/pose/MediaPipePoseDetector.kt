@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import com.google.mediapipe.tasks.components.containers.Landmark as MpWorldLandmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark as MpImageLandmark
 
+/** Completion diagnostics include empty detections, unlike the overlay pose stream. */
+internal data class PoseCompletion(val cameraTimestampMs: Long, val pose: PoseFrame?)
+
 /**
  * [PoseDetector] backed by MediaPipe's Pose Landmarker in live-stream mode.
  *
@@ -66,6 +69,10 @@ class MediaPipePoseDetector private constructor(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     override val poses: SharedFlow<PoseFrame> = _poses.asSharedFlow()
+    private val _completions = MutableSharedFlow<PoseCompletion>(
+        replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    internal val completions: SharedFlow<PoseCompletion> = _completions.asSharedFlow()
 
     /**
      * Carries the mirroring flag from [submit] across to the async result.
@@ -89,9 +96,12 @@ class MediaPipePoseDetector private constructor(
         cameraTimeByTimestamp[monotonicTimestampMs] = timestampMs
         runCatching {
             val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
-            landmarker.detectAsync(mpImage, monotonicTimestampMs)
+            // Packet creation synchronously copies Bitmap pixels into native storage.
+            // Releasing the Java input prevents continuous capture from retaining images.
+            try { landmarker.detectAsync(mpImage, monotonicTimestampMs) } finally { mpImage.close() }
         }
             .onFailure {
+                if (!bitmap.isRecycled) bitmap.recycle()
                 mirroredByTimestamp.remove(monotonicTimestampMs)
                 cameraTimeByTimestamp.remove(monotonicTimestampMs)
                 Log.w(TAG, "detectAsync rejected frame at $monotonicTimestampMs", it)
@@ -114,25 +124,29 @@ class MediaPipePoseDetector private constructor(
         // No pose in frame is a normal, frequent condition - the athlete walks
         // out of shot between reps - so it emits nothing rather than an error.
         // PoseQualityValidator treats an absent frame as NoPersonDetected.
-        if (imageLandmarks == null || worldLandmarks == null) return
+        if (imageLandmarks == null || worldLandmarks == null) {
+            _completions.tryEmit(PoseCompletion(cameraTimestampMs, null))
+            return
+        }
         if (imageLandmarks.size != PoseFrame.EXPECTED_LANDMARK_COUNT ||
             worldLandmarks.size != PoseFrame.EXPECTED_LANDMARK_COUNT
         ) {
             Log.w(TAG, "Unexpected landmark count: ${imageLandmarks.size}")
+            _completions.tryEmit(PoseCompletion(cameraTimestampMs, null))
             return
         }
 
-        _poses.tryEmit(
-            PoseFrame(
-                timestampMs = timestampMs,
-                image = imageLandmarks.map { it.toLandmark() },
-                world = worldLandmarks.map { it.toLandmark() },
-                imageWidth = input.width,
-                imageHeight = input.height,
-                mirrored = mirrored,
-                cameraTimestampMs = cameraTimestampMs,
-            )
+        val frame = PoseFrame(
+            timestampMs = timestampMs,
+            image = imageLandmarks.map { it.toLandmark() },
+            world = worldLandmarks.map { it.toLandmark() },
+            imageWidth = input.width,
+            imageHeight = input.height,
+            mirrored = mirrored,
+            cameraTimestampMs = cameraTimestampMs,
         )
+        _poses.tryEmit(frame)
+        _completions.tryEmit(PoseCompletion(cameraTimestampMs, frame))
     }
 
     override fun close() {

@@ -28,9 +28,8 @@ fun DetailedReportCard(session: SessionResult, modifier: Modifier = Modifier) {
     val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
     val today by dayFlow.collectAsStateWithLifecycle(LocalDate.now())
     val usage = ReportAllowance.usage(reports, plan, today)
-    val focus = session.reps.flatMap { it.cueScores }.filter { it.score != null }
-        .groupBy { it.cueId }.filterValues { it.size >= SessionResult.MIN_REPS_FOR_RECOMMENDATION }
-        .minByOrNull { (_, scores) -> scores.mapNotNull { it.score }.average() }
+    val assessment = remember(session) { CoachAssessmentEngine.assess(session) }
+    val focus = assessment.corrections.firstOrNull()
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Detailed AI report", style = MaterialTheme.typography.titleMedium)
@@ -42,7 +41,7 @@ fun DetailedReportCard(session: SessionResult, modifier: Modifier = Modifier) {
                 Text("Saved report · Scores come from final session analysis", style = MaterialTheme.typography.bodySmall)
             } else {
                 Text("Get an explanation of your measured focus cue and one next action. Your final results remain available below.", style = MaterialTheme.typography.bodySmall)
-                if (focus == null) Text("Complete at least three measurable reps of a cue to generate a report.", style = MaterialTheme.typography.bodySmall)
+                if (focus == null) Text("A report needs a repeated, measurable correction. Your visible measurements remain available below.", style = MaterialTheme.typography.bodySmall)
                 Button(enabled = !busy && focus != null && (usage.unlimited || usage.remaining > 0), onClick = {
                     if (busy) return@Button
                     busy = true; message = null
@@ -50,10 +49,9 @@ fun DetailedReportCard(session: SessionResult, modifier: Modifier = Modifier) {
                         try {
                             val result = workspace.createReport(session.id, plan) {
                                 val measured = requireNotNull(focus)
-                                val all = session.reps.flatMap { it.cueScores }
-                                val generated = graph.aiCoachRepository.generate(AiCoachRequest(measured.key, session.skill,
-                                    (measured.value.mapNotNull { it.score }.average() * 100).roundToInt(), measured.value.size, 1,
-                                    if (all.isEmpty()) 100 else (all.count { it.score == null } * 100f / all.size).roundToInt()))
+                                val generated = graph.aiCoachRepository.generate(AiCoachRequest(measured.evidence.cue.id, session.skill,
+                                    measured.evidence.referenceScore, measured.evidence.measuredReps, 1,
+                                    ((1 - assessment.evidenceCoverage) * 100).roundToInt(), measured.instruction))
                                     ?: return@createReport null
                                 SavedDetailedReport(session.id, ReportAllowance.week(LocalDate.now()).toString(), generated.headline,
                                     generated.explanation, generated.nextAction, System.currentTimeMillis(), true)

@@ -13,7 +13,7 @@ plus a run-wide `manifest.json` with the totals worth reading before training
 anything.
 
 The model, and the confidences it runs at, are deliberately the same ones the
-Android app uses - `pose_landmarker_full.task`, up to three poses, 0.5 across the board.
+Android app uses - `pose_landmarker_full.task`, one pose, 0.65 person confidences.
 Measuring form offline with a different detector than the phone ships would make
 every threshold derived here a threshold that does not transfer, and the failure
 would show up late, on a device, as "the app disagrees with our own numbers".
@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -51,9 +52,13 @@ VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
 
 # Matches MediaPipePoseDetector.create() in the Android app. Changing one of
 # these without changing the other is the bug this comment exists to prevent.
-MIN_DETECTION_CONFIDENCE = 0.5
-MIN_PRESENCE_CONFIDENCE = 0.5
-MIN_TRACKING_CONFIDENCE = 0.5
+MIN_DETECTION_CONFIDENCE = 0.65
+MIN_PRESENCE_CONFIDENCE = 0.65
+MIN_TRACKING_CONFIDENCE = 0.65
+NUM_POSES = 1
+POSE_CONFIGURATION = {"num_poses": NUM_POSES, "min_detection_confidence": MIN_DETECTION_CONFIDENCE,
+    "min_presence_confidence": MIN_PRESENCE_CONFIDENCE, "min_tracking_confidence": MIN_TRACKING_CONFIDENCE,
+    "tracker": "android_primary_tracker_v1", "running_mode": "VIDEO"}
 
 # A landmark below this is a guess. Counting them per frame is what lets the
 # capture screen say "step back, your feet are out of frame" instead of scoring
@@ -79,7 +84,7 @@ def build_landmarker(model_path: Path) -> vision.PoseLandmarker:
     options = vision.PoseLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=str(model_path)),
         running_mode=vision.RunningMode.VIDEO,
-        num_poses=3,
+        num_poses=NUM_POSES,
         min_pose_detection_confidence=MIN_DETECTION_CONFIDENCE,
         min_pose_presence_confidence=MIN_PRESENCE_CONFIDENCE,
         min_tracking_confidence=MIN_TRACKING_CONFIDENCE,
@@ -102,46 +107,63 @@ def collect_videos(inputs: list[str]) -> list[Path]:
 
 
 class PrimaryPoseTracker:
-    """Mirror the Android player's central-first, continuity-after selection."""
+    """Port of Android PrimaryPoseTracker, including confirmation and identity lock."""
+    BODY = (11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 
     def __init__(self):
-        self.centre: np.ndarray | None = None
-        self.missing = 0
+        self.tracked = self.pending = None
+        self.confirmation = self.missing = 0
+        self.first_missing = self.last_seen = None
 
-    def select(self, poses) -> int | None:
-        candidates = []
-        for index, pose in enumerate(poses):
-            if len(pose) != 33:
-                continue
-            torso = [pose[i] for i in (11, 12, 23, 24)]
-            if any(not np.isfinite((p.x, p.y)).all() or
-                   p.visibility < 0.5 or p.presence < 0.5 for p in torso):
-                continue
-            centre = np.array([np.mean([p.x for p in torso]),
-                               np.mean([p.y for p in torso])])
-            visible = [pose[i].y for i in (11, 12, 13, 14, 15, 16, 23, 24,
-                                           25, 26, 27, 28)
-                       if pose[i].visibility >= 0.5 and np.isfinite(pose[i].y)]
-            height = max(visible) - min(visible) if len(visible) >= 8 else 0.0
-            candidates.append((index, centre, height))
-        if self.centre is None:
-            chosen = min(candidates,
-                         key=lambda c: np.linalg.norm(c[1] - 0.5) - c[2] * 0.25,
-                         default=None)
-        else:
-            chosen = min(candidates,
-                         key=lambda c: np.linalg.norm(c[1] - self.centre),
-                         default=None)
-            if chosen is not None and np.linalg.norm(chosen[1] - self.centre) > 0.20:
-                chosen = None
-        if chosen is None:
-            self.missing += 1
-            if self.missing >= 15:
-                self.centre = None
-                self.missing = 0
+    @staticmethod
+    def matches(a, b):
+        return np.linalg.norm(a[0] - b[0]) <= .20 and .6 <= b[2] / a[2] <= 1.65
+
+    def candidate(self, pose):
+        if len(pose) != 33:
             return None
-        self.missing = 0
-        self.centre = chosen[1]
+        reliable = {i: p for i in self.BODY if np.isfinite((p := pose[i]).x)
+            and np.isfinite((p.y, p.z)).all()
+            and (p.visibility if p.visibility is not None else 1.) >= .55
+            and (p.presence if p.presence is not None else 1.) >= .55}
+        torso = [reliable[i] for i in (11, 12, 23, 24) if i in reliable]
+        if len(reliable) < 8 or len(torso) < 3:
+            return None
+        lengths = [np.hypot(reliable[s].x - reliable[h].x, reliable[s].y - reliable[h].y)
+                   for s, h in ((11, 23), (12, 24)) if s in reliable and h in reliable]
+        lengths = [length for length in lengths if length >= .035]
+        if not lengths:
+            return None
+        xy = np.array([(p.x, p.y) for p in reliable.values()])
+        extent = xy.max(0) - xy.min(0)
+        centre = np.array([(p.x, p.y) for p in torso]).mean(0)
+        if np.linalg.norm(extent) < .12 or not ((centre >= 0) & (centre <= 1)).all():
+            return None
+        return centre, extent[1], float(np.mean(lengths))
+
+    def select(self, poses, timestamp_ms=None):
+        candidates = [(i, c) for i, pose in enumerate(poses) if (c := self.candidate(pose)) is not None]
+        if self.tracked is None:
+            chosen = min(candidates, key=lambda x: np.linalg.norm(x[1][0] - .5) - x[1][1] * .25, default=None)
+        else:
+            chosen = min((x for x in candidates if self.matches(self.tracked, x[1])),
+                         key=lambda x: np.linalg.norm(x[1][0] - self.tracked[0]), default=None)
+        if chosen is None:
+            if self.missing == 0:
+                self.first_missing = timestamp_ms
+            self.missing += 1
+            self.pending = None; self.confirmation = 0
+            return None
+        missing_ms = timestamp_ms - self.first_missing if timestamp_ms is not None and self.first_missing is not None else 0
+        elapsed = timestamp_ms - self.last_seen if timestamp_ms is not None and self.last_seen is not None else 0
+        if self.tracked is None or self.missing >= 15 or missing_ms >= 500 or elapsed >= 500:
+            proposed = chosen[1]
+            self.confirmation = self.confirmation + 1 if self.pending is not None and self.matches(self.pending, proposed) else 1
+            self.pending = proposed
+            if self.confirmation < 3:
+                return None
+        self.pending = None; self.confirmation = self.missing = 0
+        self.first_missing = None; self.last_seen = timestamp_ms; self.tracked = chosen[1]
         return chosen[0]
 
 
@@ -156,6 +178,7 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     # is rejected outright. Rebuilding also drops the tracking state, which is
     # what we want across unrelated clips - carrying a pose hypothesis from one
     # athlete into another's footage is a bug that would be very hard to see.
+    pose_configuration = {**POSE_CONFIGURATION, "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest()}
     landmarker = build_landmarker(model_path)
     primary_tracker = PrimaryPoseTracker()
 
@@ -168,6 +191,7 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     image_all: list[np.ndarray] = []
     world_all: list[np.ndarray] = []
     visibility_all: list[np.ndarray] = []
+    presence_all: list[np.ndarray] = []
     angles_all: list[np.ndarray] = []
     valid_all: list[bool] = []
     torso_all: list[float] = []
@@ -206,13 +230,14 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
         # angles, and what every analyzer in the app consumes. Image is a
         # perspective projection: correct for drawing, and the only space that
         # records a jump, since world puts the hips at the origin in every frame.
-        selected = primary_tracker.select(result.pose_landmarks)
+        selected = primary_tracker.select(result.pose_landmarks, int(index * 1000 / fps))
         if selected is not None and selected < len(result.pose_world_landmarks):
             marks = result.pose_landmarks[selected]
             image = np.array([[m.x, m.y] for m in marks], dtype=np.float64)
             world = np.array([[m.x, m.y, m.z] for m in result.pose_world_landmarks[selected]],
                              dtype=np.float64)
             visibility = np.array([m.visibility for m in marks], dtype=np.float64)
+            presence = np.array([m.presence for m in marks], dtype=np.float64)
             torso = float(np.linalg.norm(
                 features.shoulder_centre(world) - features.hip_centre(world)))
             valid = np.isfinite(world).all() and torso >= MIN_TORSO_METRES
@@ -221,12 +246,14 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
             image = np.full((features.NUM_LANDMARKS, 2), np.nan)
             world = np.full((features.NUM_LANDMARKS, 3), np.nan)
             visibility = np.zeros(features.NUM_LANDMARKS)
+            presence = np.zeros(features.NUM_LANDMARKS)
             torso, valid = float("nan"), False
             detected_all.append(False)
 
         image_all.append(image)
         world_all.append(world)
         visibility_all.append(visibility)
+        presence_all.append(presence)
         # Computed unconditionally. `valid` is reported, not enforced: the Kotlin
         # has no all-or-nothing gate, and a distant athlete still has a
         # measurable elbow. Whether the capture was good enough is
@@ -351,8 +378,11 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
     np.savez_compressed(
         out_dir / f"{stem}_landmarks.npz",
         schema_version=SCHEMA_VERSION,
+        pose_configuration=np.array(json.dumps(pose_configuration, sort_keys=True)),
         image=np.array(image_all), world=np.array(world_all),
         visibility=visibility_array, valid=np.array(valid_all),
+        presence=np.array(presence_all), detected=np.array(detected_all),
+        timestamps_ms=np.array([int(i * 1000 / fps) for i in range(index)], dtype=np.int64),
         torso_metres=np.array(torso_all),
         shot_of_frame=shot_of_frame, segment_of_frame=segment_of_frame,
         fps=fps, width=width, height=height,
@@ -365,6 +395,7 @@ def process(path: Path, model_path: Path, out_dir: Path, sequence_length: int,
         out_dir / f"{stem}_sequences.npz",
         schema_version=SCHEMA_VERSION,
         sequences=np.array(sequences), labels=np.array(sequence_labels),
+        pose_configuration=np.array(json.dumps(pose_configuration, sort_keys=True)),
         segments=np.array(sequence_ids), feature_names=np.array(features.FEATURE_NAMES),
         too_short=np.array([r["too_short"] for r in segment_rows], dtype=bool),
         skill=np.array([skill] * len(segment_rows)),
@@ -504,7 +535,7 @@ def main() -> int:
           f"({totals['segments_ok']} ok, {totals['segments_fault']} fault, "
           f"{totals['segments_unlabelled']} unlabelled, "
           f"{totals['segments_too_short']} too short) in {out_dir}/")
-    return 0
+    return 1 if totals["failed"] else 0
 
 
 if __name__ == "__main__":

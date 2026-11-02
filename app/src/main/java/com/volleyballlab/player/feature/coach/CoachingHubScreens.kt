@@ -97,9 +97,10 @@ fun MyCoachScreen(
 
     LazyColumn(Modifier.fillMaxSize().coachPageBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item(key = "header") { Column { HubHeader(selected?.label ?: "My coach", onBack); HubSync(actions.hub) } }
-        if (!state.loaded) item { CircularProgressIndicator() }
+        if (!state.loaded) item { Box(Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         else {
-            if (active && coach != null) {
+            // The coach hero belongs on the hub home; sections stay focused on their own content.
+            if (selected == null && active && coach != null) {
                 item(key = "identity") { com.volleyballlab.player.ui.component.EntranceAnimation(index = 0) {
                     CoachIdentityHero(coach, summary, connected = true, onViewProfile = { onOpenProfile(coach.coachUid) })
                 } }

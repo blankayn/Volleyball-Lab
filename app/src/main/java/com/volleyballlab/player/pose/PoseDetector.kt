@@ -48,6 +48,8 @@ interface PoseDetector : AutoCloseable {
 
     /**
      * Submits a frame for inference. Returns immediately.
+     * Ownership of [bitmap] transfers to the detector; callers must not reuse it
+     * after this call. Implementations release its pixels after copying input.
      *
      * @param timestampMs camera acquisition timestamp from the ImageProxy.
      *   MediaPipe requires strictly increasing timestamps; the real detector

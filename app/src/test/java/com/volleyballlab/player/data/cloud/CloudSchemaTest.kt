@@ -20,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.volleyballlab.player.domain.model.RepMotionEvidence
 
 /**
  * The contract both clients share, pinned from the app side.
@@ -30,6 +31,13 @@ import org.junit.Test
  * this one.
  */
 class CloudSchemaTest {
+    @Test fun `observed motion round trips without sharing raw landmarks`() {
+        val session = SessionResult("motion", Skill.Spiking, "spike-basic", 100, 1000,
+            listOf(RepResult(0, 0, 500, 900, emptyList(), RepMotionEvidence(250, .8f, .9f))))
+        val doc = CloudSchema.sessionDoc(session, "player", emptyList(), 1000)
+        assertEquals(session, CloudSchema.sessionOf(doc))
+        assertTrue(!doc.toString().contains("landmarks"))
+    }
 
     @Test
     fun `directory projection excludes private licence and notification preferences`() {

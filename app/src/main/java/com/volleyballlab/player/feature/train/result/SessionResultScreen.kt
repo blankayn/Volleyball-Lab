@@ -42,6 +42,7 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.feature.coach.AssignmentResultActions
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.CueUnit
+import com.volleyballlab.player.domain.model.CoachAssessmentEngine
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.FormCueCatalog
@@ -59,6 +60,7 @@ import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -83,6 +85,7 @@ sealed interface ResultUiState {
     data class Ready(
         val session: SessionResult,
         val summaries: List<CueSummary>,
+        val history: List<SessionResult> = emptyList(),
     ) : ResultUiState
 }
 
@@ -100,7 +103,7 @@ class SessionResultViewModel(
             _uiState.value = if (session == null) {
                 ResultUiState.NotFound
             } else {
-                ResultUiState.Ready(session, summarise(session))
+                ResultUiState.Ready(session, summarise(session), sessionRepository.sessions.first())
             }
         }
     }
@@ -209,7 +212,8 @@ private fun ResultContent(
     doneLabel: String? = null,
 ) {
     val session = state.session
-    val score = session.formScore()
+    val assessment = remember(session, state.history) { CoachAssessmentEngine.assess(session, state.history) }
+    val score = assessment.overallScore
     val playableVideo = session.videoPath?.takeIf { File(it).isFile }
     var confirmDeleteVideo by remember { mutableStateOf(false) }
 
@@ -234,7 +238,7 @@ private fun ResultContent(
                     if (score != null) {
                         ScoreArc(
                             score = score,
-                            label = stringResource(R.string.result_form_score),
+                            label = stringResource(R.string.coach_assessment_score),
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
@@ -247,7 +251,11 @@ private fun ResultContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
-                        NoRepsCard()
+                        if (session.repCount == 0) NoRepsCard() else Text(
+                            stringResource(R.string.coach_assessment_more_evidence),
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
             }
@@ -276,6 +284,7 @@ private fun ResultContent(
             }
         }
 
+        item { CoachAssessmentCard(assessment, Modifier.padding(horizontal = 20.dp)) }
         item { DetailedReportCard(session, Modifier.padding(horizontal = 20.dp)) }
 
         if (playableVideo != null) {

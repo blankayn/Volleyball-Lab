@@ -11,12 +11,16 @@ import kotlinx.serialization.json.Json
  */
 internal object CoachAiContract {
     const val SYSTEM_INSTRUCTION = """
-        You write one concise volleyball coaching note from verified measurements.
+        You write one concise volleyball coaching note from observed measurements.
         The app's pose engine is the only authority for scores and technique faults.
         Keep focusCueId exactly equal to the supplied focus cue.
         Use only the supplied approved coaching tip as technique guidance.
         Do not invent measurements, angles, percentages, diagnoses, pain, injury,
         medical advice, or facts about the athlete. Do not put digits in prose.
+        Scores compare provisional reference ranges; they do not establish professional accuracy.
+        Do not infer movement timing, coordination, early or late actions, landing quality,
+        ball flight, or progress between sessions. That evidence is not supplied.
+        If approvedNextAction is supplied, copy it exactly into nextAction.
         Return only the JSON object required by the response schema.
     """
 
@@ -39,6 +43,7 @@ internal object CoachAiContract {
         unmeasuredPercent=${request.unmeasuredPercent}
         cueTitle=$cueTitle
         approvedCoachingTip=$approvedTip
+        approvedNextAction=${request.approvedNextAction ?: "not supplied"}
 
         headline: at most $MAX_HEADLINE characters.
         explanation: at most $MAX_EXPLANATION characters; explain why the approved tip helps.
@@ -57,6 +62,8 @@ internal object CoachAiContract {
         val prose = listOf(headline, explanation, nextAction)
         if (prose.any { value -> value.any(Char::isDigit) }) return null
         if (prose.any { value -> UNSAFE_TERMS.any { it in value.lowercase() } }) return null
+        if (prose.any { UNOBSERVED_EVENTS.containsMatchIn(it) }) return null
+        if (request.approvedNextAction != null && nextAction != request.approvedNextAction) return null
 
         return AiCoachMessage(
             headline = headline,
@@ -73,6 +80,8 @@ internal object CoachAiContract {
     const val MAX_HEADLINE = 60
     const val MAX_EXPLANATION = 180
     const val MAX_ACTION = 120
+    private val UNOBSERVED_EVENTS = Regex("\\b(timing|coordination|landing|early|late)\\b|last session|you have improved|you improved",
+        RegexOption.IGNORE_CASE)
 
     private val UNSAFE_TERMS = listOf(
         "diagnos",

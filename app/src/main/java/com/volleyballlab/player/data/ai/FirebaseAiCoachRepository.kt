@@ -38,10 +38,12 @@ class FirebaseAiCoachRepository(private val context: Context) : AiCoachRepositor
 
     override suspend fun generate(request: AiCoachRequest): AiCoachMessage? {
         val cue = FormCueCatalog.byId(request.focusCueId) ?: return null
+        if (FormCueCatalog.forSkill(request.skill).none { it.id == cue.id } || request.measuredReps < 3 ||
+            request.scoreOutOfHundred !in 0..100 || request.unmeasuredPercent !in 0..100) return null
         val prompt = CoachAiContract.prompt(
             request = request,
             cueTitle = context.getString(cue.label),
-            approvedTip = context.getString(cue.coachingTip),
+            approvedTip = request.approvedNextAction ?: context.getString(cue.coachingTip),
         )
         val response = withTimeout(REQUEST_TIMEOUT_MS) { model.generateContent(prompt) }
         return response.text?.let { CoachAiContract.parseAndValidate(it, request) }
