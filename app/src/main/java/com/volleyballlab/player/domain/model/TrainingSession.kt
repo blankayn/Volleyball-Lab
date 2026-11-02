@@ -39,6 +39,13 @@ data class CueScore(
     val isMeasured: Boolean get() = score != null
 }
 
+/** Observed movement proxies, not a diagnosis of timing or a calibrated 3D measurement. */
+data class RepMotionEvidence(
+    val kneeLoadToArmPeakMs: Long? = null,
+    val stanceWidthShoulderRatio: Float? = null,
+    val reliableFrameFraction: Float,
+)
+
 /**
  * A single detected repetition.
  *
@@ -51,6 +58,7 @@ data class RepResult(
     val contactMs: Long,
     val endMs: Long,
     val cueScores: List<CueScore>,
+    val motion: RepMotionEvidence? = null,
 ) {
     val durationMs: Long get() = endMs - startMs
 

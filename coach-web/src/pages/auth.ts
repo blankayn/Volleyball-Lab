@@ -79,11 +79,11 @@ function friendly(code: string): string {
 }
 
 export function renderLogin(root: HTMLElement): void {
-  document.title = "Sign in — Volleyball Lab Coach Portal";
+  document.title = "Login — Volleyball Lab Coach Portal";
   root.innerHTML = authLayout("login", `<div class="auth-card">
     <img class="login-card-logo" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab" width="48" height="48" />
     <p class="eyebrow">Your coaching workspace</p>
-    <h1>Welcome back</h1>
+    <h1>Login</h1>
     <p class="muted">Your queue, roster and assignments are where you left them.</p>
     <div id="form-error" aria-live="assertive"></div>
     <form id="login-form" novalidate>
@@ -94,7 +94,7 @@ export function renderLogin(root: HTMLElement): void {
         <div class="password-input"><span class="password-leading-icon">${icon("lock")}</span><input id="password" type="password" autocomplete="current-password" required minlength="6" placeholder="Your password" aria-describedby="password-error" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div>
         <span class="field-error" id="password-error" hidden>${icon("shield")}<span></span></span></div>
       <div class="login-options"><label><input id="remember-me" type="checkbox" checked />Remember me</label><a href="#/forgot-password" id="forgot-password">Forgot password?</a></div>
-      <button class="btn btn-primary auth-submit" type="submit"><span class="auth-submit-label">Sign in</span><span class="auth-submit-icon">${icon("arrow")}</span></button>
+      <button class="btn btn-primary auth-submit" type="submit"><span class="auth-submit-label">Login</span><span class="auth-submit-icon">${icon("arrow")}</span></button>
     </form>
     <p class="auth-switch">New here? <a href="#/register">Register as a coach</a></p>
   </div>`);
@@ -147,7 +147,7 @@ export function renderLogin(root: HTMLElement): void {
     if (button) {
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
-      if (label) label.textContent = "Signing in…";
+      if (label) label.textContent = "Logging in…";
       if (arrow) arrow.innerHTML = '<span class="auth-spinner" aria-hidden="true"></span>';
     }
     if (err) err.innerHTML = "";
@@ -188,7 +188,7 @@ export function renderLogin(root: HTMLElement): void {
       if (button) {
         button.disabled = false;
         button.removeAttribute("aria-busy");
-        if (label) label.textContent = "Sign in";
+        if (label) label.textContent = "Login";
         if (arrow) arrow.innerHTML = icon("arrow");
       }
     }

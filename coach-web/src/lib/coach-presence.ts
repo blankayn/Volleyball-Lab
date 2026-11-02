@@ -10,7 +10,7 @@ function coachIsBusy(): boolean {
   if (route.name !== "app") return false;
   if (route.tab === "player" && (route.sessionId || document.querySelector("[data-session-details][open]"))) return true;
   const focused = document.activeElement;
-  return ["questions", "player", "assignments"].includes(route.tab) && focused instanceof HTMLElement &&
+  return ["roster", "player", "assignments"].includes(route.tab) && focused instanceof HTMLElement &&
     focused.matches("textarea, input, select, [contenteditable='true']");
 }
 

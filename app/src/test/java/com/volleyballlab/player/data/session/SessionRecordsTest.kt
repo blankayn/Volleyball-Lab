@@ -4,12 +4,25 @@ import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.model.RepResult
+import com.volleyballlab.player.domain.model.RepMotionEvidence
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SessionRecordsTest {
+    @Test fun observedMotionSurvivesLocalSerialization() {
+        val motion = RepMotionEvidence(220, .8f, .95f)
+        val original = SessionResult("motion", Skill.Spiking, "spike-basic", 100, 1000,
+            listOf(RepResult(0, 0, 500, 900, emptyList(), motion)))
+        assertEquals(original, Json.decodeFromString<SessionRecord>(Json.encodeToString(original.toRecord())).toDomain())
+    }
+
+    @Test fun legacyRepetitionWithoutMotionStillLoads() {
+        val oldJson = """{"id":"old","skill":"Serving","drillId":"serve-basic","startedAtEpochMs":100,"durationMs":1000,"reps":[{"index":0,"startMs":0,"contactMs":500,"endMs":900,"cueScores":[]}]}"""
+        assertNull(Json.decodeFromString<SessionRecord>(oldJson).toDomain()?.reps?.single()?.motion)
+    }
     @Test fun assignmentRecordingCanBeResumedAfterSerialization() {
         val original = SessionResult("task-recording", Skill.Setting, "set-basic", 100, 1_000, emptyList(), assignmentId = "coach-task-1")
         val restored = Json.decodeFromString<SessionRecord>(Json.encodeToString(original.toRecord())).toDomain()

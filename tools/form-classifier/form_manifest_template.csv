@@ -1,0 +1,7 @@
+video,skill,label,source_group,reviewer
+clips/serve_ok_01.mp4,serve,ok,athlete01_session01,coach_name
+clips/serve_fault_01.mp4,serve,fault,athlete01_session01,coach_name
+clips/receive_ok_01.mp4,pass,ok,athlete02_session01,coach_name
+clips/set_fault_01.mp4,set,fault,athlete03_session01,coach_name
+clips/spike_ok_01.mp4,spike,ok,athlete04_session01,coach_name
+clips/block_fault_01.mp4,block,fault,athlete05_session01,coach_name
