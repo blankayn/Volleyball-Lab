@@ -55,6 +55,9 @@ internal val CoachInk = Color(0xFF242925)
 ) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
         .background(Brush.linearGradient(listOf(CoachInk, Color(0xFF373B32))))) {
+        val media = com.volleyballlab.player.feature.profile.rememberProfileMedia(coach.coachUid, coach = true)
+        com.volleyballlab.player.feature.profile.ProfileMediaImage(media.banner, null, Modifier.matchParentSize())
+        if (!media.banner.isNullOrBlank()) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .58f)))
         Canvas(Modifier.matchParentSize()) {
             val left = size.width * .60f
             val ink = Color.White.copy(alpha = .055f)

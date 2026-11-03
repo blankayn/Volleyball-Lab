@@ -46,7 +46,10 @@ fun ProfilePhoto(path: String?, modifier: Modifier = Modifier) {
 enum class ProfileToolSection { Photo, Training }
 
 @Composable
-fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSection = ProfileToolSection.Training, publishCoachPhoto: Boolean = false) {
+fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSection = ProfileToolSection.Training, publishCoachPhoto: Boolean = false,
+    mediaRequest: Boolean? = null, onMediaRequestHandled: () -> Unit = {}, showControls: Boolean = true,
+    onMediaBusyChanged: (Boolean) -> Unit = {},
+) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val profile by graph.profileRepository.profile.collectAsStateWithLifecycle(AthleteProfile.Anonymous)
@@ -55,8 +58,11 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
     var busy by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var pickingUid by remember { mutableStateOf<String?>(null) }
+    var pickingBanner by remember { mutableStateOf(false) }
+    val media = rememberProfileMedia(graph.authRepository.currentUid, coach = publishCoachPhoto)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val uid = pickingUid
+        val banner = pickingBanner
         pickingUid = null
         if (uri != null && uid != null) scope.launch {
             busy = true
@@ -101,21 +107,28 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
                     file.absolutePath
                 }
                 if (graph.authRepository.currentUid == uid) {
+                    if (banner) {
+                        try {
+                            graph.coachPhotoStore.saveLocalPhoto(path, uid, banner = true, coach = publishCoachPhoto)
+                            message = "Banner saved and synced."
+                        } finally { withContext(Dispatchers.IO) { File(path).delete() } }
+                    } else {
                     val current = graph.profileRepository.profile.first()
                     graph.profileRepository.update { it.copy(photoPath = path) }
                     current.photoPath?.let { old -> withContext(Dispatchers.IO) {
                         val file = File(old).canonicalFile
                         if (file.parentFile == File(context.filesDir, "profile_photos").canonicalFile) file.delete()
                     } }
-                    message = if (publishCoachPhoto) {
+                    message = run {
                         try {
-                            graph.coachPhotoStore.saveLocalPhoto(path, uid)
-                            "Profile photo saved."
+                            graph.coachPhotoStore.saveLocalPhoto(path, uid, coach = publishCoachPhoto)
+                            "Profile photo saved and synced."
                         } catch (failure: Exception) {
                             if (failure is kotlinx.coroutines.CancellationException) throw failure
-                            "Photo saved on this device. Could not share it with players; choose the photo again to retry."
+                            "Photo saved on this device. Tap Sync photo to retry sharing it."
                         }
-                    } else "Profile photo saved on this device."
+                    }
+                    }
                 } else withContext(Dispatchers.IO) { File(path).delete() }
             } catch (failure: Exception) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
@@ -123,6 +136,22 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
             }
             finally { busy = false }
         }
+    }
+    LaunchedEffect(busy, pickingUid) { onMediaBusyChanged(busy || pickingUid != null) }
+    LaunchedEffect(mediaRequest) {
+        if (mediaRequest != null) {
+            if (!busy && pickingUid == null) {
+                pickingBanner = mediaRequest
+                pickingUid = graph.authRepository.currentUid
+                if (pickingUid != null) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
+            onMediaRequestHandled()
+        }
+    }
+    if (!showControls) {
+        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        return
     }
     fun export(uri: Uri?, csv: Boolean) {
         if (uri == null || busy) return
@@ -155,13 +184,13 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
             if (section == ProfileToolSection.Photo) {
             Text("Profile photo", style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(enabled = !busy && pickingUid == null, modifier = Modifier.heightIn(min = 48.dp), onClick = { pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
-                if (profile.photoPath != null) TextButton(enabled = !busy, onClick = {
+                TextButton(enabled = !busy && pickingUid == null, modifier = Modifier.heightIn(min = 48.dp), onClick = { pickingBanner = false; pickingUid = graph.authRepository.currentUid; picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Choose photo") }
+                if (profile.photoPath != null || !media.photo.isNullOrBlank()) TextButton(enabled = !busy, onClick = {
                     scope.launch {
                         val uid = graph.authRepository.currentUid ?: return@launch
                         busy = true
                         try {
-                        if (publishCoachPhoto) graph.coachPhotoStore.saveLocalPhoto(null, uid)
+                        graph.coachPhotoStore.saveLocalPhoto(null, uid, coach = publishCoachPhoto)
                         check(graph.authRepository.currentUid == uid)
                         val old = graph.profileRepository.profile.first().photoPath
                         graph.profileRepository.update { it.copy(photoPath = null) }
@@ -176,6 +205,33 @@ fun ProfileTrainingTools(modifier: Modifier = Modifier, section: ProfileToolSect
                         } finally { busy = false }
                     }
                 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove photo") }
+                if (profile.photoPath != null) TextButton(enabled = !busy, onClick = {
+                    scope.launch {
+                        val uid = graph.authRepository.currentUid ?: return@launch
+                        busy = true
+                        try { graph.coachPhotoStore.saveLocalPhoto(profile.photoPath, uid, coach = publishCoachPhoto); message = "Profile photo synced." }
+                        catch (failure: Exception) { if (failure is kotlinx.coroutines.CancellationException) throw failure; message = "Could not sync the photo. Please retry." }
+                        finally { busy = false }
+                    }
+                }) { Text("Sync photo") }
+            }
+            Text("Profile banner", style = MaterialTheme.typography.titleMedium)
+            Text(if (publishCoachPhoto) "Your photo and banner appear on your coach profile and player connection cards." else "Your photo and banner are visible to you and coaches connected to you.", style = MaterialTheme.typography.bodySmall)
+            if (!media.banner.isNullOrBlank()) ProfileMediaImage(media.banner, "Profile banner", Modifier.fillMaxWidth().height(110.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled = !busy && pickingUid == null, onClick = {
+                    pickingBanner = true; pickingUid = graph.authRepository.currentUid
+                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text("Choose banner") }
+                if (!media.banner.isNullOrBlank()) TextButton(enabled = !busy, onClick = {
+                    scope.launch {
+                        val uid = graph.authRepository.currentUid ?: return@launch
+                        busy = true
+                        try { graph.coachPhotoStore.saveLocalPhoto(null, uid, banner = true, coach = publishCoachPhoto); message = "Banner removed." }
+                        catch (failure: Exception) { if (failure is kotlinx.coroutines.CancellationException) throw failure; message = "Could not remove the banner. Please retry." }
+                        finally { busy = false }
+                    }
+                }) { Text("Remove banner") }
             }
             }
             if (section == ProfileToolSection.Training) {

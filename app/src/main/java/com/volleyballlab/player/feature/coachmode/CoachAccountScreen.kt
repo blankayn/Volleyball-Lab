@@ -199,12 +199,22 @@ fun CoachAccountScreen(
     val model: CoachAccountViewModel = viewModel(factory = CoachAccountViewModel.Factory)
     val state by model.uiState.collectAsStateWithLifecycle()
     if (!state.loaded) { GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier); return }
+    var mediaRequest by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+    var mediaBusy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     com.volleyballlab.player.feature.profile.AccountMenuScreen(coach = true,
         onLogout = { model.signOut(onSignedOut) }, contentPadding = contentPadding, modifier = modifier,
         banner = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val media = com.volleyballlab.player.feature.profile.rememberProfileMedia(state.account?.uid, coach = true)
             CoachWorkspaceIdentity(state.identity.name.ifBlank { state.profile.name }.ifBlank { "Coach" },
                 state.profile.teamName.ifBlank { "Your coaching workspace" }, state.profile.initials(), "Coach profile",
-                portrait = state.identity.photoPath?.let { path -> { com.volleyballlab.player.feature.profile.ProfilePhoto(path, Modifier.fillMaxSize()) } })
+                banner = media.banner,
+                onPhotoClick = { mediaRequest = false }, onCoverClick = { mediaRequest = true }, mediaEnabled = !mediaBusy,
+                portrait = { com.volleyballlab.player.feature.profile.ProfileMediaImage(media.photo ?: state.identity.photoPath, "Profile photo", Modifier.fillMaxSize()) })
+            com.volleyballlab.player.feature.profile.ProfileTrainingTools(section = com.volleyballlab.player.feature.profile.ProfileToolSection.Photo,
+                publishCoachPhoto = true, mediaRequest = mediaRequest, onMediaRequestHandled = { mediaRequest = null },
+                showControls = false, onMediaBusyChanged = { mediaBusy = it })
+            }
         },
         sectionContent = { section -> CoachAccountSectionContent(section, state, model, onSignedOut) },
     )

@@ -203,14 +203,23 @@ fun ProfileScreen(
     val model: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
     val state by model.uiState.collectAsStateWithLifecycle()
     if (!state.loaded) { GhostLoadingScreen(GhostLayout.Profile, contentPadding, modifier); return }
+    var mediaRequest by remember { mutableStateOf<Boolean?>(null) }
+    var mediaBusy by remember { mutableStateOf(false) }
     AccountMenuScreen(coach = false, onLogout = { model.onSignOut(onSignedOut) }, contentPadding = contentPadding, modifier = modifier,
         banner = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val media = rememberProfileMedia(state.account?.uid)
             com.volleyballlab.player.feature.coachmode.CoachWorkspaceIdentity(
                 name = state.profile.name.ifBlank { state.account?.displayName.orEmpty() }.ifBlank { "Player" },
                 subtitle = state.profile.position?.let { stringResource(it.displayName) } ?: "Your training workspace",
                 initials = state.profile.initials(), eyebrow = "Student profile",
-                portrait = state.profile.photoPath?.let { path -> { ProfilePhoto(path, Modifier.fillMaxSize()) } },
+                banner = media.banner,
+                onPhotoClick = { mediaRequest = false }, onCoverClick = { mediaRequest = true }, mediaEnabled = !mediaBusy,
+                portrait = { ProfileMediaImage(media.photo ?: state.profile.photoPath, "Profile photo", Modifier.fillMaxSize()) },
             )
+            ProfileTrainingTools(section = ProfileToolSection.Photo, mediaRequest = mediaRequest,
+                onMediaRequestHandled = { mediaRequest = null }, showControls = false, onMediaBusyChanged = { mediaBusy = it })
+            }
         },
         sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut) },
     )
