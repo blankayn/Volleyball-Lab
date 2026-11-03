@@ -37,7 +37,7 @@ internal fun CoachingInboxRow(conversation: CoachingConversation, name: String, 
         .clickable(onClick = onClick).heightIn(min = 92.dp).padding(vertical = 18.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Box {
-            InitialsAvatar(name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }, Modifier.clip(CircleShape))
+            com.volleyballlab.player.feature.profile.ProfileAvatar(conversation.playerUid, name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }, Modifier.clip(CircleShape))
             if (unread > 0) Box(Modifier.size(12.dp).align(Alignment.TopEnd).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {

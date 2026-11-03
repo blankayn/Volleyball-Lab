@@ -110,7 +110,7 @@ service cloud.firestore {
           'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
         && data.keys().hasOnly(['theme', 'accent', 'density', 'textSize', 'highContrast',
           'reduceMotion', 'enhancedFocus', 'submissionAlerts', 'deadlineReminders',
-          'trainingNotifications', 'emailNotifications', 'photo', 'certifications', 'updatedAt'])
+          'trainingNotifications', 'emailNotifications', 'photo', 'banner', 'certifications', 'updatedAt'])
         && data.theme in ['light', 'dark', 'system']
         && data.accent in ['rust', 'forest', 'plum']
         && data.density in ['comfortable', 'compact']
@@ -120,6 +120,8 @@ service cloud.firestore {
         && data.trainingNotifications is bool && data.emailNotifications is bool
         && boundedString(data.photo, 120000)
         && (data.photo == '' || data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))
+        && (!('banner' in data) || (boundedString(data.banner, 300000)
+          && (data.banner == '' || data.banner.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'))))
         && boundedString(data.certifications, 1200) && validDate(data.updatedAt);
     }
     function isValidDirectory(data) {
@@ -286,6 +288,28 @@ service cloud.firestore {
           && isValidWebSettings(request.resource.data);
         allow delete: if false;
       }
+    }
+
+    match /profileMedia/{uid} {
+      function connectedCoach() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'COACH'
+          && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(uid))
+          && get(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(uid)).data.status in ['Pending', 'Active'];
+      }
+      function validImage(value, maximum) {
+        return boundedString(value, maximum) && (value == '' || value.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*'));
+      }
+      allow get: if signedIn() && notDeleting(uid)
+        && (request.auth.uid == uid || exists(/databases/$(database)/documents/coachDirectory/$(uid)) || connectedCoach());
+      allow list: if false;
+      allow create, update: if isUser(uid) && notDeleting(uid)
+        && request.resource.data.keys().hasOnly(['photo', 'banner', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['updatedAt'])
+        && ('photo' in request.resource.data || 'banner' in request.resource.data)
+        && (!('photo' in request.resource.data) || validImage(request.resource.data.photo, 120000))
+        && (!('banner' in request.resource.data) || validImage(request.resource.data.banner, 300000))
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if isUser(uid);
     }
 
     match /coachPhotos/{coachUid} {

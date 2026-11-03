@@ -13,6 +13,7 @@ export interface PortalPreferences {
   trainingNotifications: boolean;
   emailNotifications: boolean;
   photo: string;
+  banner: string;
   certifications: string;
 }
 
@@ -21,12 +22,16 @@ export const defaultPreferences = (): PortalPreferences => ({
   theme: "system", accent: "rust", density: "comfortable", textSize: "normal",
   highContrast: false, reduceMotion: false, enhancedFocus: true,
   submissionAlerts: true, deadlineReminders: true, trainingNotifications: true,
-  emailNotifications: false, photo: "", certifications: "",
+  emailNotifications: false, photo: "", banner: "", certifications: "",
 });
 
 export function validPhoto(photo: unknown): photo is string {
   return typeof photo === "string" && photo.length <= 120_000
     && (photo === "" || /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(photo));
+}
+export function validBanner(banner: unknown): banner is string {
+  return typeof banner === "string" && banner.length <= 300_000
+    && (banner === "" || /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(banner));
 }
 
 export function normalizePreferences(value: unknown): PortalPreferences {
@@ -46,6 +51,7 @@ export function normalizePreferences(value: unknown): PortalPreferences {
     trainingNotifications: data.trainingNotifications !== false,
     emailNotifications: data.emailNotifications === true,
     photo: validPhoto(data.photo) ? data.photo : "",
+    banner: validBanner(data.banner) ? data.banner : "",
     certifications: typeof data.certifications === "string" ? data.certifications.slice(0, 1200) : "",
   };
 }

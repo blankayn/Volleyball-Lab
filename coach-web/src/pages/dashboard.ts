@@ -33,6 +33,9 @@ import { hydrateAccountPreferences, renderAccount, wireAccount } from "./account
 import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
+import { sharedRecordingPanel, wireSharedRecordings } from "../lib/shared-recording";
+import { wireProfileMedia } from "../lib/profile-media";
+import { profileHeader } from "../lib/profile-header";
 import { wireCoachExperience } from "../lib/coach-experience";
 import { messageBadge, playerUnreadCount, unreadCount } from "../lib/coaching-unread";
 import { getCoachQuestions, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
@@ -60,10 +63,15 @@ let disposeSidebar: (() => void) | null = null;
 let disposeAccount: (() => void) | null = null;
 let disposeNotifications: (() => void) | null = null;
 let disposeExplanations: (() => void) | null = null;
+let disposeRecordings: (() => void) | null = null;
+let disposeProfileMedia: (() => void) | null = null;
 let disposeHub: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
+  disposeProfileMedia?.(); disposeProfileMedia = null;
+  disposeRecordings?.();
+  disposeRecordings = null;
   disposeHub?.();
   disposeHub = null;
   dashboardVersion++;
@@ -421,9 +429,14 @@ export async function renderDashboard(
       disposeAccount = null;
       disposeExplanations?.();
       disposeExplanations = null;
+      disposeRecordings?.();
+      disposeRecordings = null;
+      disposeProfileMedia?.(); disposeProfileMedia = null;
       disposeExperience?.();
       disposeHub?.();
       body.innerHTML = html;
+      disposeRecordings = wireSharedRecordings(body);
+      disposeProfileMedia = wireProfileMedia(body);
       body.querySelectorAll<HTMLInputElement>("[data-coach-search]").forEach(field => {
         field.value = filterQueries.get(field.getAttribute("aria-label") ?? "") ?? "";
       });
@@ -589,7 +602,7 @@ function viewOverview(data: DashData): string {
 
   const queuePreview = pending.slice(0, 4).map((s) => {
     const name = memberName(data.roster, s.playerUid);
-    return `<a class="row-item" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name)}
+    return `<a class="row-item" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name, s.playerUid)}
       <span style="flex:1"><strong>${esc(name)}</strong><br /><span class="muted">${esc(sessionTitle(data, s.sessionId))} · ${timeAgo(s.submittedAt)}</span></span>
       <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
   }).join("");
@@ -692,7 +705,7 @@ function sessionTitle(data: DashData, sessionId: string): string {
 function playerRow(data: DashData, m: RosterMember): string {
   const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
   const form = meanForm(sessions);
-  return `<a class="row-item" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player")}
+  return `<a class="row-item" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player", m.playerUid)}
     <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
     <span class="muted">${sessions.length} set${sessions.length === 1 ? "" : "s"}${form !== null ? ` · form ${form}` : ""}</span></span>
     ${messageBadge(playerUnreadCount(data.questions, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
@@ -713,7 +726,7 @@ function viewQueue(data: DashData, highlight: string | null): string {
     <p class="search-empty" role="status" data-search-empty hidden>No matching sessions. Try another name or skill.</p>
     <div class="row-list">${pending.map((s) => {
       const name = memberName(data.roster, s.playerUid);
-      return `<a class="row-item" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name)}
+      return `<a class="row-item" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name, s.playerUid)}
         <span style="flex:1"><strong>${esc(name)}</strong><br />
         <span class="muted">${esc(sessionTitle(data, s.sessionId))} · sent ${timeAgo(s.submittedAt)}</span></span>
         <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
@@ -729,7 +742,7 @@ function viewRoster(data: DashData): string {
   return `<div class="coach-page-intro"><p class="eyebrow">Your team</p><h2>Your players</h2><p class="muted">Find a player, review their sessions, and send feedback.</p></div><div class="page-grid">
     ${requests.length ? `<div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("userPlus", "rust")}<h3 class="section-title">Join requests (${requests.length})</h3></div>
       <div class="row-list">${requests.map((m) => `
-          <div class="row-item">${avatar(m.playerName || "Player")}
+          <div class="row-item">${avatar(m.playerName || "Player", m.playerUid)}
             <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
             <span class="muted">${esc(m.position ?? "Position not set")} · asked ${timeAgo(m.requestedAt)}</span></span>
             <button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(m.playerUid)}">Approve</button>
@@ -742,7 +755,7 @@ function viewRoster(data: DashData): string {
     </div>
     ${past.length ? `<details class="card span-2 history-disclosure"><summary>Past players <span class="muted">${past.length}</span>${icon("chevronDown")}</summary>
       <div class="row-list">${past.map((m) => `
-        <div class="row-item">${avatar(m.playerName || "Player")}
+        <div class="row-item">${avatar(m.playerName || "Player", m.playerUid)}
           <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong></span>
           <span class="muted">Connection ended</span>
         </div>`).join("")}</div>
@@ -777,11 +790,8 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
       <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(playerUnreadCount(data.questions, playerUid))}</summary>
       <div class="player-message-content"><h2>Messages with ${esc(member.playerName || "Player")}</h2>${conversation}</div>
     </details></div>
-  <div class="card" style="margin-top:10px"><div class="chip-row">${avatar(member.playerName || "Player")}
-    <div style="flex:1"><h2 style="font-size:22px">${esc(member.playerName || "Unnamed player")}</h2>
-    <p class="muted" style="margin:2px 0 0">${esc(member.position ?? "Position not set")} · <span class="pill${member.status === "Active" ? "-green" : ""}" style="margin-left:4px">${member.status}</span></p></div>
-    ${member.status === "Pending" ? `<button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(playerUid)}">Approve</button>` : ""}
-  </div></div>
+  <div style="margin-top:10px">${profileHeader({ name: member.playerName || "Player", subtitle: `${member.position ?? "Position not set"} · ${member.status}`, uid: playerUid })}</div>
+  ${member.status === "Pending" ? `<div class="profile-media-toolbar"><button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(playerUid)}">Approve</button></div>` : ""}
 
   <div class="stat-strip" style="margin-top:14px">
     <div class="stat"><b>${sessions.length}</b><span>Sets shared</span></div>
@@ -846,6 +856,7 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
       <span class="session-chevron">${icon("chevronDown")}</span>
     </summary>
     <div class="session-detail"><template data-session-template><div class="session-detail-inner">
+      ${sharedRecordingPanel(s.id)}
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
       <div class="cue-table-scroll" role="region" aria-label="Session cue measurements" tabindex="0"><table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table></div>
       ${sessionExplanationPanel(s.id)}

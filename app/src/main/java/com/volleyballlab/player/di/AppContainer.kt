@@ -99,6 +99,15 @@ class AppContainer(private val context: Context) {
             androidx.core.app.NotificationManagerCompat.from(context).cancelAll()
             if (uid != null) kotlinx.coroutines.coroutineScope {
                 launch {
+                    profileRepository.profile.map { it.photoPath }.distinctUntilChanged().collectLatest { path ->
+                        if (!path.isNullOrBlank()) {
+                            try { coachPhotoStore.syncExistingLocalPhoto(path, uid) }
+                            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                            catch (_: Exception) { /* Keep the local portrait; retry on the next app start or photo change. */ }
+                        }
+                    }
+                }
+                launch {
                     combine(profileRepository.profile.map { it.name }, profileRepository.syncStatus, ::Pair)
                         .distinctUntilChanged().collect { (name, status) ->
                         if (name.isNotBlank() && status == com.volleyballlab.player.domain.repository.ProfileSyncStatus.Saved

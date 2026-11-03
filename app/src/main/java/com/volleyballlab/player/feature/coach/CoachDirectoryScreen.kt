@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -262,12 +263,7 @@ private fun CoachDiscoveryCard(coach: CoachPreview, onClick: () -> Unit) {
 
 @Composable
 private fun CoachInitials(coach: CoachPreview, large: Boolean = false) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(if (large) 80.dp else 52.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(coach.initials() ?: "C", style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-        }
-    }
+    CoachAvatar(coach.coachUid, coach.initials(), Modifier.size(if (large) 80.dp else 52.dp).clip(CircleShape))
 }
 
 @Composable

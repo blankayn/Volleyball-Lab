@@ -64,7 +64,7 @@ async function boundedJson(response, maximum) {
   catch { throw new ApiError("UNAVAILABLE", "Session access is unavailable."); }
 }
 
-async function firestoreRead(path, token, fetchImpl, mask = [], maximum = 16 * 1024) {
+export async function firestoreRead(path, token, fetchImpl, mask = [], maximum = 16 * 1024) {
   const url = new URL(BASE + path);
   // Google's default pretty-printed REST payload adds substantial whitespace
   // to nested rep arrays. Compact JSON keeps the byte/CPU bound meaningful.

@@ -1,10 +1,11 @@
 import { getProfile, getRoster, saveProfile } from "../lib/cloud";
+import { profileHeader } from "../lib/profile-header";
 import { sendEmailVerification } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { loadPreferences, savePreferences } from "../lib/account-settings";
 import { esc, initials } from "../lib/format";
 import { icon, type IconName } from "../lib/icons";
-import { getPreferences, updatePreferences, validPhoto, type PortalPreferences } from "../lib/preferences";
+import { getPreferences, updatePreferences, validPhoto, validBanner, type PortalPreferences } from "../lib/preferences";
 
 function heading(id: string, number: string, name: string, symbol: IconName): string {
   return `<div class="settings-card-heading"><span class="settings-symbol">${icon(symbol)}</span><div><span class="settings-index">${number}</span><h2 id="${id}">${name}</h2></div></div>`;
@@ -26,8 +27,11 @@ export async function renderAccount(coachUid: string): Promise<string> {
       <section class="settings-card settings-profile" aria-labelledby="profile-settings">
         ${heading("profile-settings", "01", "Profile &amp; team", "user")}
         <form id="profile-form">
-          <div class="profile-photo-row"><div class="profile-photo" id="profile-photo-preview">${prefs.photo ? `<img src="${esc(prefs.photo)}" alt="Your profile picture" />` : `<span>${esc(initials(profile.name || "Coach"))}</span>`}</div><div><label class="btn btn-ghost btn-sm photo-upload" for="profile-photo">${icon("upload")} Change photo</label><input class="visually-hidden" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" /><button class="photo-remove" type="button" id="remove-profile-photo"${prefs.photo ? "" : " hidden"}>Remove photo</button><small>JPG, PNG or WebP · Up to 5 MB</small></div></div>
-          <div id="photo-status" role="status" aria-live="polite"></div>
+          ${profileHeader({ name: profile.name || "Coach", subtitle: profile.teamName || "Your coaching profile", uid: coachUid, photo: prefs.photo, banner: prefs.banner, editable: true })}
+          <input class="visually-hidden" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" />
+          <input class="visually-hidden" id="profile-banner" type="file" accept="image/jpeg,image/png,image/webp" />
+          <div class="profile-media-toolbar"><button class="photo-remove" type="button" id="remove-profile-photo"${prefs.photo ? "" : " hidden"}>Remove profile picture</button><button class="photo-remove" type="button" id="remove-profile-banner"${prefs.banner ? "" : " hidden"}>Remove cover photo</button></div>
+          <div id="photo-status" role="status" aria-live="polite"></div><div id="banner-status" role="status" aria-live="polite"></div>
           <div class="form-grid"><div class="field"><label for="p-name">Display name</label><input id="p-name" required maxlength="60" value="${esc(profile.name)}" autocomplete="name" /></div><div class="field"><label for="p-team">Team name</label><input id="p-team" maxlength="48" value="${esc(profile.teamName)}" /></div></div>
           <div class="field"><label for="p-org">School or club</label><input id="p-org" maxlength="48" value="${esc(profile.organisation)}" autocomplete="organization" /></div>
           <div class="form-grid"><div class="field"><label for="p-spec">Coaching specialization</label><select id="p-spec">${specOptions}</select></div><div class="field"><label for="p-years">Years coaching</label><input id="p-years" type="number" min="0" max="70" step="1" value="${profile.yearsExperience ?? ""}" /></div></div>
@@ -64,21 +68,24 @@ export async function renderAccount(coachUid: string): Promise<string> {
   </div>`;
 }
 
-async function photoData(file: File): Promise<string> {
+async function photoData(file: File, banner = false): Promise<string> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPG, PNG or WebP image.");
   if (file.size > 5 * 1024 * 1024) throw new Error("Choose a photo smaller than 5 MB.");
   const bitmap = await createImageBitmap(file);
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
+    canvas.width = banner ? 1024 : 256; canvas.height = banner ? 360 : 256;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser could not process this image.");
     context.fillStyle = "#fff";
-    context.fillRect(0, 0, 256, 256);
-    const side = Math.min(bitmap.width, bitmap.height);
-    context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 256, 256);
-    const result = canvas.toDataURL("image/jpeg", .84);
-    if (!validPhoto(result)) throw new Error("Choose a simpler or smaller image.");
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const scale = Math.max(canvas.width / bitmap.width, canvas.height / bitmap.height);
+    const width = canvas.width / scale, height = canvas.height / scale;
+    context.drawImage(bitmap, (bitmap.width - width) / 2, (bitmap.height - height) / 2, width, height, 0, 0, canvas.width, canvas.height);
+    let quality = .84; let result = canvas.toDataURL("image/jpeg", quality);
+    const valid = banner ? validBanner : validPhoto;
+    while (!valid(result) && quality > .34) { quality -= .1; result = canvas.toDataURL("image/jpeg", quality); }
+    if (!valid(result)) throw new Error("Choose a simpler or smaller image.");
     return result;
   } finally { bitmap.close(); }
 }
@@ -93,6 +100,10 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   let photoRevision = 0;
   let pendingPhoto = getPreferences().photo;
   let portraitChanged = false;
+  let pendingBanner = getPreferences().banner;
+  let bannerChanged = false;
+  let bannerRevision = 0;
+  let processingBanner = false;
   let processingPhoto = false;
   const setStatus = (text: string, error = false) => {
     if (!account.isConnected) return;
@@ -144,6 +155,30 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   const photoStatus = account.querySelector<HTMLElement>("#photo-status")!;
   const remove = account.querySelector<HTMLButtonElement>("#remove-profile-photo")!;
   const photoInput = account.querySelector<HTMLInputElement>("#profile-photo")!;
+  const bannerInput = account.querySelector<HTMLInputElement>("#profile-banner")!;
+  const bannerPreview = account.querySelector<HTMLElement>("#profile-banner-preview")!;
+  const bannerStatus = account.querySelector<HTMLElement>("#banner-status")!;
+  const bannerRemove = account.querySelector<HTMLButtonElement>("#remove-profile-banner")!;
+  account.querySelector<HTMLButtonElement>("[data-edit-cover]")!.addEventListener("click", () => bannerInput.click());
+  account.querySelector<HTMLButtonElement>("[data-edit-profile-photo]")!.addEventListener("click", () => photoInput.click());
+  bannerInput.addEventListener("change", async () => {
+    const file = bannerInput.files?.[0]; if (!file) return;
+    const attempt = ++bannerRevision; processingBanner = true; submit.disabled = true;
+    bannerStatus.textContent = "Preparing banner…";
+    try {
+      const image = await photoData(file, true);
+      if (attempt !== bannerRevision || !account.isConnected) return;
+      pendingBanner = image; bannerChanged = true;
+      bannerPreview.style.backgroundImage = `url("${image}")`; bannerRemove.hidden = false;
+      bannerStatus.textContent = "Banner ready. Save your profile to sync it.";
+    } catch (error) { if (attempt === bannerRevision) bannerStatus.textContent = error instanceof Error ? error.message : "This image could not be opened."; }
+    finally { if (attempt === bannerRevision) { processingBanner = false; submit.disabled = processingPhoto; } bannerInput.value = ""; }
+  });
+  bannerRemove.addEventListener("click", () => {
+    bannerRevision++; processingBanner = false; pendingBanner = ""; bannerChanged = true;
+    bannerPreview.style.backgroundImage = ""; bannerRemove.hidden = true; submit.disabled = processingPhoto;
+    bannerStatus.textContent = "Save your profile to remove the banner.";
+  });
   const form = account.querySelector<HTMLFormElement>("#profile-form")!;
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const showPhoto = () => {
@@ -170,7 +205,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       photoStatus.textContent = error instanceof Error ? error.message : "This image could not be opened.";
       photoStatus.classList.add("is-error");
     } finally {
-      if (attempt === photoRevision) { processingPhoto = false; submit.disabled = false; }
+      if (attempt === photoRevision) { processingPhoto = false; submit.disabled = processingBanner; }
       photoInput.value = "";
     }
   });
@@ -186,12 +221,13 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (processingPhoto) return;
+    if (processingPhoto || processingBanner) return;
     const result = account.querySelector<HTMLElement>("#profile-saved")!;
     const value = (id: string) => (form.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`#${id}`)?.value ?? "").trim();
     if (!value("p-name")) { result.textContent = "Enter your display name."; return; }
     submit.disabled = true;
     photoInput.disabled = true;
+    bannerInput.disabled = true; bannerRemove.disabled = true;
     remove.disabled = true;
     const preferenceFields = account.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-preference]");
     preferenceFields.forEach((field) => { field.disabled = true; });
@@ -205,15 +241,16 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       await saves;
       const [profile, roster] = await Promise.all([getProfile(coachUid), getRoster(coachUid)]);
       const years = Number.parseInt(value("p-years"), 10);
-      const next = { ...getPreferences(), photo: pendingPhoto, certifications: value("p-certifications") };
-      const outcome = await saveProfile(coachUid, { ...profile, name: value("p-name"), teamName: value("p-team"), organisation: value("p-org"), specialisation: value("p-spec") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, licenceNumber: value("p-licence"), notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next, portraitChanged);
-      if (outcome.preferencesSaved) portraitChanged = false;
+      const next = { ...getPreferences(), photo: pendingPhoto, banner: pendingBanner, certifications: value("p-certifications") };
+      const outcome = await saveProfile(coachUid, { ...profile, name: value("p-name"), teamName: value("p-team"), organisation: value("p-org"), specialisation: value("p-spec") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, licenceNumber: value("p-licence"), notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next, portraitChanged, bannerChanged);
+      if (outcome.preferencesSaved) { portraitChanged = false; bannerChanged = false; }
       updatePreferences(coachUid, next);
       result.textContent = outcome.preferencesSaved
         ? "Profile saved"
         : "Profile saved. Photo and certifications are kept on this browser; cloud sync is unavailable.";
       result.classList.toggle("is-warning", !outcome.preferencesSaved);
       photoStatus.textContent = "";
+      bannerStatus.textContent = "";
       refreshIdentity();
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
@@ -221,9 +258,9 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
         ? "Firebase blocked the profile update. Your edits are still here."
         : "Could not save. Your edits are still here; check your connection and try again.";
       result.classList.add("is-error");
-    } finally { submit.disabled = false; photoInput.disabled = false; remove.disabled = false; preferenceFields.forEach((field) => { field.disabled = false; }); profileFields.forEach((field) => { field.disabled = false; }); }
+    } finally { submit.disabled = false; photoInput.disabled = false; remove.disabled = false; bannerInput.disabled = false; bannerRemove.disabled = false; preferenceFields.forEach((field) => { field.disabled = false; }); profileFields.forEach((field) => { field.disabled = false; }); }
   });
-  return () => { if (timer) { window.clearTimeout(timer); persist(); } photoRevision++; };
+  return () => { if (timer) { window.clearTimeout(timer); persist(); } photoRevision++; bannerRevision++; };
 }
 
 export async function hydrateAccountPreferences(uid: string): Promise<void> {
