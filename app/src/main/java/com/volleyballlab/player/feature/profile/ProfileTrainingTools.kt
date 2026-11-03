@@ -344,7 +344,9 @@ private fun BannerCropDialog(
     val bitmap by produceState<Bitmap?>(null, path) {
         value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(path) }.getOrNull() }
     }
-    DisposableEffect(bitmap) { onDispose { bitmap?.recycle() } }
+    // ImageBitmap wraps this Android bitmap and Compose may still have a draw
+    // frame queued after the dialog leaves composition. Let GC reclaim it so
+    // that frame cannot hit a recycled bitmap and crash the process.
     var zoom by remember(path) { mutableStateOf(1f) }
     var panX by remember(path) { mutableStateOf(0f) }
     var panY by remember(path) { mutableStateOf(0f) }
