@@ -75,6 +75,22 @@ test("ordinary profile edits keep existing private photos private", async () => 
   assert.ok(state().writes.some(write => write.path.includes("/webSettings/")));
   assert.ok(!state().writes.some(write => write.path.startsWith("coachPhotos/")));
 });
+
+test("explicit photo selection reaches the shared Android photo source without private settings", async () => {
+  await cloud.saveProfile("coach", profile(), 4, preferences(), true);
+  const media = state().writes.find(write => write.path === "profileMedia/coach");
+  assert.equal(media.data.photo, preferences().photo);
+  assert.deepEqual(Object.keys(media.data).sort(), ["photo", "updatedAt"]);
+});
+
+test("banner edits publish only the banner, preserving the separately selected portrait", async () => {
+  const banner = "data:image/jpeg;base64,/9j/BBBB";
+  await cloud.saveProfile("coach", profile(), 4, { ...preferences(), banner }, false, true);
+  const media = state().writes.find(write => write.path === "profileMedia/coach");
+  assert.equal(media.data.banner, banner);
+  assert.ok(!("photo" in media.data));
+  assert.ok(!state().writes.some(write => write.path === "coachPhotos/coach"));
+});
 test("a denied core profile write still fails without claiming success or writing optional data", async () => {
   state().denyProfile = true;
   await assert.rejects(cloud.saveProfile("coach", profile(), 4, preferences()), error => error.code === "permission-denied");

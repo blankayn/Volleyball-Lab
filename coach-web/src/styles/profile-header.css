@@ -1,0 +1,17 @@
+.social-profile{overflow:hidden;border:1px solid var(--line);border-radius:20px;background:var(--card);margin-bottom:20px}
+.social-profile-cover{height:210px;position:relative;background:linear-gradient(120deg,var(--portal-subtle,#e4eaf0),var(--accent-indigo-bg));background-position:center;background-size:cover}
+.social-cover-edit{position:absolute;top:14px;right:14px;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:600 14px var(--font);cursor:pointer;box-shadow:0 2px 8px #0002}
+.social-cover-edit svg,.social-photo-edit svg{width:20px;height:20px;flex:none}
+.social-profile-details{position:relative;padding:0 24px 24px;display:flex;align-items:flex-end;gap:22px}
+.social-profile-portrait{position:relative;width:124px;height:124px;flex:none;margin-top:-52px}
+.social-profile-avatar{display:flex;align-items:center;justify-content:center;overflow:hidden;width:124px;height:124px;border:5px solid var(--card);border-radius:50%;background:var(--accent-indigo-bg);color:var(--accent-indigo-fg);font:700 34px var(--font)}
+.social-profile-avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.social-photo-edit{position:absolute;right:0;bottom:2px;display:grid;place-items:center;width:44px;height:44px;border:3px solid var(--card);border-radius:50%;background:var(--rust);color:#fff;cursor:pointer}
+.social-profile-name{min-width:0;padding-top:18px;overflow-wrap:anywhere}
+.social-profile-name h2{margin:0;font:700 clamp(24px,3vw,34px)/1.15 var(--font);color:var(--ink)}
+.social-profile-name p{margin:7px 0 0;color:var(--ink-soft);font-size:15px}
+.social-cover-edit:hover,.social-photo-edit:hover{filter:brightness(.94)}
+.social-cover-edit:focus-visible,.social-photo-edit:focus-visible{outline:3px solid var(--rust);outline-offset:3px}
+.profile-media-toolbar{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 16px}
+.profile-media-toolbar .photo-remove{margin:0}
+@media(max-width:580px){.social-profile-cover{height:160px}.social-profile-details{display:block;padding:0 16px 20px}.social-profile-portrait{width:104px;height:104px;margin-top:-44px}.social-profile-avatar{width:104px;height:104px}.social-profile-name{padding-top:12px}.social-cover-edit{top:10px;right:10px;padding:8px 10px;font-size:12px}}

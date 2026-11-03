@@ -339,6 +339,7 @@ export async function saveProfile(
   rosterSize: number,
   preferences?: PortalPreferences,
   publishPortrait = false,
+  publishBanner = false,
 ): Promise<ProfileSaveResult> {
   const now = Date.now();
   const batch = writeBatch(db);
@@ -361,6 +362,10 @@ export async function saveProfile(
           const photos = writeBatch(db);
           photos.set(preferencesPath(uid), { ...data, updatedAt: now });
           if (publishPortrait) photos.set(doc(db, "coachPhotos", uid), { photo: data.photo, updatedAt: now });
+          if (publishPortrait || publishBanner) photos.set(doc(db, "profileMedia", uid), {
+            ...(publishPortrait ? { photo: data.photo } : {}),
+            ...(publishBanner ? { banner: data.banner } : {}), updatedAt: now,
+          }, { merge: true });
           await photos.commit();
         })()
       : Promise.resolve(),

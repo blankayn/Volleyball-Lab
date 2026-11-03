@@ -271,7 +271,7 @@ private fun RequestRow(
 ) {
     CoachCard(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            InitialsAvatar(member.initials(), accent = CoachAccent.Rust)
+            com.volleyballlab.player.feature.profile.ProfileAvatar(member.playerUid, member.initials())
             HorizontalGap(12)
             Column(Modifier.weight(1f)) {
                 Text(
@@ -330,7 +330,7 @@ private fun PlayerRow(
     modifier: Modifier = Modifier,
 ) {
     CoachRowCard(modifier = modifier, onClick = onClick) {
-        InitialsAvatar(snapshot.member.initials(), accent = CoachAccent.Rust)
+        com.volleyballlab.player.feature.profile.ProfileAvatar(snapshot.member.playerUid, snapshot.member.initials())
         HorizontalGap(12)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

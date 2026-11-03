@@ -42,8 +42,8 @@ export function scoreBar(score: number | null): string {
     <span class="score-num" style="color:${color}">${score}</span></span>`;
 }
 
-export function avatar(name: string): string {
-  return `<span class="avatar">${esc(initials(name))}</span>`;
+export function avatar(name: string, uid?: string): string {
+  return `<span class="avatar"${uid ? ` data-profile-avatar="${esc(uid)}"` : ""}>${esc(initials(name))}</span>`;
 }
 
 export function spinner(label: string): string {

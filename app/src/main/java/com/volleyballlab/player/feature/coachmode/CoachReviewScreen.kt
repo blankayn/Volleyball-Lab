@@ -231,11 +231,7 @@ fun CoachReviewScreen(
                 // The same disc the roster and player pages put beside this name, so
                 // a coach two taps deep can still see whose session they are reading.
                 leading = {
-                    InitialsAvatar(
-                        initials = snapshot?.member?.initials(),
-                        diameter = 40,
-                        accent = CoachAccent.Rust,
-                    )
+                    com.volleyballlab.player.feature.profile.ProfileAvatar(snapshot?.member?.playerUid, snapshot?.member?.initials(), Modifier.size(40.dp))
                 },
             )
         }

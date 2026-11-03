@@ -496,7 +496,7 @@ private fun QueueRow(
         // inert instead of lighting up under a finger and doing nothing.
         onClick = onClick.takeIf { session != null },
     ) {
-        InitialsAvatar(entry.member?.initials())
+        com.volleyballlab.player.feature.profile.ProfileAvatar(entry.member?.playerUid, entry.member?.initials())
         HorizontalGap(12)
         Column(Modifier.weight(1f)) {
             Text(

@@ -382,9 +382,9 @@ class FirestoreCoachRepository(
             val existing = ref.get().awaitCloud().data?.let(CloudSchema::submissionOf)
             // A queued submission is a no-op; a reviewed one re-queues, asking
             // for a second look after redoing the drill.
-            if (existing != null && existing.playerUid == playerUid && existing.isPending) return@runCatching
             if (authRepository.currentUid != playerUid) return@runCatching
-            ref.set(
+            val batch = db.batch()
+            if (existing == null || existing.playerUid != playerUid || !existing.isPending) batch.set(ref,
                 CloudSchema.submissionDoc(
                     SessionSubmission(
                         sessionId = sessionId,
@@ -393,10 +393,11 @@ class FirestoreCoachRepository(
                         submittedAtEpochMs = now(),
                     ),
                 ),
-            ).awaitCloud()
+            )
             // The receipt: the coach can now read this one session, and only it.
-            db.collection(CloudSchema.SESSIONS).document(sessionId)
-                .update("sharedWith", FieldValue.arrayUnion(link.coachUid)).awaitCloud()
+            batch.update(db.collection(CloudSchema.SESSIONS).document(sessionId),
+                "sharedWith", FieldValue.arrayUnion(link.coachUid))
+            batch.commit().awaitCloud()
         }.onSuccess { clearFailure(issueKey("submit session", playerUid)) }
             .onFailure { reportFailure(issueKey("submit session", playerUid), it, saving = true) }
     }

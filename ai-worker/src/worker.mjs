@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { DEFAULT_GROQ_MODEL, EXPLANATION_VERSION, explanationHash, requestGroqExplanation, sessionEvidence, validateExplanation } from "../../functions/session-explanation-policy.mjs";
 import { ApiError, authorizedSession, candidateIdentity } from "./firebase.mjs";
 import { ExplanationStore } from "./store.mjs";
+import { recordingRequest } from "./recordings.mjs";
 
 const HTTP = { INVALID_ARGUMENT: 400, UNAUTHENTICATED: 401, PERMISSION_DENIED: 403, NOT_FOUND: 404, FAILED_PRECONDITION: 400, ABORTED: 409, RESOURCE_EXHAUSTED: 429, UNAVAILABLE: 503, INTERNAL: 500 };
 const hashKey = (type, value) => createHash("sha256").update(`volleyball-lab:${type}:${value}`).digest("hex");
@@ -43,8 +44,9 @@ export function createWorker({ fetchImpl = fetch, generate = requestGroqExplanat
       const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8", "Vary": "Origin", "X-Content-Type-Options": "nosniff" };
       if (origin && !allowed.includes(origin)) return Response.json({ error: { status: "PERMISSION_DENIED", message: "This origin is unavailable." } }, { status: 403, headers });
       if (origin) headers["Access-Control-Allow-Origin"] = origin;
-      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck, Firebase-Instance-ID-Token", "Access-Control-Max-Age": "3600" } });
+      if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "GET, HEAD, PUT, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck, Firebase-Instance-ID-Token", "Access-Control-Max-Age": "3600" } });
       const url = new URL(request.url);
+      if (url.pathname.startsWith("/recordings/")) return recordingRequest(request, env, headers, { fetchImpl, now });
       if (url.pathname === "/health" && request.method === "GET") return Response.json({ ok: true, service: "volleyball-session-ai", version: EXPLANATION_VERSION, configured: Boolean(env.GROQ_API_KEY && env.AI_DB) }, { headers });
       if (url.pathname !== "/explainTrainingSession") return Response.json({ error: { status: "NOT_FOUND", message: "Endpoint unavailable." } }, { status: 404, headers });
       if (request.method !== "POST") return Response.json({ error: { status: "INVALID_ARGUMENT", message: "Use POST." } }, { status: 405, headers: { ...headers, Allow: "POST, OPTIONS" } });

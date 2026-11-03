@@ -24,6 +24,16 @@ val sessionAiUrl = providers.gradleProperty("sessionAiUrl")
     .orElse(providers.environmentVariable("SESSION_AI_URL"))
     .orElse("")
     .get().trim()
+val recordingStorageUrl = providers.gradleProperty("recordingStorageUrl")
+    .orElse(providers.environmentVariable("RECORDING_STORAGE_URL"))
+    .orElse("").get().trim()
+if (recordingStorageUrl.isNotEmpty()) {
+    val endpoint = URI(recordingStorageUrl)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
+        endpoint.userInfo == null && endpoint.query == null && endpoint.fragment == null) {
+        "recordingStorageUrl must be a public HTTPS address without credentials, query, or fragment."
+    }
+}
 
 // Keep clean checkouts from silently producing an APK without live pose tracking.
 abstract class VerifyPoseModel : DefaultTask() {
@@ -86,9 +96,10 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 16
-        versionName = "0.1.15"
+        versionCode = 20
+        versionName = "0.1.19"
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -1,11 +1,9 @@
 package com.volleyballlab.player.data.session
 
 import android.content.Context
-import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import com.google.firebase.storage.FirebaseStorage
-import com.google.firebase.storage.StorageMetadata
 import com.volleyballlab.player.data.cloud.CloudSchema
 import com.volleyballlab.player.data.cloud.awaitCloud
 import com.volleyballlab.player.domain.model.SessionResult
@@ -17,13 +15,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** Private SDK transfers, without public download URLs or token-bearing links. */
+/** Private R2 transfers, without public download URLs or token-bearing links. */
 class SharedRecordingStore(
     private val context: Context,
     private val auth: AuthRepository,
     private val db: FirebaseFirestore,
     private val cache: VideoReviewCache,
     private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
+    private val cloud: RecordingCloudClient = RecordingCloudClient(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -43,12 +42,10 @@ class SharedRecordingStore(
         val ref = db.collection(CloudSchema.SESSIONS).document(session.id)
         if (!ref.get(Source.SERVER).awaitCloud().exists())
             ref.set(CloudSchema.sessionDoc(session, uid, emptyList(), System.currentTimeMillis())).awaitCloud()
-        val prefix = "recordings/$uid/${session.id}"
-        storage.reference.child("$prefix/video.mp4").putFile(Uri.fromFile(video),
-            StorageMetadata.Builder().setContentType("video/mp4").build()).awaitCloud()
+        cloud.uploadVideo(session.id, uid, video)
         check(auth.currentUid == uid)
-        storage.reference.child("$prefix/review.json").putBytes(reviewBytes,
-            StorageMetadata.Builder().setContentType("application/json").build()).awaitCloud()
+        cloud.uploadReview(session.id, uid, reviewBytes)
+        cloud.complete(session.id, uid)
         check(auth.currentUid == uid)
         // The ready marker is written only after both objects completed. Retry uses the same paths.
         db.collection("recordings").document(session.id).set(mapOf("ownerUid" to uid,
@@ -66,16 +63,28 @@ class SharedRecordingStore(
         check(row.getString("ownerUid") == ownerUid &&
             (viewer == ownerUid || viewer in (row.get("sharedWith") as? List<*>).orEmpty()))
         require(ownerUid.matches(SAFE_ID) && session.id.matches(SAFE_ID) && viewer.matches(SAFE_ID))
+        try { cloud.checkAccess(session.id, viewer) }
+        catch (error: RecordingTransferException) {
+            // Only missing R2 objects may use the legacy Firebase transport.
+            if (error.status != 404) throw error
+        }
         val local = File(context.cacheDir, "shared_recordings/$viewer/$ownerUid/${session.id}.mp4")
         val prefix = "recordings/$ownerUid/${session.id}"
         withContext(Dispatchers.IO) { local.parentFile?.mkdirs() }
         if (!local.isFile || cache.read(local.path, session.skill) == null) {
             val temporary = File(local.parentFile, "${session.id}.partial")
             try {
-                val metadata = storage.reference.child("$prefix/video.mp4").metadata.awaitCloud()
-                require(metadata.sizeBytes in 1..MAX_VIDEO_BYTES)
-                storage.reference.child("$prefix/video.mp4").getFile(temporary).awaitCloud()
-                val bytes = storage.reference.child("$prefix/review.json").getBytes(MAX_REVIEW_BYTES.toLong()).awaitCloud()
+                val bytes = try {
+                    cloud.downloadVideo(session.id, viewer, temporary)
+                    cloud.downloadReview(session.id, viewer)
+                } catch (error: RecordingTransferException) {
+                    if (error.status != 404) throw error
+                    // Preserve playback of recordings sent before the R2 migration.
+                    val metadata = storage.reference.child("$prefix/video.mp4").metadata.awaitCloud()
+                    require(metadata.sizeBytes in 1..LEGACY_MAX_VIDEO_BYTES)
+                    storage.reference.child("$prefix/video.mp4").getFile(temporary).awaitCloud()
+                    storage.reference.child("$prefix/review.json").getBytes(MAX_REVIEW_BYTES.toLong()).awaitCloud()
+                }
                 val review = withContext(Dispatchers.IO) { json.decodeFromString<VideoReview>(bytes.decodeToString()) }
                 require(review.width > 0 && review.height > 0)
                 check(auth.currentUid == viewer)
@@ -88,7 +97,8 @@ class SharedRecordingStore(
     }
 
     companion object {
-        const val MAX_VIDEO_BYTES = 100L * 1024 * 1024
+        const val MAX_VIDEO_BYTES = 90L * 1024 * 1024
+        private const val LEGACY_MAX_VIDEO_BYTES = 100L * 1024 * 1024
         const val MAX_REVIEW_BYTES = 10 * 1024 * 1024
         private val SAFE_ID = Regex("[A-Za-z0-9_-]{1,128}")
     }

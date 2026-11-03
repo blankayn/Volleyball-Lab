@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -146,11 +147,7 @@ internal fun CoachPlayerContent(
                 subtitle = snapshot?.member?.position?.let { stringResource(it.displayName) },
                 onBack = onBack,
                 leading = {
-                    InitialsAvatar(
-                        initials = snapshot?.member?.initials(),
-                        diameter = 40,
-                        accent = CoachAccent.Rust,
-                    )
+                    com.volleyballlab.player.feature.profile.ProfileAvatar(snapshot?.member?.playerUid, snapshot?.member?.initials(), Modifier.size(40.dp))
                 },
                 // This screen is the one most likely to be screenshotted for a
                 // report, and it is a whole page of numbers about a named person.
@@ -183,6 +180,11 @@ internal fun CoachPlayerContent(
             return@LazyColumn
         }
 
+        item(key = "profile-banner") {
+            val media = com.volleyballlab.player.feature.profile.rememberProfileMedia(snapshot.member.playerUid)
+            if (!media.banner.isNullOrBlank()) com.volleyballlab.player.feature.profile.ProfileMediaImage(media.banner,
+                "Player profile banner", Modifier.fillMaxWidth().height(150.dp).padding(horizontal = CoachGutter))
+        }
         item(key = "stats") {
             EntranceAnimation(index = 1) {
                 PlayerStatStrip(snapshot, Modifier.padding(horizontal = CoachGutter))

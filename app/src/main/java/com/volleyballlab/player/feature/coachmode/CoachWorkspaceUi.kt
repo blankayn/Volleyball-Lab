@@ -9,10 +9,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -105,35 +107,47 @@ internal fun CoachNavigationRow(
 @Composable
 internal fun CoachWorkspaceIdentity(
     name: String, subtitle: String, initials: String?, eyebrow: String, modifier: Modifier = Modifier,
+    banner: String? = null,
     portrait: (@Composable () -> Unit)? = null,
     action: (@Composable () -> Unit)? = null,
+    onPhotoClick: (() -> Unit)? = null,
+    onCoverClick: (() -> Unit)? = null,
+    mediaEnabled: Boolean = true,
 ) {
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF282D29))) {
-        Canvas(Modifier.matchParentSize()) {
-            val line = Color.White.copy(alpha = .055f)
-            repeat(9) { i ->
-                val x = size.width * .7f + i * 22.dp.toPx()
-                drawLine(line, Offset(x, 0f), Offset(x - size.height * .25f, size.height), 1.dp.toPx())
-                val y = i * 24.dp.toPx()
-                drawLine(line, Offset(size.width * .7f - y * .25f, y), Offset(size.width, y), 1.dp.toPx())
-            }
-        }
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            WorkspaceEyebrow(eyebrow, Color(0xFFF1B58F))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Surface(shape = RoundedCornerShape(18.dp), color = Color.White.copy(alpha = .10f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = .18f)), modifier = Modifier.size(64.dp)) {
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column {
+            Box(Modifier.fillMaxWidth().height(210.dp)) {
+                Box(Modifier.fillMaxWidth().height(152.dp).background(MaterialTheme.colorScheme.primaryContainer)) {
+                    com.volleyballlab.player.feature.profile.ProfileMediaImage(banner, "Profile cover photo", Modifier.fillMaxSize())
+                    if (onCoverClick != null) FilledTonalButton(onClick = onCoverClick, enabled = mediaEnabled,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+                        Icon(Icons.Rounded.PhotoCamera, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp)); Text("Edit cover", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                Box(Modifier.align(Alignment.BottomStart).padding(start = 20.dp).size(112.dp)) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(4.dp, MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxSize()) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(initials ?: "C", fontSize = 24.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text(initials ?: "·", fontSize = 30.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         portrait?.invoke()
                     }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color(0xFFD9DCD4))
+                if (onPhotoClick != null) Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary,
+                    border = BorderStroke(3.dp, MaterialTheme.colorScheme.surface), modifier = Modifier.align(Alignment.BottomEnd).size(44.dp)) {
+                    IconButton(onClick = onPhotoClick, enabled = mediaEnabled) {
+                        Icon(Icons.Rounded.PhotoCamera, "Change profile picture", Modifier.size(21.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
                 }
             }
+            Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 8.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                WorkspaceEyebrow(eyebrow)
+                Text(name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             action?.invoke()
+            }
         }
     }
 }

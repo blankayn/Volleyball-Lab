@@ -1,9 +1,21 @@
-# Session AI on Cloudflare Workers Free
+# Session AI and private recordings on Cloudflare Workers
 
-This service replaces only the saved-session AI callable. Firebase Auth and
+This service handles the saved-session AI callable and private R2 recordings. Firebase Auth and
 Firestore remain on Spark. It accepts the Firebase callable JSON protocol at
 `/explainTrainingSession`, so Android/web Firebase Functions SDKs can use a custom
 URL while automatically sending their Firebase ID token.
+
+Recordings use authenticated `/recordings/{sessionId}/video.mp4`, `review.json`
+and POST `complete` routes. Create private R2 bucket `volleyball-lab-recordings`
+and bind it as `RECORDINGS` before deploying. Both clients send Firebase ID tokens
+in bearer headers; the same virtual access gate below protects every request.
+PUT is owner-only, and GET/HEAD additionally allow explicitly shared active coaches.
+The video ceiling is 90 MiB, feedback 10 MiB. Stream uploads with Content-Length
+and the exact MIME type; do not buffer videos inside the Worker. Files are
+immutable once uploaded, and completion requires both objects. No expiry or public
+bucket access is enabled. R2 overages can incur charges independently of the
+Workers plan. See `../docs/account-and-recording-services.md` for retention,
+legacy playback and account-deletion limitations.
 
 ## Required access gate
 
@@ -35,7 +47,8 @@ published request-per-day cap.
 
 D1 stores only validated explanation prose, fingerprints, hashed owner/session/
 caller references, timestamps, and counters. Tokens, names, recordings, notes,
-and raw measurements are never stored there. Every cached read is gated against
+and raw measurements are never stored in D1. Explicitly submitted videos and pose
+feedback reside separately in private R2. Every cached explanation read is gated against
 current Firebase access and re-derived session evidence.
 
 A single atomic D1 batch claims a session lease and grants the caller up to
