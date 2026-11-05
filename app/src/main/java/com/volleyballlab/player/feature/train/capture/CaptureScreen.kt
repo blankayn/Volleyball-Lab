@@ -9,13 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -36,16 +30,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Cameraswitch
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.automirrored.rounded.VolumeOff
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -63,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -74,6 +59,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -96,7 +82,6 @@ import kotlinx.coroutines.delay
 import com.volleyballlab.player.pose.PoseDetectorUnavailableException
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.quality.PoseQuality
-import com.volleyballlab.player.ui.component.AnimatedCounter
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.VbMotion
@@ -248,215 +233,54 @@ private fun GrantedCaptureScreen(
         (state as? CaptureUiState.Finished)?.let { onSessionComplete(it.sessionId) }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        CameraPreview(
-            lensFacing = lensFacing,
-            onFrame = viewModel::onCameraFrame,
-            recordingId = (state as? CaptureUiState.Recording)?.sessionId,
-            onVideoFinalized = viewModel::onVideoFinalized,
-            onVideoClock = viewModel::onVideoClock,
-            modifier = Modifier.fillMaxSize(),
-        )
-        PoseOverlay(frame = frame, posture = livePosture, modifier = Modifier.fillMaxSize())
-
-        CaptureControls(
-            state = state,
-            livePosture = livePosture,
-            coachContext = coachContext,
-            guidedOptions = guidedOptions,
-            coachingText = coachingMessage?.text,
-            voiceMuted = muted || !preferences.voiceEnabled,
-            audioUnavailable = audioStatus == CoachingAudioStatus.Unavailable,
-            onToggleMute = {
-                if (preferences.voiceEnabled) muted = !muted
-                else android.widget.Toast.makeText(context, "Enable voice coaching in Profile", android.widget.Toast.LENGTH_SHORT).show()
-            },
-            onSpeechSettings = { runCatching { context.startActivity(CoachingAudio.settingsIntent()) } },
-            onGuidedChanged = viewModel::setGuidedAngles,
-            onRepTargetChanged = viewModel::setRepsPerAngle,
-            onRetryAngle = viewModel::onRetryAngle,
-            onSkipAngle = viewModel::onSkipAngle,
-            onStart = viewModel::onStartRequested,
-            onStop = viewModel::onStopRequested,
-            onCancelCountdown = viewModel::onCancelCountdown,
-            onRetry = viewModel::onRetryDetector,
-            onRetrySave = viewModel::onRetrySaveRequested,
-            onUseDemo = viewModel::onUseDemoDetector,
-            onSwitchCamera = {
-                lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
-                    CameraSelector.LENS_FACING_FRONT
-                } else {
-                    CameraSelector.LENS_FACING_BACK
-                }
-            },
-            onBack = onBack,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-@Composable
-internal fun CaptureControls(
-    state: CaptureUiState,
-    livePosture: LivePostureUi,
-    coachContext: LiveCoachContext,
-    guidedOptions: GuidedCaptureOptions,
-    coachingText: String?,
-    voiceMuted: Boolean,
-    audioUnavailable: Boolean,
-    onToggleMute: () -> Unit,
-    onSpeechSettings: () -> Unit,
-    onGuidedChanged: (Boolean) -> Unit,
-    onRepTargetChanged: (Int) -> Unit,
-    onRetryAngle: () -> Unit,
-    onSkipAngle: () -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    onCancelCountdown: () -> Unit,
-    onRetry: () -> Unit,
-    onUseDemo: () -> Unit,
-    onSwitchCamera: () -> Unit,
-    onBack: () -> Unit,
-    onRetrySave: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-            TopBar(
-                state = state,
-                onBack = onBack,
-                onSwitchCamera = onSwitchCamera,
-                onCancelCountdown = onCancelCountdown,
-                voiceMuted = voiceMuted,
-                onToggleMute = onToggleMute,
-            )
-
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                when (state) {
-                    is CaptureUiState.Recording -> if (state.rotation != null) {
-                        RotationCard(state.rotation, onRetryAngle, onSkipAngle, onStop)
-                    } else LivePostureCard(posture = livePosture, coachingText = state.suspensionHint ?: coachingText,
-                        modifier = Modifier.padding(horizontal = 24.dp))
-                    is CaptureUiState.Analysing -> AnalysingDisplay()
-                    is CaptureUiState.SaveFailed -> SaveFailedCard(onRetrySave)
-                    is CaptureUiState.Unavailable -> UnavailableCard(
-                        state = state,
-                        onRetry = onRetry,
-                        onUseDemo = onUseDemo,
-                    )
-
-                    else -> Unit
-                }
+    CaptureControls(
+        state = state,
+        livePosture = livePosture,
+        coachContext = coachContext,
+        guidedOptions = guidedOptions,
+        coachingText = coachingMessage?.text,
+        voiceMuted = muted || !preferences.voiceEnabled,
+        audioUnavailable = audioStatus == CoachingAudioStatus.Unavailable,
+        onToggleMute = {
+            if (preferences.voiceEnabled) muted = !muted
+            else android.widget.Toast.makeText(context, "Enable voice coaching in Profile", android.widget.Toast.LENGTH_SHORT).show()
+        },
+        onSpeechSettings = { runCatching { context.startActivity(CoachingAudio.settingsIntent()) } },
+        onGuidedChanged = viewModel::setGuidedAngles,
+        onRepTargetChanged = viewModel::setRepsPerAngle,
+        onRetryAngle = viewModel::onRetryAngle,
+        onSkipAngle = viewModel::onSkipAngle,
+        onStart = viewModel::onStartRequested,
+        onStop = viewModel::onStopRequested,
+        onCancelCountdown = viewModel::onCancelCountdown,
+        onRetry = viewModel::onRetryDetector,
+        onRetrySave = viewModel::onRetrySaveRequested,
+        onUseDemo = viewModel::onUseDemoDetector,
+        onSwitchCamera = {
+            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+                CameraSelector.LENS_FACING_FRONT
+            } else {
+                CameraSelector.LENS_FACING_BACK
             }
-
-            BottomBar(
-                state = state,
-                coachContext = coachContext,
-                guidedOptions = guidedOptions,
-                audioUnavailable = audioUnavailable,
-                onSpeechSettings = onSpeechSettings,
-                onGuidedChanged = onGuidedChanged,
-                onRepTargetChanged = onRepTargetChanged,
-                onStart = onStart,
-                onStop = onStop,
+        },
+        onBack = onBack,
+        modifier = modifier.fillMaxSize(),
+        cameraContent = {
+            CameraPreview(
+                lensFacing = lensFacing,
+                onFrame = viewModel::onCameraFrame,
+                recordingId = (state as? CaptureUiState.Recording)?.sessionId,
+                onVideoFinalized = viewModel::onVideoFinalized,
+                onVideoClock = viewModel::onVideoClock,
+                modifier = Modifier.fillMaxSize(),
             )
-        }
-
-        // Anchor both start cues to the camera's centre, independently of the
-        // changing top/bottom controls and their widths.
-        when (state) {
-            is CaptureUiState.Framing -> if (state.isHoldingStill) HoldStillRing(state)
-            is CaptureUiState.CountingDown -> CountdownDisplay(state.secondsLeft)
-            else -> Unit
-        }
-    }
-}
-
-@Composable
-private fun TopBar(
-    state: CaptureUiState,
-    onBack: () -> Unit,
-    onSwitchCamera: () -> Unit,
-    onCancelCountdown: () -> Unit,
-    voiceMuted: Boolean,
-    onToggleMute: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(
-            onClick = if (state is CaptureUiState.CountingDown) onCancelCountdown else onBack,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = stringResource(R.string.capture_cancel),
-                tint = Color.White,
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        if (state is CaptureUiState.Recording) RecordingIndicator(state.elapsedMs)
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onToggleMute) {
-            Icon(if (voiceMuted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
-                contentDescription = if (voiceMuted) "Unmute voice coaching" else "Mute voice coaching",
-                tint = Color.White)
-        }
-        // Hidden during recording: switching lenses mid-drill rebinds the camera,
-        // which drops frames and resets tracking, silently corrupting the session.
-        AnimatedVisibility(visible = state is CaptureUiState.Framing) {
-            IconButton(onClick = onSwitchCamera) {
-                Icon(
-                    imageVector = Icons.Rounded.Cameraswitch,
-                    contentDescription = stringResource(R.string.capture_switch_camera),
-                    tint = Color.White,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecordingIndicator(elapsedMs: Long) {
-    val transition = rememberInfiniteTransition(label = "recordingPulse")
-    val pulse by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = VbMotion.Standard),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "recordingPulseAlpha",
+            PoseOverlay(frame = frame, posture = livePosture, modifier = Modifier.fillMaxSize())
+        },
     )
-
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.vbColors.cameraScrim,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(10.dp)
-                    .alpha(pulse)
-                    .background(MaterialTheme.colorScheme.error, CircleShape)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = formatElapsed(elapsedMs),
-                style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
-                color = Color.White,
-            )
-        }
-    }
 }
 
 @Composable
-private fun CountdownDisplay(secondsLeft: Int) {
+internal fun CountdownDisplay(secondsLeft: Int) {
     val reduceMotion = LocalReduceMotion.current
     AnimatedContent(
         targetState = secondsLeft,
@@ -489,7 +313,7 @@ private fun CountdownDisplay(secondsLeft: Int) {
  * since it visibly empties the instant they drift out of frame.
  */
 @Composable
-private fun HoldStillRing(state: CaptureUiState.Framing) {
+internal fun HoldStillRing(state: CaptureUiState.Framing) {
     // Smooths the gate's 100 ms steps into continuous motion. Collapses to a snap
     // under reduce-motion, where the number still carries the whole message.
     val progress by animateFloatAsState(
@@ -557,8 +381,8 @@ private fun HoldStillRing(state: CaptureUiState.Framing) {
 }
 
 @Composable
-private fun AnalysingDisplay() {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.vbColors.cameraScrim) {
+internal fun AnalysingDisplay() {
+    Surface(shape = MaterialTheme.shapes.large, color = LiveSessionPanel) {
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -575,7 +399,7 @@ private fun AnalysingDisplay() {
 }
 
 @Composable
-private fun SaveFailedCard(onRetry: () -> Unit) {
+internal fun SaveFailedCard(onRetry: () -> Unit) {
     Surface(
         modifier = Modifier.padding(24.dp),
         shape = MaterialTheme.shapes.large,
@@ -647,13 +471,13 @@ internal fun UnavailableCard(
 }
 
 @Composable
-private fun GuidedSetupCard(
+internal fun GuidedSetupCard(
     options: GuidedCaptureOptions,
     angleReady: Boolean,
     onGuidedChanged: (Boolean) -> Unit,
     onRepTargetChanged: (Int) -> Unit,
 ) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.vbColors.cameraScrim) {
+    Surface(shape = MaterialTheme.shapes.large, color = LiveSessionPanel) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -661,130 +485,26 @@ private fun GuidedSetupCard(
                     Text("Front → side → rear", style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.75f))
                 }
-                Switch(checked = options.enabled, onCheckedChange = onGuidedChanged)
+                Switch(checked = options.enabled, onCheckedChange = onGuidedChanged,
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = Color.White, checkedTrackColor = com.volleyballlab.player.ui.theme.RustPrimary40,
+                        uncheckedThumbColor = Color.White, uncheckedTrackColor = Color.White.copy(alpha = 0.12f),
+                    ))
             }
             if (options.enabled) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(5, 10).forEach { reps ->
                         FilterChip(selected = options.repsPerAngle == reps,
-                            onClick = { onRepTargetChanged(reps) }, label = { Text("$reps reps / angle") })
+                            onClick = { onRepTargetChanged(reps) }, label = { Text("$reps reps / angle") },
+                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                labelColor = Color.White, selectedLabelColor = Color.White,
+                                selectedContainerColor = Color.White.copy(alpha = 0.12f),
+                            ))
                     }
                 }
                 Text(if (angleReady) "Front view ready" else "Face the camera, with your whole body visible",
                     style = MaterialTheme.typography.labelMedium, color = Color.White)
             }
-        }
-    }
-}
-
-@Composable
-private fun RotationCard(rotation: RotationUi, onRetry: () -> Unit, onSkip: () -> Unit, onFinish: () -> Unit) {
-    Surface(modifier = Modifier.padding(horizontal = 24.dp), shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.vbColors.cameraScrim) {
-        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${rotation.requestedAngle.name} view", style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            Spacer(Modifier.height(12.dp))
-            Text(rotation.message, color = Color.White, style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center)
-            Spacer(Modifier.height(12.dp))
-            if (rotation.secondsLeft != null) CountdownDisplay(rotation.secondsLeft)
-            else Text(if (rotation.timedOut) "The angle is still unclear. Adjust your position, retry, or skip this view."
-                else "Checking your angle. Hold steady once you’ve turned.",
-                color = Color.White.copy(alpha = 0.8f), textAlign = TextAlign.Center)
-            if (rotation.timedOut) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(onClick = onRetry) { Text("Retry", color = Color.White) }
-                    TextButton(onClick = onSkip) { Text("Skip angle", color = Color.White) }
-                }
-            }
-            TextButton(onClick = onFinish) { Text("Finish session", color = Color.White) }
-        }
-    }
-}
-
-@Composable
-private fun BottomBar(
-    state: CaptureUiState,
-    coachContext: LiveCoachContext,
-    guidedOptions: GuidedCaptureOptions,
-    audioUnavailable: Boolean,
-    onSpeechSettings: () -> Unit,
-    onGuidedChanged: (Boolean) -> Unit,
-    onRepTargetChanged: (Int) -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        when (state) {
-            is CaptureUiState.Framing -> {
-                GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
-                Spacer(Modifier.height(10.dp))
-                if (audioUnavailable) TextButton(onClick = onSpeechSettings) {
-                    Text("Voice unavailable · Open speech settings", color = Color.White)
-                }
-                FramingGuidance(quality = state.quality, autoStartArmed = state.autoStartArmed)
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onStart,
-                    enabled = state.quality.isAcceptable && state.angleReady,
-                    shape = VbButtonShape,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
-                ) {
-                    Text(stringResource(R.string.capture_start))
-                }
-            }
-
-            is CaptureUiState.Recording -> {
-                // Who is coaching this set: the linked human coach when there is
-                // one (name + their drill + their latest note), else the
-                // on-device coach. One line, above the count, so the athlete
-                // knows whose instructions the card above is speaking with.
-                LiveCoachStrip(
-                    context = coachContext,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = if (guidedOptions.enabled) {
-                        "${state.angle.name} view · ${state.stageMetrics.reps}/${guidedOptions.repsPerAngle} reps"
-                    } else "${state.totalMetrics.reps} completed reps",
-                    style = MaterialTheme.typography.titleMedium, color = Color.White,
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedCounter(
-                        value = state.totalMetrics.validReps,
-                        style = MaterialTheme.typography.headlineSmall.copy(color = Color.White),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "good reps · streak ${state.totalMetrics.streak}\nBest ${state.totalMetrics.bestStreak} · form ${state.totalMetrics.estimatedFormScore?.let { "$it/100" } ?: "—"} (estimated)",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onStop,
-                    shape = VbButtonShape,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text(stringResource(R.string.capture_stop))
-                }
-            }
-
-            else -> Unit
         }
     }
 }
@@ -803,7 +523,7 @@ private fun BottomBar(
  * unreadable mid-rep, while dots answer "how many things are off" without words.
  */
 @Composable
-private fun LivePostureCard(
+internal fun LivePostureCard(
     posture: LivePostureUi,
     coachingText: String? = null,
     modifier: Modifier = Modifier,
@@ -811,8 +531,8 @@ private fun LivePostureCard(
     val description = stringResource(R.string.cd_live_posture)
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.vbColors.cameraScrim,
-        modifier = modifier.clearAndSetSemantics { contentDescription = description },
+        color = LiveSessionPanel,
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = description },
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -962,71 +682,6 @@ private fun LiveCueDots(posture: LivePostureUi, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Who is in the session with the athlete, in one strip.
- *
- * A linked human coach outranks the device: name, the drill they set, and their
- * latest note when there is one. With no link, the strip says the on-device
- * coach is judging - so the card above is never a voice from nowhere, and the
- * copy never implies a person is watching live when nobody is.
- */
-@Composable
-private fun LiveCoachStrip(
-    context: LiveCoachContext,
-    modifier: Modifier = Modifier,
-) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.vbColors.cameraScrim) {
-        Column(
-            modifier = modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val name = context.displayName
-            if (name == null) {
-                Text(
-                    text = stringResource(R.string.live_coach_device),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(R.string.live_coach_device_sub),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.live_coach_human_title, name),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                )
-                context.assignment?.let { assignment ->
-                    Text(
-                        text = stringResource(
-                            R.string.live_coach_assignment,
-                            assignment.title,
-                            assignment.targetSets,
-                            assignment.targetReps,
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                context.latestNote?.text?.takeIf { it.isNotBlank() }?.let { note ->
-                    Text(
-                        text = "“${note.take(COACH_NOTE_PREVIEW)}”",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.vbColors.cueGood,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-        }
-    }
-}
-
 private fun formatLiveMeasured(cue: FormCue, measured: Float): String = when (cue.unit) {
     CueUnit.Degrees -> "${measured.roundToInt()}° · ${cue.target.start.roundToInt()}–${cue.target.endInclusive.roundToInt()}°"
     CueUnit.Metres -> String.format(Locale.US, "%.2f m · %.2f–%.2f m", measured, cue.target.start, cue.target.endInclusive)
@@ -1034,7 +689,6 @@ private fun formatLiveMeasured(cue: FormCue, measured: Float): String = when (cu
 }
 
 private const val SEVERE_LIVE_SCORE = 0.35f
-private const val COACH_NOTE_PREVIEW = 90
 
 /**
  * The live framing feedback.
@@ -1049,7 +703,7 @@ private const val COACH_NOTE_PREVIEW = 90
  * them afterwards.
  */
 @Composable
-private fun FramingGuidance(quality: PoseQuality, autoStartArmed: Boolean) {
+internal fun FramingGuidance(quality: PoseQuality, autoStartArmed: Boolean) {
     val issue = quality.primaryIssue
     val message = if (issue == null) {
         stringResource(R.string.quality_ok)
@@ -1057,7 +711,7 @@ private fun FramingGuidance(quality: PoseQuality, autoStartArmed: Boolean) {
         stringResource(issue.message)
     }
 
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.vbColors.cameraScrim) {
+    Surface(shape = MaterialTheme.shapes.large, color = LiveSessionPanel) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1173,7 +827,7 @@ private fun CameraPermissionGate(
 private val HoldRingDiameter = 200.dp
 private val HoldRingStroke = 8.dp
 
-private fun formatElapsed(elapsedMs: Long): String {
+internal fun formatElapsed(elapsedMs: Long): String {
     val totalSeconds = elapsedMs / 1_000
     return String.format(Locale.US, "%d:%02d", totalSeconds / 60, totalSeconds % 60)
 }

@@ -1,0 +1,23 @@
+<resources>
+    <string name="capture_live_title">Live Session</string>
+    <string name="capture_finish_session">Finish Session</string>
+    <string name="capture_setup_label">Camera setup</string>
+    <string name="capture_get_ready">Get ready</string>
+    <string name="capture_front_view">Front View</string>
+    <string name="capture_side_view">Side View</string>
+    <string name="capture_rear_view">Rear View</string>
+    <string name="capture_free_practice">Free practice</string>
+    <string name="capture_mute">Mute voice coaching</string>
+    <string name="capture_unmute">Unmute voice coaching</string>
+    <string name="capture_speech_settings">Voice unavailable · Open speech settings</string>
+    <string name="capture_rep_target">%1$d / %2$d reps</string>
+    <string name="capture_rep_count">%1$d reps</string>
+    <string name="capture_completed">Completed</string>
+    <string name="capture_good_reps">Good reps</string>
+    <string name="capture_session_metrics">Streak %1$d · Best %2$d · Form %3$s (estimated)</string>
+    <string name="capture_next_view">View complete. Let’s check another angle.</string>
+    <string name="capture_angle_unclear">Angle not confirmed. Adjust your position, retry, or skip this view.</string>
+    <string name="capture_angle_countdown">Angle confirmed · Starting in %1$d</string>
+    <string name="capture_skip_angle">Skip Angle</string>
+    <string name="capture_retry_angle">Retry</string>
+</resources>
