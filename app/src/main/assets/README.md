@@ -39,6 +39,23 @@ tracking, so the app keeps `full` until a real-device video benchmark supports
 a switch. A second run using this exact Android asset reproduced every primary
 metric exactly, including a direct recomputation from all detected joint rows.
 
+The same pinned `full` asset now has an independent **3-D** measurement:
+**172.716 mm** on 969 valid MADS volleyball-video frames (12 hip-relative joint
+pairs per frame, continuous Python VIDEO inference). A separate general-pose
+MPI-INF-3DHP pilot measured 143.274 mm. Both exceed the manuscript's 50 mm target.
+These are distinct from the 2-D pixel errors above, do not establish separate
+results for all five volleyball skills, and do not measure Android LIVE_STREAM
+accuracy. Protocols, raw-reference verification and reproduction commands are in
+[3D benchmark status](../../../../docs/mpjpe-3d-benchmark-status.md).
+
+`pose_benchmark.json` is the verified MADS measurement summary used by the
+assessment card's **About 3D accuracy** dialog. It contains aggregate benchmark
+data and provenance hashes, not recordings or personal information. Generate it
+with `tools/pose-pipeline/export_mads_benchmark.py` as documented in the linked
+status file. `verifyPoseModel` requires its model hash and scope to match the
+packaged full pose asset. Session MPJPE remains unavailable without a reference
+recording for that session.
+
 To deliberately benchmark a different variant, change the pinned URL, checksum,
 and filename in `app/build.gradle.kts`; pass the new filename to `MediaPipePoseDetector.create(...)`,
 whose `modelAsset` parameter defaults to `DEFAULT_MODEL_ASSET`.

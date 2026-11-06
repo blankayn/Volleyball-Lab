@@ -49,6 +49,7 @@ internal fun CoachAssessmentCard(assessment: CoachAssessment, modifier: Modifier
                     style = MaterialTheme.typography.bodySmall)
             }
             Text(stringResource(R.string.coach_assessment_mpjpe), style = MaterialTheme.typography.bodySmall)
+            PoseBenchmarkDisclosure()
             if (assessment.overallScore == null) {
                 Text(stringResource(R.string.coach_assessment_more_evidence), color = MaterialTheme.colorScheme.primary)
             }

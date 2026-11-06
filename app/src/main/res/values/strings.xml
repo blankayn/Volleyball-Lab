@@ -757,7 +757,15 @@
     <string name="coach_assessment_confidence">Validated model confidence: %1$s</string>
     <string name="coach_assessment_unavailable">Not established</string>
     <string name="coach_assessment_duration">Mean detected movement window: %1$.2f s</string>
-    <string name="coach_assessment_mpjpe">3D joint error (MPJPE): not independently measured</string>
+    <string name="coach_assessment_mpjpe">This session’s 3D joint error: not measured</string>
+    <string name="pose_benchmark_open">About 3D accuracy</string>
+    <string name="pose_benchmark_title">3D pose benchmark</string>
+    <string name="pose_benchmark_value">MADS benchmark: %1$.1f mm MPJPE</string>
+    <string name="pose_benchmark_definition">MPJPE measures the average distance between predicted and reference 3D joints. Lower is better. The research target is less than 50 mm.</string>
+    <string name="pose_benchmark_sample">Compared with independent motion capture: %1$d valid reference frames and %2$d joint comparisons.</string>
+    <string name="pose_benchmark_scope">One athlete and one camera view, evaluated offline. This does not establish accuracy for all five skills or live phone recordings.</string>
+    <string name="pose_benchmark_session">This is a test of the pose model, not your technique score or the error in your recording. Your session needs its own reference measurements to calculate MPJPE.</string>
+    <string name="pose_benchmark_close">Close</string>
     <string name="coach_assessment_more_evidence">Record at least three clear repetitions with your arms and legs visible for an overall estimate.</string>
     <string name="coach_assessment_evidence">Median observed position: %1$s across %2$d measurable repetitions</string>
     <string name="coach_assessment_reference">Reference range: %1$s–%2$s</string>
