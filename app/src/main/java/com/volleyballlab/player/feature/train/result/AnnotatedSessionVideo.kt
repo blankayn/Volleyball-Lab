@@ -125,7 +125,7 @@ private class VideoReviewViewModel(context: Context, private val path: String, p
 fun AnnotatedSessionVideo(session: SessionResult, path: String) {
     val context = LocalContext.current
     val model: VideoReviewViewModel = viewModel(
-        key = "video-review-${session.id}",
+        key = "video-review-${session.id}-$path",
         factory = viewModelFactory { initializer { VideoReviewViewModel(context, path, session.skill) } },
     )
     val state by model.state.collectAsStateWithLifecycle()

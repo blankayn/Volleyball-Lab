@@ -1,19 +1,24 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { esc } from "./format";
+import { attachRecordingSkeleton } from "./recording-skeleton";
 
 const DEFAULT_ENDPOINT = "https://volleyball-lab-session-ai.volleyball-lab-session-ai.workers.dev";
 
 export function sharedRecordingPanel(sessionId: string): string {
-  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;background:#111;border-radius:12px"></video></section>`;
+  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><div style="position:relative"><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;object-fit:contain;background:#111;border-radius:12px;vertical-align:top"></video><canvas data-recording-skeleton aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas></div><label data-skeleton-option hidden><input type="checkbox" checked> Show MediaPipe skeleton</label></section>`;
 }
 
 export function wireSharedRecordings(root: HTMLElement): () => void {
   const viewer = auth.currentUser?.uid;
   const urls = new Set<string>();
   const requests = new Set<AbortController>();
+  const overlays = new Set<() => void>();
   let disposed = false;
   const clear = () => {
+    overlays.forEach(dispose => dispose());
+    overlays.clear();
+    root.querySelectorAll<HTMLElement>("[data-skeleton-option]").forEach(option => { option.hidden = true; });
     requests.forEach(request => request.abort());
     requests.clear();
     root.querySelectorAll<HTMLVideoElement>("[data-recording-video]").forEach(video => {
@@ -56,6 +61,27 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
       const url = URL.createObjectURL(blob); urls.add(url);
       video.src = url; video.hidden = false; button.hidden = true;
       status.textContent = "Private recording ready to play.";
+      try {
+        const review = await fetch(`${endpoint.href.replace(/\/$/, "")}/recordings/${sessionId}/review.json`, {
+          headers: { Authorization: `Bearer ${token}` }, signal: controller.signal, redirect: "error", cache: "no-store",
+        });
+        const limit = 10 * 1024 * 1024;
+        if (!review.ok || Number(review.headers.get("content-length")) > limit) throw new Error();
+        const blob = await review.blob();
+        if (blob.size > limit) throw new Error();
+        const data: unknown = JSON.parse(await blob.text());
+        if (disposed || controller.signal.aborted || !panel.isConnected || auth.currentUser?.uid !== viewer) return;
+        const canvas = panel.querySelector<HTMLCanvasElement>("[data-recording-skeleton]")!;
+        const option = panel.querySelector<HTMLElement>("[data-skeleton-option]")!;
+        const toggle = option.querySelector<HTMLInputElement>("input")!;
+        const detach = attachRecordingSkeleton(video, canvas, toggle, data);
+        if (!detach) throw new Error();
+        overlays.add(detach);
+        option.hidden = false;
+      } catch {
+        if (!disposed && panel.isConnected && auth.currentUser?.uid === viewer)
+          status.textContent = "Recording ready to play. Pose landmarks are unavailable.";
+      }
     } catch (error) {
       if (!disposed && panel.isConnected) status.textContent = error instanceof Error && error.name !== "AbortError" ? error.message : "Loading timed out. Please try again.";
     } finally {

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 let recording;
 const auth = { currentUser: null };
-const original = { fetch: globalThis.fetch, window: globalThis.window, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+const original = { fetch: globalThis.fetch, window: globalThis.window, resize: globalThis.ResizeObserver, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
 before(async () => {
   globalThis.__r2WebCheck = { auth };
   const result = await build({ entryPoints: [fileURLToPath(new URL("../src/lib/shared-recording.ts", import.meta.url))], bundle: true, platform: "node", format: "cjs", write: false,
@@ -22,28 +22,40 @@ before(async () => {
 beforeEach(() => {
   globalThis.__r2WebCheck = { auth, urls: [], revoked: [] };
   auth.currentUser = { uid: "coach", getIdToken: async () => "signed-firebase-token" };
-  globalThis.window = { setTimeout, clearTimeout };
+  globalThis.window = { setTimeout, clearTimeout, cancelAnimationFrame() {} };
+  globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   URL.createObjectURL = blob => { assert.equal(blob.type, "video/mp4"); globalThis.__r2WebCheck.urls.push(blob); return "blob:private-video"; };
   URL.revokeObjectURL = url => globalThis.__r2WebCheck.revoked.push(url);
 });
-afterEach(() => { globalThis.fetch = original.fetch; globalThis.window = original.window; URL.createObjectURL = original.create; URL.revokeObjectURL = original.revoke; });
+afterEach(() => { globalThis.fetch = original.fetch; globalThis.window = original.window; globalThis.ResizeObserver = original.resize; URL.createObjectURL = original.create; URL.revokeObjectURL = original.revoke; });
 after(() => { delete globalThis.__r2WebCheck; });
 function ui() {
-  const video = { hidden: true, src: "", pause() {}, removeAttribute() { this.src = ""; }, load() {} };
+  const video = Object.assign(new EventTarget(), { hidden: true, src: "", paused: true, currentTime: 0,
+    videoWidth: 100, videoHeight: 200, pause() {}, removeAttribute() { this.src = ""; }, load() {} });
   const status = { textContent: "" };
-  const panel = { isConnected: true, dataset: { recordingPanel: "session" }, querySelector: selector => selector === "video" ? video : status };
+  const toggle = Object.assign(new EventTarget(), { checked: true });
+  const option = { hidden: true, querySelector: () => toggle };
+  const drawn = [];
+  const canvas = { clientWidth: 200, clientHeight: 200, getContext: () => ({
+    clearRect() { drawn.length = 0; }, arc(x, y) { drawn.push([x, y]); },
+    setTransform() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {},
+  }) };
+  const nodes = { video, "[data-recording-status]": status, "[data-recording-skeleton]": canvas, "[data-skeleton-option]": option };
+  const panel = { isConnected: true, dataset: { recordingPanel: "session" }, querySelector: selector => nodes[selector] };
   const button = { disabled: false, hidden: false, closest: () => panel };
   let click;
-  const root = { addEventListener(_name, listener) { click = listener; }, removeEventListener() {}, querySelectorAll: () => [video] };
-  return { video, status, button, root, click: () => click({ target: { closest: () => button } }) };
+  const root = { addEventListener(_name, listener) { click = listener; }, removeEventListener() {},
+    querySelectorAll: selector => selector === "[data-skeleton-option]" ? [option] : [video] };
+  return { video, status, button, root, option, toggle, drawn, click: () => click({ target: { closest: () => button } }) };
 }
 
 test("coach video loads with bearer authorization and its private object URL is cleared on sign-out", async () => {
   const f = ui();
   globalThis.fetch = async (url, init) => {
-    assert.equal(url, "https://storage.example/recordings/session/video.mp4");
     assert.equal(init.headers.Authorization, "Bearer signed-firebase-token");
     assert.equal(init.redirect, "error"); assert.equal(init.cache, "no-store");
+    if (url.endsWith("/review.json")) return new Response(null, { status: 404 });
+    assert.equal(url, "https://storage.example/recordings/session/video.mp4");
     return new Response("synthetic-video", { headers: { "Content-Type": "video/mp4" } });
   };
   const dispose = recording.wireSharedRecordings(f.root);
@@ -52,6 +64,36 @@ test("coach video loads with bearer authorization and its private object URL is 
   auth.currentUser = null; globalThis.__r2WebCheck.changed(null);
   assert.equal(f.video.src, ""); assert.equal(f.video.hidden, true);
   assert.deepEqual(globalThis.__r2WebCheck.revoked, ["blob:private-video"]);
+  dispose();
+});
+
+test("private pose frames fit the video, follow seeking, and clear on sign-out", async () => {
+  const f = ui();
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push([url, init.headers.Authorization]);
+    if (url.endsWith("/review.json")) return Response.json({ sampleIntervalMs: 100, frames: [
+      { timestampMs: 0, points: Array.from({ length: 33 }, () => ({ x: 0.25, y: 0.5, confidence: 1 })) },
+      { timestampMs: 100, points: [] },
+    ] });
+    return new Response("synthetic-video", { headers: { "Content-Type": "video/mp4" } });
+  };
+  const dispose = recording.wireSharedRecordings(f.root);
+  await f.click();
+  assert.deepEqual(requests, ["video.mp4", "review.json"].map(name =>
+    [`https://storage.example/recordings/session/${name}`, "Bearer signed-firebase-token"]));
+  assert.equal(f.option.hidden, false);
+  assert.deepEqual(f.drawn[0], [75, 100]);
+  f.video.currentTime = 0.1;
+  f.video.dispatchEvent(new Event("seeked"));
+  assert.equal(f.drawn.length, 0);
+  f.video.currentTime = 0;
+  f.video.dispatchEvent(new Event("seeked"));
+  assert.equal(f.drawn.length, 22);
+  auth.currentUser = null;
+  globalThis.__r2WebCheck.changed(null);
+  assert.equal(f.drawn.length, 0);
+  assert.equal(f.option.hidden, true);
   dispose();
 });
 
