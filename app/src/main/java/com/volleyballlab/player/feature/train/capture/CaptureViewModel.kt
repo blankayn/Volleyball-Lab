@@ -560,7 +560,7 @@ class CaptureViewModel(
         val message = summary + lastRepSummary.takeIf { it.isNotBlank() }?.let { "$it " }.orEmpty() + direction
         _coachingMessage.value = null
         _livePosture.value = LivePostureUi.Idle
-        _uiState.value = state.copy(rotation = RotationUi(angle, index, message = message))
+        _uiState.value = state.copy(rotation = RotationUi(angle, index, message = message, instruction = direction))
         publish(reactiveCoach.onRotation(message, lastFrameMs ?: 0L))
     }
 

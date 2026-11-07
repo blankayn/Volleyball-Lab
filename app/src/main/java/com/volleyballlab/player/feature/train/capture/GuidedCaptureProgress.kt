@@ -41,6 +41,8 @@ data class RotationUi(
     val elapsedMs: Long = 0,
     val secondsLeft: Int? = null,
     val message: String,
+    /** Short direction for the visual card; the full message remains in voice coaching. */
+    val instruction: String = message,
 ) {
     val timedOut: Boolean get() = elapsedMs >= 10_000
 }
