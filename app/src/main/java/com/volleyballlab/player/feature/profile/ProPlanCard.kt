@@ -21,22 +21,22 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val repository = graph.planRepository as FirestorePlanRepository
     val plan by repository.plan.collectAsStateWithLifecycle(UserPlan.Free)
-    val reports by graph.trainingWorkspaceRepository.reports.collectAsStateWithLifecycle(emptyList())
     val account by graph.authRepository.currentUser.collectAsStateWithLifecycle(null)
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var showCodeDialog by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
-    val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
-    val today by dayFlow.collectAsStateWithLifecycle(java.time.LocalDate.now())
-    val usage = ReportAllowance.usage(reports, plan, today)
     Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = AccountMenuSurface) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(if (plan.isPro) "Pro account" else "Free account", style = MaterialTheme.typography.titleMedium)
             if (account?.uid == ProEntitlement.OWNER_UID) Text("Owner Pro access", style = MaterialTheme.typography.bodySmall)
-            Text(if (usage.unlimited) "Unlimited detailed reports" else "${usage.remaining}/${usage.limit} detailed reports left this week")
-            Text("Pro includes all 15 drills, unlimited detailed reports, and coach connection. Free includes five starter drills.", style = MaterialTheme.typography.bodySmall)
+            Text("Pro includes all 15 drills and coach connection. Free includes five starter drills.", style = MaterialTheme.typography.bodySmall)
+            Text(if (plan.isPro) "Unlimited detailed AI reports."
+                else "${ReportAllowance.FREE_WEEKLY_LIMIT} detailed AI reports per week. The allowance resets every Monday.",
+                style = MaterialTheme.typography.bodySmall)
+            Text("Automatic session summaries are included with both plans after each live session.",
+                style = MaterialTheme.typography.bodySmall)
             if (!plan.isPro) {
                 Text("Enter an access code to activate Pro. No payment is collected.", style = MaterialTheme.typography.bodySmall)
                 Button(enabled = account != null && !busy, onClick = { code = ""; message = null; showCodeDialog = true }) {

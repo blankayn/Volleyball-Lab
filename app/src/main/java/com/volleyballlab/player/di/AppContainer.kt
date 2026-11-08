@@ -195,6 +195,9 @@ class AppContainer(private val context: Context) {
     val coachingPreferencesRepository: CoachingPreferencesRepository by lazy {
         DataStoreCoachingPreferencesRepository(context, authRepository)
     }
+    val liveCoachingRepository: com.volleyballlab.player.data.ai.LiveCoachingRepository by lazy {
+        com.volleyballlab.player.data.ai.CloudLiveCoachingRepository(context)
+    }
 
     val assessmentRepository: AssessmentRepository by lazy {
         DataStoreAssessmentRepository(context, authRepository)

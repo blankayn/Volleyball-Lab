@@ -28,6 +28,8 @@ for a portrait saved only on that phone by an older app. Version 0.1.18 addition
 backfills a phone-only portrait when its owner opens/resumes the app: a server
 transaction writes it only if the canonical photo field is absent. Existing photos
 and explicit removals are preserved, and a selected banner is not replaced.
+Both profile editors let owners reposition and zoom a selected cover before saving;
+the resulting shared banner image preserves that crop for connected viewers.
 
 For coaches, `coachPhotos/{uid}` remains a portrait-only compatibility projection
 for older Android versions. A coach's own account header may also read their private

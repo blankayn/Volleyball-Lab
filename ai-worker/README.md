@@ -1,6 +1,6 @@
 # Session AI and private recordings on Cloudflare Workers
 
-This service handles the saved-session AI callable and private R2 recordings. Firebase Auth and
+This service handles saved-session explanations, live angle coaching, and private R2 recordings. Firebase Auth and
 Firestore remain on Spark. It accepts the Firebase callable JSON protocol at
 `/explainTrainingSession`, so Android/web Firebase Functions SDKs can use a custom
 URL while automatically sending their Firebase ID token.
@@ -25,7 +25,10 @@ shared COACH with an Active roster connection. No gate document is stored; an
 authorized REST read returns `404 NOT_FOUND`. Missing rules fail closed with 403.
 The Worker also requires a successful source session read using the same token.
 Google verifies the ID token and existing rules; the Worker has no Firebase
-administrator credential and never accepts client-provided scores.
+administrator credential. Saved-session explanations never accept client-provided scores.
+Live coaching separately accepts a bounded local measurement summary without
+writing or verifying a saved session. See `../docs/live-coaching.md` for its
+evidence policy, hands-free flow, quotas, and free-only voice activation.
 
 ## Deployment
 

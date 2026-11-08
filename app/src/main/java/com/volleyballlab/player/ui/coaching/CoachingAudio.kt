@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -14,6 +15,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.volleyballlab.player.domain.repository.CoachingPreferences
 import java.util.Locale
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,8 +24,8 @@ enum class CoachingAudioStatus { Initializing, Ready, Unavailable }
 
 /**
  * Screen-owned speech. Attach to the screen lifecycle, then close on disposal.
- * Camera images and cues never leave the app: only an installed offline English
- * voice is used. An unavailable voice leaves all visual coaching working.
+ * Short cues use installed phone speech. At a break, a fully buffered optional
+ * coach WAV and its next-view instruction share the same audio focus and lane.
  */
 class CoachingAudio(
     context: Context,
@@ -46,6 +48,13 @@ class CoachingAudio(
     private var sequence = 0L
     private var hasAudioFocus = false
     private var engineGeneration = 0L
+    private data class Segment(val text: String, val voicePath: String? = null)
+    private val guidanceSegments = ArrayDeque<Segment>()
+    private var guidanceFinished: (() -> Unit)? = null
+    private var player: MediaPlayer? = null
+    private var playingFile: String? = null
+    private val guidanceNext = Runnable { playNextGuidance() }
+    private val speechWatchdog = Runnable { currentUtterance?.let(::utteranceFinished) }
 
     private val audioAttributes = AudioAttributes.Builder()
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -101,9 +110,34 @@ class CoachingAudio(
         priority: SpeechPriority = SpeechPriority.Correction,
         expiresInMs: Long = 5_000,
     ) = onMain {
-        if (!canSpeak()) return@onMain
+        if (!canSpeak() || guidanceFinished != null) return@onMain
         val now = SystemClock.elapsedRealtime()
         if (pacer.offer(CoachingSpeech(text, key, priority, now, expiresInMs), now)) pump()
+    }
+
+    /** One complete coaching turn; completion also fires for mute/focus/error. */
+    fun playGuidance(text: String, voicePath: String? = null, instruction: String = "", onFinished: () -> Unit = {}) = onMain {
+        stopNow()
+        if (!canPlay() || (_status.value != CoachingAudioStatus.Ready && voicePath == null)) {
+            voicePath?.let { File(it).delete() }
+            onFinished()
+            return@onMain
+        }
+        guidanceFinished = onFinished
+        if (text.isNotBlank()) guidanceSegments.addLast(Segment(text, voicePath))
+        if (instruction.isNotBlank()) guidanceSegments.addLast(Segment(instruction))
+        playNextGuidance()
+    }
+
+    /** Countdown has its own rhythm, outside the correction cooldown. */
+    fun announceCountdown(seconds: Int) = onMain {
+        if (!canSpeak() || guidanceFinished != null) return@onMain
+        stopNow()
+        if (!requestFocus()) return@onMain
+        val id = "countdown-${++sequence}"
+        currentUtterance = id
+        if (engine?.speak(seconds.toString(), TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) utteranceFailed(id)
+        else main.postDelayed(speechWatchdog, 1_500)
     }
 
     /** The caller consumes a completed-rep event once, rather than each redraw. */
@@ -180,12 +214,54 @@ class CoachingAudio(
         _status.value = CoachingAudioStatus.Ready
     }
 
-    private fun canSpeak(): Boolean = !closed && foreground && sessionActive &&
-        !muted && preferences.voiceEnabled && _status.value == CoachingAudioStatus.Ready
+    private fun canPlay(): Boolean = !closed && foreground && sessionActive && !muted && preferences.voiceEnabled
+    private fun canSpeak(): Boolean = canPlay() && _status.value == CoachingAudioStatus.Ready
+
+    private fun requestFocus(): Boolean {
+        if (hasAudioFocus) return true
+        hasAudioFocus = audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return hasAudioFocus
+    }
+
+    private fun playNextGuidance() {
+        if (!canPlay() || guidanceSegments.isEmpty() || !requestFocus()) {
+            stopNow()
+            return
+        }
+        val segment = guidanceSegments.removeFirst()
+        val id = "coach-break-${++sequence}"
+        currentUtterance = id
+        // A missing completion callback must never trap an athlete in a break.
+        main.removeCallbacks(speechWatchdog)
+        main.postDelayed(speechWatchdog, 30_000)
+        val path = segment.voicePath?.takeIf { File(it).isFile }
+        if (path != null) {
+            try {
+                playingFile = path
+                player = MediaPlayer().apply {
+                    setAudioAttributes(audioAttributes)
+                    setDataSource(path)
+                    setOnPreparedListener { if (currentUtterance == id && canPlay()) it.start() }
+                    setOnCompletionListener { utteranceFinished(id) }
+                    setOnErrorListener { _, _, _ ->
+                        if (currentUtterance == id) { releasePlayer(); speakGuidanceSegment(segment.text, id) }
+                        true
+                    }
+                    prepareAsync()
+                }
+                return
+            } catch (_: Exception) { releasePlayer() }
+        }
+        speakGuidanceSegment(segment.text, id)
+    }
+
+    private fun speakGuidanceSegment(text: String, id: String) {
+        if (!canSpeak() || engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) utteranceFinished(id)
+    }
 
     private fun pump() {
         main.removeCallbacks(pumpRunnable)
-        if (!canSpeak()) {
+        if (!canSpeak() || guidanceFinished != null) {
             pacer.clearPending()
             return
         }
@@ -195,37 +271,58 @@ class CoachingAudio(
             if (pacer.hasPending && currentUtterance == null) main.postDelayed(pumpRunnable, 200)
             return
         }
-        if (audioManager.requestAudioFocus(focusRequest) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
-        hasAudioFocus = true
+        if (!requestFocus()) return
         val id = "live-coach-${++sequence}"
         currentUtterance = id
         val result = engine?.speak(message.text, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result == TextToSpeech.SUCCESS) {
             pacer.markSpoken(message, now)
+            main.postDelayed(speechWatchdog, 15_000)
         } else {
             utteranceFailed(id)
         }
     }
 
     private fun utteranceFinished(id: String?) {
-        if (id != currentUtterance) return
+        if (id == null || id != currentUtterance) return
+        main.removeCallbacks(speechWatchdog)
+        releasePlayer()
         currentUtterance = null
+        if (guidanceFinished != null) {
+            if (guidanceSegments.isEmpty()) stopNow() else main.postDelayed(guidanceNext, 350)
+            return
+        }
         abandonFocus()
         pump()
     }
 
     private fun utteranceFailed(id: String?) {
-        if (id != currentUtterance) return
+        if (id == null || id != currentUtterance) return
         _status.value = CoachingAudioStatus.Unavailable
         stopNow()
     }
 
     private fun stopNow() {
         main.removeCallbacks(pumpRunnable)
+        main.removeCallbacks(guidanceNext)
+        main.removeCallbacks(speechWatchdog)
         pacer.clearPending()
         currentUtterance = null
+        releasePlayer()
+        guidanceSegments.forEach { it.voicePath?.let { path -> File(path).delete() } }
+        guidanceSegments.clear()
+        val finished = guidanceFinished
+        guidanceFinished = null
         engine?.stop()
         abandonFocus()
+        finished?.invoke()
+    }
+
+    private fun releasePlayer() {
+        player?.release()
+        player = null
+        playingFile?.let { File(it).delete() }
+        playingFile = null
     }
 
     private fun abandonFocus() {

@@ -14,4 +14,15 @@
 .social-cover-edit:focus-visible,.social-photo-edit:focus-visible{outline:3px solid var(--rust);outline-offset:3px}
 .profile-media-toolbar{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 16px}
 .profile-media-toolbar .photo-remove{margin:0}
+.cover-editor{width:min(620px,calc(100vw - 28px));max-width:none;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--card);color:var(--ink);box-shadow:0 24px 80px #0005}
+.cover-editor::backdrop{background:#101820b8;backdrop-filter:blur(4px)}
+.cover-editor-card{padding:clamp(18px,4vw,30px)}
+.cover-editor-card h2{margin:0;font:700 clamp(22px,4vw,30px)/1.2 var(--font);color:var(--ink)}
+.cover-editor-card>.muted{margin:8px 0 18px}
+.cover-editor-canvas{display:block;width:100%;aspect-ratio:1024/410;border:1px solid var(--line);border-radius:14px;background:var(--portal-subtle,#e4eaf0);touch-action:none;cursor:grab}
+.cover-editor-canvas:active{cursor:grabbing}
+.cover-editor-zoom{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px 16px;margin-top:18px;font-weight:600}
+.cover-editor-zoom input{grid-column:1/-1;width:100%;accent-color:var(--rust)}
+.cover-editor-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:20px}
+@media(max-width:420px){.cover-editor-actions button{flex:1 1 auto}}
 @media(max-width:580px){.social-profile-cover{height:160px}.social-profile-details{display:block;padding:0 16px 20px}.social-profile-portrait{width:104px;height:104px;margin-top:-44px}.social-profile-avatar{width:104px;height:104px}.social-profile-name{padding-top:12px}.social-cover-edit{top:10px;right:10px;padding:8px 10px;font-size:12px}}

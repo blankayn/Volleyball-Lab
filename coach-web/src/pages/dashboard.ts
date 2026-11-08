@@ -976,23 +976,29 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
   assignForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const button = assignForm.querySelector("button");
+    if (button?.disabled) return;
+    const buttonLabel = button?.textContent ?? "Assign it";
     if (button) button.disabled = true;
     const dueDays = Number.parseInt(val(root, "a-due"), 10);
     const sets = Math.min(10, Math.max(1, Number.parseInt(val(root, "a-sets"), 10) || 3));
     const reps = Math.min(50, Math.max(1, Number.parseInt(val(root, "a-reps"), 10) || 10));
     const title = val(root, "a-title");
+    const playerUid = val(root, "a-player");
+    const playerName = root.querySelector<HTMLSelectElement>("#a-player")?.selectedOptions[0]?.textContent?.trim() || "Player";
     const errBox = root.querySelector("#assign-error");
     if (!title) {
       if (errBox) errBox.innerHTML = `<div class="form-error">Give the drill a name.</div>`;
       if (button) button.disabled = false;
       return;
     }
+    if (errBox) errBox.replaceChildren();
+    if (button) button.textContent = "Assigning…";
     try {
       const skill = val(root, "a-skill") as Skill;
       await saveAssignment({
         id: newId(),
         coachUid,
-        playerUid: val(root, "a-player"),
+        playerUid,
         title: title.slice(0, 60),
         skill,
         level: val(root, "a-level") || "Beginner",
@@ -1005,10 +1011,11 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
         createdAt: Date.now(),
         libraryDrillId: null,
       });
+      showStatus(`Assigned “${title.slice(0, 60)}” to ${playerName}.`);
     } catch (e) {
       console.error(e);
       if (errBox) errBox.innerHTML = `<div class="form-error" role="alert">Could not assign this drill. Your entries are saved on this screen; please try again.</div>`;
-      if (button) button.disabled = false;
+      if (button) { button.disabled = false; button.textContent = buttonLabel; }
       return;
     }
     refresh();

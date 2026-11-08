@@ -30,6 +30,15 @@ export async function renderAccount(coachUid: string): Promise<string> {
           ${profileHeader({ name: profile.name || "Coach", subtitle: profile.teamName || "Your coaching profile", uid: coachUid, photo: prefs.photo, banner: prefs.banner, editable: true })}
           <input class="visually-hidden" id="profile-photo" type="file" accept="image/jpeg,image/png,image/webp" />
           <input class="visually-hidden" id="profile-banner" type="file" accept="image/jpeg,image/png,image/webp" />
+          <dialog class="cover-editor" id="cover-editor" aria-labelledby="cover-editor-title">
+            <div class="cover-editor-card">
+              <p class="eyebrow">Profile cover</p><h2 id="cover-editor-title">Adjust cover photo</h2>
+              <p class="muted">Drag the image to choose what appears in your profile cover.</p>
+              <canvas id="cover-editor-canvas" class="cover-editor-canvas" width="1024" height="410" role="img" aria-label="Cover photo crop preview"></canvas>
+              <label class="cover-editor-zoom" for="cover-editor-zoom">Zoom <output id="cover-editor-zoom-value">100%</output><input id="cover-editor-zoom" type="range" min="100" max="250" step="1" value="100" /></label>
+              <div class="cover-editor-actions"><button class="btn btn-ghost" type="button" id="cover-editor-cancel">Cancel</button><button class="btn btn-primary" type="button" id="cover-editor-reset">Reset</button><button class="btn btn-primary" type="button" id="cover-editor-apply">Use cover photo</button></div>
+            </div>
+          </dialog>
           <div class="profile-media-toolbar"><button class="photo-remove" type="button" id="remove-profile-photo"${prefs.photo ? "" : " hidden"}>Remove profile picture</button><button class="photo-remove" type="button" id="remove-profile-banner"${prefs.banner ? "" : " hidden"}>Remove cover photo</button></div>
           <div id="photo-status" role="status" aria-live="polite"></div><div id="banner-status" role="status" aria-live="polite"></div>
           <div class="form-grid"><div class="field"><label for="p-name">Display name</label><input id="p-name" required maxlength="60" value="${esc(profile.name)}" autocomplete="name" /></div><div class="field"><label for="p-team">Team name</label><input id="p-team" maxlength="48" value="${esc(profile.teamName)}" /></div></div>
@@ -68,13 +77,13 @@ export async function renderAccount(coachUid: string): Promise<string> {
   </div>`;
 }
 
-async function photoData(file: File, banner = false): Promise<string> {
+async function photoData(file: File): Promise<string> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPG, PNG or WebP image.");
   if (file.size > 5 * 1024 * 1024) throw new Error("Choose a photo smaller than 5 MB.");
   const bitmap = await createImageBitmap(file);
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = banner ? 1024 : 256; canvas.height = banner ? 360 : 256;
+    canvas.width = 256; canvas.height = 256;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser could not process this image.");
     context.fillStyle = "#fff";
@@ -83,9 +92,8 @@ async function photoData(file: File, banner = false): Promise<string> {
     const width = canvas.width / scale, height = canvas.height / scale;
     context.drawImage(bitmap, (bitmap.width - width) / 2, (bitmap.height - height) / 2, width, height, 0, 0, canvas.width, canvas.height);
     let quality = .84; let result = canvas.toDataURL("image/jpeg", quality);
-    const valid = banner ? validBanner : validPhoto;
-    while (!valid(result) && quality > .34) { quality -= .1; result = canvas.toDataURL("image/jpeg", quality); }
-    if (!valid(result)) throw new Error("Choose a simpler or smaller image.");
+    while (!validPhoto(result) && quality > .34) { quality -= .1; result = canvas.toDataURL("image/jpeg", quality); }
+    if (!validPhoto(result)) throw new Error("Choose a simpler or smaller image.");
     return result;
   } finally { bitmap.close(); }
 }
@@ -159,28 +167,102 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   const bannerPreview = account.querySelector<HTMLElement>("#profile-banner-preview")!;
   const bannerStatus = account.querySelector<HTMLElement>("#banner-status")!;
   const bannerRemove = account.querySelector<HTMLButtonElement>("#remove-profile-banner")!;
+  const form = account.querySelector<HTMLFormElement>("#profile-form")!;
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  const coverDialog = account.querySelector<HTMLDialogElement>("#cover-editor")!;
+  const coverCanvas = account.querySelector<HTMLCanvasElement>("#cover-editor-canvas")!;
+  const coverZoom = account.querySelector<HTMLInputElement>("#cover-editor-zoom")!;
+  const coverZoomValue = account.querySelector<HTMLOutputElement>("#cover-editor-zoom-value")!;
+  const coverApply = account.querySelector<HTMLButtonElement>("#cover-editor-apply")!;
+  let coverBitmap: ImageBitmap | null = null;
+  let coverZoomFactor = 1;
+  let coverPanX = 0;
+  let coverPanY = 0;
+  let coverPointer: { id: number; x: number; y: number } | null = null;
+  const drawCoverPreview = (target: HTMLCanvasElement, bitmap: ImageBitmap, zoom: number, panX: number, panY: number) => {
+    const aspect = 1024 / 410;
+    const cropWidth = (bitmap.width / bitmap.height > aspect ? bitmap.height * aspect : bitmap.width) / zoom;
+    const cropHeight = cropWidth / aspect;
+    const centerX = bitmap.width / 2 + panX * (bitmap.width - cropWidth) / 2;
+    const centerY = bitmap.height / 2 + panY * (bitmap.height - cropHeight) / 2;
+    const sx = Math.max(0, Math.min(bitmap.width - cropWidth, centerX - cropWidth / 2));
+    const sy = Math.max(0, Math.min(bitmap.height - cropHeight, centerY - cropHeight / 2));
+    const context = target.getContext("2d");
+    if (!context) throw new Error("Your browser could not preview this image.");
+    context.clearRect(0, 0, target.width, target.height);
+    context.drawImage(bitmap, sx, sy, cropWidth, cropHeight, 0, 0, target.width, target.height);
+  };
+  const redrawCover = () => {
+    if (!coverBitmap) return;
+    drawCoverPreview(coverCanvas, coverBitmap, coverZoomFactor, coverPanX, coverPanY);
+    coverZoomValue.value = `${Math.round(coverZoomFactor * 100)}%`;
+  };
+  const releaseCoverEditor = () => {
+    coverBitmap?.close(); coverBitmap = null; coverPointer = null;
+    if (bannerInput) bannerInput.value = "";
+  };
+  const closeCoverEditor = () => { if (coverDialog.open) coverDialog.close(); else releaseCoverEditor(); };
+  coverDialog.addEventListener("close", () => {
+    releaseCoverEditor(); processingBanner = false; submit.disabled = processingPhoto;
+  });
+  coverDialog.querySelector<HTMLButtonElement>("#cover-editor-cancel")!.addEventListener("click", closeCoverEditor);
+  coverDialog.querySelector<HTMLButtonElement>("#cover-editor-reset")!.addEventListener("click", () => {
+    coverZoomFactor = 1; coverPanX = 0; coverPanY = 0; coverZoom.value = "100"; redrawCover();
+  });
+  coverZoom.addEventListener("input", () => { coverZoomFactor = Number(coverZoom.value) / 100; redrawCover(); });
+  coverCanvas.addEventListener("pointerdown", (event) => {
+    if (!coverBitmap) return;
+    coverPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    coverCanvas.setPointerCapture(event.pointerId);
+  });
+  coverCanvas.addEventListener("pointermove", (event) => {
+    if (!coverPointer || coverPointer.id !== event.pointerId || !coverBitmap) return;
+    const cropWidth = (coverBitmap.width / coverBitmap.height > 1024 / 410 ? coverBitmap.height * 1024 / 410 : coverBitmap.width) / coverZoomFactor;
+    const cropHeight = cropWidth / (1024 / 410);
+    const rect = coverCanvas.getBoundingClientRect();
+    if (coverBitmap.width > cropWidth) coverPanX = Math.max(-1, Math.min(1, coverPanX - (event.clientX - coverPointer.x) / rect.width * 2 * cropWidth / (coverBitmap.width - cropWidth)));
+    if (coverBitmap.height > cropHeight) coverPanY = Math.max(-1, Math.min(1, coverPanY - (event.clientY - coverPointer.y) / rect.height * 2 * cropHeight / (coverBitmap.height - cropHeight)));
+    coverPointer.x = event.clientX; coverPointer.y = event.clientY; redrawCover();
+  });
+  coverCanvas.addEventListener("pointerup", (event) => { if (coverPointer?.id === event.pointerId) coverPointer = null; });
+  coverCanvas.addEventListener("pointercancel", () => { coverPointer = null; });
+  coverApply.addEventListener("click", () => {
+    if (!coverBitmap) return;
+    try {
+      const output = document.createElement("canvas"); output.width = 1024; output.height = 410;
+      drawCoverPreview(output, coverBitmap, coverZoomFactor, coverPanX, coverPanY);
+      let quality = .84; let image = output.toDataURL("image/jpeg", quality);
+      while (!validBanner(image) && quality > .34) { quality -= .1; image = output.toDataURL("image/jpeg", quality); }
+      if (!validBanner(image)) throw new Error("Choose a simpler or smaller image.");
+      pendingBanner = image; bannerChanged = true;
+      bannerPreview.style.backgroundImage = `url("${image}")`; bannerRemove.hidden = false;
+      bannerStatus.textContent = "Cover photo ready. Save your profile to sync it.";
+      closeCoverEditor();
+    } catch (error) { bannerStatus.textContent = error instanceof Error ? error.message : "This image could not be saved."; }
+  });
   account.querySelector<HTMLButtonElement>("[data-edit-cover]")!.addEventListener("click", () => bannerInput.click());
   account.querySelector<HTMLButtonElement>("[data-edit-profile-photo]")!.addEventListener("click", () => photoInput.click());
   bannerInput.addEventListener("change", async () => {
     const file = bannerInput.files?.[0]; if (!file) return;
     const attempt = ++bannerRevision; processingBanner = true; submit.disabled = true;
-    bannerStatus.textContent = "Preparing banner…";
+    bannerStatus.textContent = "Opening cover editor…";
     try {
-      const image = await photoData(file, true);
-      if (attempt !== bannerRevision || !account.isConnected) return;
-      pendingBanner = image; bannerChanged = true;
-      bannerPreview.style.backgroundImage = `url("${image}")`; bannerRemove.hidden = false;
-      bannerStatus.textContent = "Banner ready. Save your profile to sync it.";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPG, PNG or WebP image.");
+      if (file.size > 5 * 1024 * 1024) throw new Error("Choose a photo smaller than 5 MB.");
+      const bitmap = await createImageBitmap(file);
+      if (attempt !== bannerRevision || !account.isConnected) { bitmap.close(); return; }
+      coverBitmap?.close(); coverBitmap = bitmap;
+      coverZoomFactor = 1; coverPanX = 0; coverPanY = 0; coverZoom.value = "100";
+      coverDialog.showModal(); redrawCover(); coverStatusClear();
     } catch (error) { if (attempt === bannerRevision) bannerStatus.textContent = error instanceof Error ? error.message : "This image could not be opened."; }
-    finally { if (attempt === bannerRevision) { processingBanner = false; submit.disabled = processingPhoto; } bannerInput.value = ""; }
+    finally { if (attempt === bannerRevision && !coverDialog.open) { processingBanner = false; submit.disabled = processingPhoto; bannerInput.value = ""; } }
   });
   bannerRemove.addEventListener("click", () => {
     bannerRevision++; processingBanner = false; pendingBanner = ""; bannerChanged = true;
     bannerPreview.style.backgroundImage = ""; bannerRemove.hidden = true; submit.disabled = processingPhoto;
     bannerStatus.textContent = "Save your profile to remove the banner.";
   });
-  const form = account.querySelector<HTMLFormElement>("#profile-form")!;
-  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  function coverStatusClear() { bannerStatus.textContent = ""; }
   const showPhoto = () => {
     preview.innerHTML = pendingPhoto ? `<img src="${esc(pendingPhoto)}" alt="Your profile picture" />` : `<span>${esc(initials((account.querySelector<HTMLInputElement>("#p-name")?.value || "Coach")))}</span>`;
     remove.hidden = !pendingPhoto;
@@ -260,7 +342,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       result.classList.add("is-error");
     } finally { submit.disabled = false; photoInput.disabled = false; remove.disabled = false; bannerInput.disabled = false; bannerRemove.disabled = false; preferenceFields.forEach((field) => { field.disabled = false; }); profileFields.forEach((field) => { field.disabled = false; }); }
   });
-  return () => { if (timer) { window.clearTimeout(timer); persist(); } photoRevision++; bannerRevision++; };
+  return () => { if (timer) { window.clearTimeout(timer); persist(); } photoRevision++; bannerRevision++; closeCoverEditor(); };
 }
 
 export async function hydrateAccountPreferences(uid: string): Promise<void> {

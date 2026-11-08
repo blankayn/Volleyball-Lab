@@ -13,6 +13,11 @@ import com.volleyballlab.player.pose.model.BodyPoint
 import com.volleyballlab.player.pose.model.PoseFrame
 import com.volleyballlab.player.pose.review.CapturedReviewInput
 import com.volleyballlab.player.pose.review.CapturedReviewWriter
+import com.volleyballlab.player.data.ai.LiveCoachingRepository
+import com.volleyballlab.player.domain.repository.CoachingPreferences
+import com.volleyballlab.player.domain.repository.CoachingPreferencesRepository
+import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
+import com.volleyballlab.player.pose.analysis.LiveCoachingEvidence
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -65,6 +70,81 @@ class GuidedCaptureIntegrationTest {
             assertEquals(CameraAngle.Side, turn.rotation?.requestedAngle)
             vm.onSkipAngle()
             assertEquals(CameraAngle.Rear, (vm.uiState.value as CaptureUiState.Recording).rotation?.requestedAngle)
+        }
+    }
+
+    @Test fun `angle confirmation and countdown wait for the complete spoken coaching turn`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            vm.setVoiceGuidanceEnabled(true)
+            feed.stand(100); feed.stand(35); repeat(5) { feed.rep() }
+            val turn = (vm.uiState.value as CaptureUiState.Recording).rotation!!
+            assertTrue(turn.speechPending)
+            feed.stand(80, CameraAngle.Side)
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation!!.secondsLeft)
+            vm.onRotationSpeechFinished(turn.guidanceId + 1)
+            assertTrue((vm.uiState.value as CaptureUiState.Recording).rotation!!.speechPending)
+            vm.onRotationSpeechFinished(turn.guidanceId)
+            feed.stand(10, CameraAngle.Side)
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation!!.secondsLeft)
+            feed.stand(50, CameraAngle.Side)
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation)
+            assertEquals(CameraAngle.Side, (vm.uiState.value as CaptureUiState.Recording).angle)
+        }
+    }
+
+    @Test fun `muting coaching releases the speech gate without requiring a screen tap`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            vm.setVoiceGuidanceEnabled(true)
+            feed.stand(100); feed.stand(35); repeat(5) { feed.rep() }
+            assertTrue((vm.uiState.value as CaptureUiState.Recording).rotation!!.speechPending)
+            vm.setVoiceGuidanceEnabled(false)
+            feed.stand(60, CameraAngle.Side)
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation)
+        }
+    }
+
+    @Test fun `background and retry invalidate old speech completion callbacks`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            vm.setVoiceGuidanceEnabled(true)
+            feed.stand(100); feed.stand(35); repeat(5) { feed.rep() }
+            val first = (vm.uiState.value as CaptureUiState.Recording).rotation!!.guidanceId
+            vm.setCaptureForeground(false)
+            vm.onRotationSpeechFinished(first)
+            vm.setCaptureForeground(true)
+            vm.onRotationSpeechFinished(first)
+            assertTrue((vm.uiState.value as CaptureUiState.Recording).rotation!!.speechPending)
+            val resumed = (vm.uiState.value as CaptureUiState.Recording).rotation!!.guidanceId
+            vm.onRetryAngle()
+            vm.onRotationSpeechFinished(resumed)
+            assertTrue((vm.uiState.value as CaptureUiState.Recording).rotation!!.speechPending)
+            val retry = (vm.uiState.value as CaptureUiState.Recording).rotation!!.guidanceId
+            vm.onRotationSpeechFinished(retry)
+            feed.stand(60, CameraAngle.Side)
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation)
+        }
+    }
+
+    @Test fun `late AI advice from a skipped angle cannot replace the current coaching`() = runTest(dispatcher) {
+        val response = CompletableDeferred<LiveCoachingAdvice?>()
+        var requests = 0
+        val ai = object : LiveCoachingRepository {
+            override suspend fun advise(evidence: LiveCoachingEvidence, voice: Boolean): LiveCoachingAdvice? {
+                requests++
+                return response.await()
+            }
+            override suspend fun previewVoice(): String? = null
+        }
+        withCapture(detailed = true, ai = ai) { vm, feed ->
+            feed.stand(100); feed.stand(35); repeat(5) { feed.rep() }
+            assertEquals(1, requests)
+            assertTrue((vm.uiState.value as CaptureUiState.Recording).rotation!!.loadingCoaching)
+            vm.onSkipAngle()
+            response.complete(LiveCoachingAdvice(com.volleyballlab.player.domain.model.CueId.SetElbowFlexion, "Old angle advice", true))
+            runCurrent()
+            val turn = (vm.uiState.value as CaptureUiState.Recording).rotation!!
+            assertEquals(CameraAngle.Rear, turn.requestedAngle)
+            assertNull(turn.advice)
+            assertFalse(turn.loadingCoaching)
         }
     }
 
@@ -223,9 +303,18 @@ class GuidedCaptureIntegrationTest {
         } finally { store.clear(); runCurrent() }
     }
 
-    private suspend fun TestScope.withCapture(body: suspend TestScope.(CaptureViewModel, Feed) -> Unit) {
+    private suspend fun TestScope.withCapture(detailed: Boolean = false, ai: LiveCoachingRepository? = null,
+        body: suspend TestScope.(CaptureViewModel, Feed) -> Unit) {
         val detector = FakeDetector()
-        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, NoOpRepository, SessionScorer(), false)
+        val prefs = object : CoachingPreferencesRepository {
+            override val preferences = flowOf(CoachingPreferences(detailedAiCoachingEnabled = detailed))
+            override suspend fun setVoiceEnabled(enabled: Boolean) = Unit
+            override suspend fun setHapticsEnabled(enabled: Boolean) = Unit
+            override suspend fun setPoseGuideEnabled(enabled: Boolean) = Unit
+            override suspend fun setDetailedAiCoachingEnabled(enabled: Boolean) = Unit
+        }
+        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, NoOpRepository, SessionScorer(), false,
+            coachingPreferencesRepository = prefs, liveCoachingRepository = ai)
         val store = ViewModelStore().apply { put("capture", vm) }
         runCurrent()
         try { body(vm, Feed(this, detector)) } finally { store.clear(); runCurrent() }

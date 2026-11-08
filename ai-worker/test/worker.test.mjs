@@ -9,6 +9,7 @@ import { authorizedSession } from "../src/firebase.mjs";
 function database() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(new URL("../migrations/0001_session_ai.sql", import.meta.url), "utf8"));
+  sqlite.exec(readFileSync(new URL("../migrations/0002_live_coaching.sql", import.meta.url), "utf8"));
   const prepare = sql => {
     let args = [];
     const result = {

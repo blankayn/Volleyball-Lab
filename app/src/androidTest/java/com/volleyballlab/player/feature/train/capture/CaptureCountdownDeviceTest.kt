@@ -65,7 +65,7 @@ class CaptureCountdownDeviceTest {
         for (digit in 3 downTo 1) {
             compose.runOnIdle { seconds.value = digit }
             compose.waitForIdle()
-            val viewport = compose.onNodeWithTag("capture-root").fetchSemanticsNode().boundsInRoot
+            val viewport = compose.onNodeWithTag("capture-viewfinder").fetchSemanticsNode().boundsInRoot
             val number = compose.onNodeWithText(digit.toString()).fetchSemanticsNode().boundsInRoot
             assertEquals("Countdown horizontal centre", viewport.center.x, number.center.x, 1f)
             assertEquals("Countdown vertical centre", viewport.center.y, number.center.y, 1f)
