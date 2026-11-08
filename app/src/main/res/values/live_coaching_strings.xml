@@ -1,0 +1,16 @@
+<resources>
+    <string name="coaching_pose_guide">Pose Guide</string>
+    <string name="coaching_pose_guide_description">Show a thin gold reference limb for a visible correction at the matching movement phase.</string>
+    <string name="coaching_detailed_ai">Detailed AI Coaching</string>
+    <string name="coaching_detailed_ai_description">Explain one repeated cue between camera angles. Sends a measured form summary for AI advice; uses local tips when unavailable.</string>
+    <string name="coaching_voice_description">Spoken coaching follows your voice and volume settings. Online coach voice uses available free access, with phone speech as a fallback.</string>
+    <string name="coaching_test_voice">Test coach voice</string>
+    <string name="coaching_test_voice_loading">Preparing voice…</string>
+    <string name="coaching_voice_preview">I\'m here to coach you. Keep your whole body in view, and listen for one clear tip at a time.</string>
+    <string name="coaching_preparing">Preparing your coaching…</string>
+    <string name="coaching_listen">Listen to your coach</string>
+    <string name="coaching_ai_advice">AI coaching</string>
+    <string name="coaching_local_advice">Practice tip</string>
+    <string name="coaching_guide_legend">Gold: reference limb</string>
+    <string name="coaching_no_repeated_cue">Let\'s use the next view to check more of your form. Focus on a controlled movement.</string>
+</resources>

@@ -32,6 +32,9 @@ import com.volleyballlab.player.pose.analysis.OrientationStabilityGate
 import com.volleyballlab.player.pose.analysis.ReactiveCoachingEngine
 import com.volleyballlab.player.pose.analysis.CoachingEvent
 import com.volleyballlab.player.pose.analysis.Side
+import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
+import com.volleyballlab.player.pose.analysis.LiveCoachingEvidenceBuffer
+import com.volleyballlab.player.data.ai.LiveCoachingRepository
 import com.volleyballlab.player.pose.model.PoseFrame
 import com.volleyballlab.player.pose.review.CapturedReviewWriter
 import com.volleyballlab.player.pose.review.RecordingVideoClock
@@ -199,12 +202,13 @@ class CaptureViewModel(
     coachingPreferencesRepository: CoachingPreferencesRepository? = null,
     private val assignmentId: String? = null,
     private val capturedReviewWriter: CapturedReviewWriter? = null,
+    private val liveCoachingRepository: LiveCoachingRepository? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<CaptureUiState>(CaptureUiState.Initialising)
     val uiState: StateFlow<CaptureUiState> = _uiState.asStateFlow()
     val coachingPreferences: StateFlow<CoachingPreferences> = coachingPreferencesRepository?.preferences
-        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CoachingPreferences())
+        ?.stateIn(viewModelScope, SharingStarted.Eagerly, CoachingPreferences())
         ?: MutableStateFlow(CoachingPreferences())
 
     /**
@@ -267,6 +271,10 @@ class CaptureViewModel(
     private var captureForeground = true
     private var lastRepSummary = ""
     private var lastFrameRecordingElapsedMs = 0L
+    private val stageEvidence = LiveCoachingEvidenceBuffer()
+    private var liveCoachingJob: Job? = null
+    private var guidanceSequence = 0L
+    private var voiceGuidanceEnabled = false
 
 
     private val qualityValidator = PoseQualityValidator()
@@ -420,7 +428,14 @@ class CaptureViewModel(
 
     fun setCaptureForeground(active: Boolean) {
         captureForeground = active
-        if (active) return
+        if (active) {
+            val state = _uiState.value as? CaptureUiState.Recording
+            val rotation = state?.rotation
+            if (rotation != null) _uiState.value = state.copy(rotation = rotation.copy(
+                guidanceId = ++guidanceSequence, speechPending = voiceGuidanceEnabled, loadingCoaching = false))
+            return
+        }
+        liveCoachingJob?.cancel()
         _coachingMessage.value = null
         while (speechChannel.tryReceive().isSuccess) { /* discard old prompts */ }
         while (hapticChannel.tryReceive().isSuccess) { /* discard old successes */ }
@@ -432,8 +447,28 @@ class CaptureViewModel(
             interruptTracking()
             reactiveCoach.cancelPendingGuidance()
             rotationCountdownJob?.cancel()
-            _uiState.value = recording.copy(rotation = recording.rotation?.copy(secondsLeft = null))
+            _uiState.value = recording.copy(rotation = recording.rotation?.copy(secondsLeft = null,
+                loadingCoaching = false, guidanceId = ++guidanceSequence, speechPending = voiceGuidanceEnabled))
         }
+    }
+
+    fun setVoiceGuidanceEnabled(enabled: Boolean) {
+        voiceGuidanceEnabled = enabled
+        if (!enabled) {
+            val state = _uiState.value as? CaptureUiState.Recording ?: return
+            val rotation = state.rotation ?: return
+            _uiState.value = state.copy(rotation = rotation.copy(speechPending = false))
+            orientationGate.reset()
+        }
+    }
+
+    fun onRotationSpeechFinished(id: Long) {
+        if (!captureForeground) return
+        val state = _uiState.value as? CaptureUiState.Recording ?: return
+        val rotation = state.rotation?.takeIf { it.guidanceId == id && it.speechPending && !it.loadingCoaching } ?: return
+        _uiState.value = state.copy(rotation = rotation.copy(speechPending = false))
+        // Confirm the view after speaking; an earlier pose cannot start a countdown.
+        orientationGate.reset()
     }
 
     private fun publish(event: CoachingEvent?) {
@@ -449,7 +484,8 @@ class CaptureViewModel(
         if (state.rotation != null) {
             val ready = orientationGate.update(estimate, state.rotation.requestedAngle, frame.timestampMs, requiredSide)
             _uiState.value = state.copy(quality = quality, orientationConfidence = estimate.confidence)
-            if (ready && state.rotation.secondsLeft == null) beginRotationCountdown()
+            if (ready && state.rotation.secondsLeft == null && !state.rotation.loadingCoaching &&
+                !state.rotation.speechPending) beginRotationCountdown()
             if (!ready && state.rotation.secondsLeft != null) {
                 rotationCountdownJob?.cancel()
                 _uiState.value = state.copy(rotation = state.rotation.copy(secondsLeft = null), quality = quality)
@@ -488,6 +524,7 @@ class CaptureViewModel(
             repCounter.lastCompletedWindow?.let { window ->
                 val assessment = postureCoach.assessCompletedRep(window,
                     if (_guidedOptions.value.enabled) state.angle else actualAngle)
+                stageEvidence.add(assessment)
                 stageMetrics = stageMetrics.completed(assessment.score?.roundToInt(), assessment.isAssessable, assessment.isGood)
                 totalMetrics = totalMetrics.completed(assessment.score?.roundToInt(), assessment.isAssessable, assessment.isGood)
                 lastRepSummary = reactiveCoach.assessmentSummary(assessment)
@@ -541,6 +578,9 @@ class CaptureViewModel(
 
     private fun requestRotation(index: Int) {
         val state = _uiState.value as? CaptureUiState.Recording ?: return
+        liveCoachingJob?.cancel()
+        val evidence = stageEvidence.snapshot(skill, state.angle)
+        stageEvidence.reset()
         val angle = GuidedCaptureProgress.angles[index]
         orientationGate.reset()
         qualityValidator.reset()
@@ -560,8 +600,30 @@ class CaptureViewModel(
         val message = summary + lastRepSummary.takeIf { it.isNotBlank() }?.let { "$it " }.orEmpty() + direction
         _coachingMessage.value = null
         _livePosture.value = LivePostureUi.Idle
-        _uiState.value = state.copy(rotation = RotationUi(angle, index, message = message, instruction = direction))
-        publish(reactiveCoach.onRotation(message, lastFrameMs ?: 0L))
+        reactiveCoach.reset()
+        val detailed = coachingPreferences.value.detailedAiCoachingEnabled
+        val focus = if (detailed) evidence.focus() else null
+        val localAdvice = focus?.let { LiveCoachingAdvice(it.cueId,
+            "This cue was repeatedly outside the practice range. ${reactiveCoach.shortCueText(it.cueId, measured = it.measured)}") }
+        val id = ++guidanceSequence
+        val load = focus != null && liveCoachingRepository != null
+        _uiState.value = state.copy(rotation = RotationUi(angle, index, message = message, instruction = direction,
+            guidanceId = id, loadingCoaching = load, speechPending = voiceGuidanceEnabled, advice = localAdvice))
+        if (load) liveCoachingJob = viewModelScope.launch {
+            val advice = try {
+                kotlinx.coroutines.withTimeoutOrNull(8_000) { liveCoachingRepository.advise(evidence, voiceGuidanceEnabled) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+            val current = _uiState.value as? CaptureUiState.Recording
+            val rotation = current?.rotation?.takeIf { it.guidanceId == id }
+            if (rotation == null || !captureForeground) {
+                advice?.voicePath?.let { File(it).delete() }
+                return@launch
+            }
+            _uiState.value = current.copy(rotation = rotation.copy(loadingCoaching = false,
+                speechPending = voiceGuidanceEnabled, advice = advice ?: localAdvice))
+            orientationGate.reset()
+        }
     }
 
     private fun beginRotationCountdown() {
@@ -576,10 +638,12 @@ class CaptureViewModel(
             }
             val state = _uiState.value as? CaptureUiState.Recording ?: return@launch
             val rotation = state.rotation ?: return@launch
+            if (!captureForeground || rotation.loadingCoaching || rotation.speechPending) return@launch
             currentChunkAngle = rotation.requestedAngle
             currentChunkStage = rotation.stageIndex
             stageStartMs = null
             stageMetrics = LiveCaptureMetrics()
+            stageEvidence.reset()
             lastRepSummary = ""
             totalMetrics = totalMetrics.interrupted()
             repCounter.reset()
@@ -598,8 +662,9 @@ class CaptureViewModel(
         rotationCountdownJob?.cancel()
         orientationGate.reset()
         rotationElapsedMs = 0L
-        _uiState.value = state.copy(rotation = rotation.copy(elapsedMs = 0, secondsLeft = null))
-        publish(reactiveCoach.onRotation(rotation.message, lastFrameMs ?: 0L))
+        _uiState.value = state.copy(rotation = rotation.copy(elapsedMs = 0, secondsLeft = null,
+            guidanceId = if (rotation.loadingCoaching) rotation.guidanceId else ++guidanceSequence,
+            speechPending = voiceGuidanceEnabled))
     }
 
     fun onSkipAngle() {
@@ -753,6 +818,7 @@ class CaptureViewModel(
         stageSummaries.clear()
         totalMetrics = LiveCaptureMetrics()
         stageMetrics = LiveCaptureMetrics()
+        stageEvidence.reset()
         lastRepSummary = ""
         lastFrameRecordingElapsedMs = 0L
         currentChunkStage = 0
@@ -803,6 +869,7 @@ class CaptureViewModel(
         val state = _uiState.value as? CaptureUiState.Recording ?: return
         timerJob?.cancel()
         rotationCountdownJob?.cancel()
+        liveCoachingJob?.cancel()
         if (state.rotation == null) finishStage(state)
         flushChunk()
         _coachingMessage.value = null
@@ -891,6 +958,7 @@ class CaptureViewModel(
         collectJob?.cancel()
         poseWatchdogJob?.cancel()
         rotationCountdownJob?.cancel()
+        liveCoachingJob?.cancel()
         speechChannel.close()
         hapticChannel.close()
         recordingSessionId = null
@@ -961,6 +1029,7 @@ class CaptureViewModel(
                     receivingPostureEvaluator = receivingEvaluator,
                     coachingPreferencesRepository = container.coachingPreferencesRepository,
                     capturedReviewWriter = container.videoReviewStore,
+                    liveCoachingRepository = container.liveCoachingRepository,
                 )
             }
         }

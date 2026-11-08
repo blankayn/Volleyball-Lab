@@ -163,6 +163,14 @@ class ProfileViewModel(
         viewModelScope.launch { coachingPreferencesRepository.setHapticsEnabled(enabled) }
     }
 
+    fun onPoseGuideChanged(enabled: Boolean) {
+        viewModelScope.launch { coachingPreferencesRepository.setPoseGuideEnabled(enabled) }
+    }
+
+    fun onDetailedAiChanged(enabled: Boolean) {
+        viewModelScope.launch { coachingPreferencesRepository.setDetailedAiCoachingEnabled(enabled) }
+    }
+
 
     /**
      * Signs out, leaving everything on the device alone.
@@ -246,7 +254,8 @@ private fun StudentAccountSectionContent(
                 StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut)
             }
             AccountSection.Training -> {
-                CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged)
+                CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged,
+                    model::onPoseGuideChanged, model::onDetailedAiChanged)
                 ProfileTrainingTools(section = ProfileToolSection.Training)
             }
             AccountSection.Security -> AccountSecurityCard()
@@ -289,6 +298,8 @@ private fun CoachingPreferencesCard(
     preferences: CoachingPreferences,
     onVoiceChanged: (Boolean) -> Unit,
     onHapticsChanged: (Boolean) -> Unit,
+    onPoseGuideChanged: (Boolean) -> Unit,
+    onDetailedAiChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -314,6 +325,20 @@ private fun CoachingPreferencesCard(
                 checked = preferences.hapticsEnabled,
                 onCheckedChange = onHapticsChanged,
             )
+            CoachingPreferenceRow(
+                title = stringResource(R.string.coaching_pose_guide),
+                icon = Icons.Rounded.SportsVolleyball,
+                description = stringResource(R.string.coaching_pose_guide_description),
+                checked = preferences.poseGuideEnabled,
+                onCheckedChange = onPoseGuideChanged,
+            )
+            CoachingPreferenceRow(
+                title = stringResource(R.string.coaching_detailed_ai),
+                icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                description = stringResource(R.string.coaching_detailed_ai_description),
+                checked = preferences.detailedAiCoachingEnabled,
+                onCheckedChange = onDetailedAiChanged,
+            )
             TextButton(onClick = {
                 try {
                     context.startActivity(CoachingAudio.settingsIntent())
@@ -322,7 +347,7 @@ private fun CoachingPreferencesCard(
                 }
             }) { Text("Speech settings") }
             Text(
-                "Voice coaching uses an installed offline English voice. Install a voice in Speech settings if speech is unavailable.",
+                stringResource(R.string.coaching_voice_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

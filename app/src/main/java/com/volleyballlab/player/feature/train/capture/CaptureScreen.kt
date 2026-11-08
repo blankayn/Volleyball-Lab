@@ -76,6 +76,7 @@ import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.ui.coaching.CoachingAudio
 import com.volleyballlab.player.ui.coaching.CoachingAudioStatus
+import com.volleyballlab.player.pose.analysis.PoseGuide
 import com.volleyballlab.player.ui.coaching.SpeechPriority
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -165,6 +166,10 @@ private fun GrantedCaptureScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val feedbackView = LocalView.current
     var muted by remember { mutableStateOf(false) }
+    val voicePreviewText = stringResource(R.string.coaching_voice_preview)
+    var voiceTesting by remember { mutableStateOf(false) }
+    val voiceTestScope = androidx.compose.runtime.rememberCoroutineScope()
+    val liveCoachingRepository = (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.liveCoachingRepository
     val audio = remember(context, feedbackView) {
         CoachingAudio(context) {
             feedbackView.performHapticFeedback(
@@ -175,6 +180,7 @@ private fun GrantedCaptureScreen(
     }
     val audioStatus by audio.status.collectAsStateWithLifecycle()
     val isRecording = state is CaptureUiState.Recording
+    val audioSessionActive = isRecording || state is CaptureUiState.Framing || state is CaptureUiState.CountingDown
     val isTurning = (state as? CaptureUiState.Recording)?.rotation != null
     var wasTurning by remember { mutableStateOf(false) }
     var wasTrackingLost by remember { mutableStateOf(false) }
@@ -197,10 +203,27 @@ private fun GrantedCaptureScreen(
             audio.close()
         }
     }
-    LaunchedEffect(audio, preferences, muted, isRecording) {
+    LaunchedEffect(audio, preferences, muted, audioSessionActive) {
         audio.setPreferences(preferences)
         audio.setMuted(muted)
-        audio.setSessionActive(isRecording)
+        audio.setSessionActive(audioSessionActive)
+        viewModel.setVoiceGuidanceEnabled(preferences.voiceEnabled && !muted)
+    }
+    val rotation = (state as? CaptureUiState.Recording)?.rotation
+    DisposableEffect(audio, rotation?.guidanceId) {
+        onDispose { audio.stop() }
+    }
+    LaunchedEffect(audio, rotation?.guidanceId, rotation?.loadingCoaching, rotation?.speechPending) {
+        val turn = rotation ?: return@LaunchedEffect
+        if (turn.loadingCoaching || !turn.speechPending || !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
+        val text = turn.advice?.text ?: turn.message.removeSuffix(turn.instruction).trim()
+        audio.playGuidance(text, turn.advice?.voicePath, turn.instruction) {
+            viewModel.onRotationSpeechFinished(turn.guidanceId)
+        }
+    }
+    val countdown = (state as? CaptureUiState.CountingDown)?.secondsLeft ?: rotation?.secondsLeft
+    LaunchedEffect(audio, countdown, rotation?.guidanceId) {
+        countdown?.let(audio::announceCountdown)
     }
     LaunchedEffect(viewModel, audio, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -264,6 +287,23 @@ private fun GrantedCaptureScreen(
             }
         },
         onBack = onBack,
+        onTestVoice = {
+            if (!preferences.voiceEnabled || muted) {
+                android.widget.Toast.makeText(context, "Enable and unmute voice coaching to test it.", android.widget.Toast.LENGTH_SHORT).show()
+            } else if (!voiceTesting) voiceTestScope.launch {
+                voiceTesting = true
+                val path = try {
+                    kotlinx.coroutines.withTimeoutOrNull(4_000) { liveCoachingRepository.previewVoice() }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+                voiceTesting = false
+                // A slow preview must never interrupt a session that already started.
+                if (viewModel.uiState.value is CaptureUiState.Framing) {
+                    audio.playGuidance(voicePreviewText, path)
+                } else path?.let { java.io.File(it).delete() }
+            }
+        },
+        voiceTesting = voiceTesting,
         modifier = modifier.fillMaxSize(),
         cameraContent = {
             CameraPreview(
@@ -274,7 +314,17 @@ private fun GrantedCaptureScreen(
                 onVideoClock = viewModel::onVideoClock,
                 modifier = Modifier.fillMaxSize(),
             )
-            PoseOverlay(frame = frame, posture = livePosture, modifier = Modifier.fillMaxSize())
+            val currentFrame = frame
+            val recording = state as? CaptureUiState.Recording
+            val guide = if (preferences.poseGuideEnabled && currentFrame != null && recording != null && recording.rotation == null) {
+                PoseGuide.limbs(currentFrame, livePosture, skill, recording.angle)
+            } else emptyList()
+            PoseOverlay(frame = currentFrame, posture = livePosture, guide = guide, modifier = Modifier.fillMaxSize())
+            if (guide.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Text(stringResource(R.string.coaching_guide_legend), color = Color(0xFFFFD87A),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.background(Color.Black.copy(alpha = .65f)).padding(horizontal = 8.dp, vertical = 4.dp))
+            }
         },
     )
 }

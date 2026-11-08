@@ -30,12 +30,16 @@ class DataStoreCoachingPreferencesRepository(
         if (scope == null) CoachingPreferences() else CoachingPreferences(
             voiceEnabled = stored[scope.boolean("voice_enabled")] ?: true,
             hapticsEnabled = stored[scope.boolean("haptics_enabled")] ?: true,
+            poseGuideEnabled = stored[scope.boolean("pose_guide_enabled")] ?: false,
+            detailedAiCoachingEnabled = stored[scope.boolean("detailed_ai_enabled")] ?: false,
         )
     }
 
     override suspend fun setVoiceEnabled(enabled: Boolean) = save("voice_enabled", enabled)
 
     override suspend fun setHapticsEnabled(enabled: Boolean) = save("haptics_enabled", enabled)
+    override suspend fun setPoseGuideEnabled(enabled: Boolean) = save("pose_guide_enabled", enabled)
+    override suspend fun setDetailedAiCoachingEnabled(enabled: Boolean) = save("detailed_ai_enabled", enabled)
 
     private suspend fun save(name: String, enabled: Boolean) {
         val scope = UserScope.of(authRepository.currentUid) ?: return

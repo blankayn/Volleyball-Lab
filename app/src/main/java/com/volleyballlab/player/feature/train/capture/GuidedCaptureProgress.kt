@@ -1,6 +1,7 @@
 package com.volleyballlab.player.feature.train.capture
 
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
 
 data class GuidedCaptureOptions(val enabled: Boolean = true, val repsPerAngle: Int = 5) {
     init { require(repsPerAngle == 5 || repsPerAngle == 10) }
@@ -43,6 +44,10 @@ data class RotationUi(
     val message: String,
     /** Short direction for the visual card; the full message remains in voice coaching. */
     val instruction: String = message,
+    val guidanceId: Long = 0,
+    val loadingCoaching: Boolean = false,
+    val speechPending: Boolean = false,
+    val advice: LiveCoachingAdvice? = null,
 ) {
     val timedOut: Boolean get() = elapsedMs >= 10_000
 }

@@ -24,11 +24,14 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.pose.analysis.LivePostureUi
+import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
 import com.volleyballlab.player.pose.quality.PoseQuality
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VolleyballLabTheme
@@ -48,6 +51,7 @@ class LiveSessionLayoutDeviceTest {
     private var finishes = 0
     private var mutes = 0
     private var switches = 0
+    private var voiceTests = 0
 
     @Test fun rotationLayoutKeepsCameraUncoveredAndAllActionsVisible() {
         show()
@@ -83,6 +87,29 @@ class LiveSessionLayoutDeviceTest {
         screenshot("live-session-compact.png", entireWindow = true)
     }
 
+    @Test fun detailedCoachingStaysBelowCameraAndLongTextCanScrollToActions() {
+        val recording = rotation()
+        state.value = recording.copy(rotation = recording.rotation!!.copy(speechPending = true,
+            advice = LiveCoachingAdvice(CueId.ServeContactArmExtension, ADVICE, true)))
+        show()
+        compose.onNodeWithText("Listen to your coach").assertIsDisplayed()
+        compose.onNodeWithText("AI coaching").assertIsDisplayed()
+        val camera = compose.onNodeWithTag("capture-viewfinder").fetchSemanticsNode().boundsInRoot
+        val advice = compose.onNodeWithText(ADVICE).fetchSemanticsNode().boundsInRoot
+        assertTrue(advice.top >= camera.bottom)
+        compose.onNodeWithText("Retry").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Skip Angle").assertIsDisplayed()
+        compose.onNodeWithText("Finish Session").assertIsDisplayed()
+        screenshot("live-session-detailed-coaching.png")
+    }
+
+    @Test fun setupOffersAVoiceTestBeforeSteppingAway() {
+        state.value = CaptureUiState.Framing(PoseQuality.NotYetKnown)
+        show()
+        compose.onNodeWithText("Test coach voice").performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, voiceTests) }
+    }
+
     @Test fun stateChangesDoNotRemountCameraAndFramingRetainsLensControl() {
         state.value = CaptureUiState.Framing(PoseQuality.NotYetKnown)
         show()
@@ -114,6 +141,7 @@ class LiveSessionLayoutDeviceTest {
                             onRetryAngle = { retries++ }, onSkipAngle = { skips++ },
                             onStart = {}, onStop = { finishes++ }, onCancelCountdown = {},
                             onRetry = {}, onUseDemo = {}, onSwitchCamera = { switches++ }, onBack = {},
+                            onTestVoice = { voiceTests++ },
                             modifier = (if (compact) Modifier.size(320.dp, 640.dp) else Modifier.fillMaxSize()).testTag("live-session-root"),
                             cameraContent = {
                                 DisposableEffect(Unit) { cameraMounts++; onDispose { cameraDisposals++ } }
@@ -139,6 +167,7 @@ class LiveSessionLayoutDeviceTest {
 
     companion object {
         private const val DIRECTION = "Turn sideways with your right hitting arm nearest the camera."
+        private const val ADVICE = "Your hitting arm stayed below the practice range. For your next attempt, reach through contact with a straighter arm and keep the movement controlled."
         private fun rotation() = CaptureUiState.Recording(
             sessionId = "layout-preview", elapsedMs = 46_000, liveRepCount = 5, quality = PoseQuality.NotYetKnown,
             stageMetrics = LiveCaptureMetrics(reps = 5), totalMetrics = LiveCaptureMetrics(reps = 5),

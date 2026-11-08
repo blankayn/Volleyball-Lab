@@ -75,6 +75,8 @@ internal fun CaptureControls(
     onRetrySave: () -> Unit = {},
     modifier: Modifier = Modifier,
     cameraContent: @Composable () -> Unit = {},
+    onTestVoice: () -> Unit = {},
+    voiceTesting: Boolean = false,
 ) {
     BoxWithConstraints(
         modifier = modifier.background(Brush.verticalGradient(listOf(Color(0xFF10151D), Color(0xFF1B2634))))
@@ -159,6 +161,11 @@ internal fun CaptureControls(
                         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
                         FramingGuidance(state.quality, state.autoStartArmed)
+                        TextButton(onClick = onTestVoice, enabled = !voiceTesting) {
+                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(18.dp), tint = LiveSessionProgress)
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(if (voiceTesting) R.string.coaching_test_voice_loading else R.string.coaching_test_voice), color = Color.White)
+                        }
                         if (audioUnavailable) TextButton(onClick = onSpeechSettings) {
                             Text(stringResource(R.string.capture_speech_settings), color = Color.White)
                         }
@@ -276,12 +283,21 @@ private fun SessionRotationGuidance(rotation: RotationUi, onRetry: () -> Unit, o
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Rounded.Info, null, tint = LiveSessionProgress, modifier = Modifier.size(22.dp))
                 Text(when {
+                    rotation.loadingCoaching -> stringResource(R.string.coaching_preparing)
+                    rotation.speechPending -> stringResource(R.string.coaching_listen)
                     rotation.secondsLeft != null -> stringResource(R.string.capture_angle_countdown, rotation.secondsLeft)
                     rotation.timedOut -> stringResource(R.string.capture_angle_unclear)
                     else -> stringResource(R.string.capture_next_view)
                 }, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                rotation.advice?.let { advice ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(if (advice.aiGenerated) R.string.coaching_ai_advice else R.string.coaching_local_advice),
+                            style = MaterialTheme.typography.labelMedium, color = LiveSessionProgress)
+                        Text(advice.text, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(28.dp))
                     Text(rotation.instruction, style = MaterialTheme.typography.bodyLarge, color = Color.White)
