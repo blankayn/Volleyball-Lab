@@ -3,6 +3,7 @@ import { DEFAULT_GROQ_MODEL, EXPLANATION_VERSION, explanationHash, requestGroqEx
 import { ApiError, authorizedSession, candidateIdentity } from "./firebase.mjs";
 import { ExplanationStore } from "./store.mjs";
 import { recordingRequest } from "./recordings.mjs";
+import { liveCoachingRequest } from "./live-coaching.mjs";
 
 const HTTP = { INVALID_ARGUMENT: 400, UNAUTHENTICATED: 401, PERMISSION_DENIED: 403, NOT_FOUND: 404, FAILED_PRECONDITION: 400, ABORTED: 409, RESOURCE_EXHAUSTED: 429, UNAVAILABLE: 503, INTERNAL: 500 };
 const hashKey = (type, value) => createHash("sha256").update(`volleyball-lab:${type}:${value}`).digest("hex");
@@ -46,6 +47,7 @@ export function createWorker({ fetchImpl = fetch, generate = requestGroqExplanat
       if (origin) headers["Access-Control-Allow-Origin"] = origin;
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "GET, HEAD, PUT, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck, Firebase-Instance-ID-Token", "Access-Control-Max-Age": "3600" } });
       const url = new URL(request.url);
+      if (["/coachLiveStage", "/coachVoicePreview"].includes(url.pathname)) return liveCoachingRequest(request, env, headers, { fetchImpl, now });
       if (url.pathname.startsWith("/recordings/")) return recordingRequest(request, env, headers, { fetchImpl, now });
       if (url.pathname === "/health" && request.method === "GET") return Response.json({ ok: true, service: "volleyball-session-ai", version: EXPLANATION_VERSION, configured: Boolean(env.GROQ_API_KEY && env.AI_DB) }, { headers });
       if (url.pathname !== "/explainTrainingSession") return Response.json({ error: { status: "NOT_FOUND", message: "Endpoint unavailable." } }, { status: 404, headers });
@@ -92,7 +94,12 @@ export function createWorker({ fetchImpl = fetch, generate = requestGroqExplanat
         return Response.json({ error: { status, message: known ? error.message : "AI explanation is unavailable. Your measured feedback is still available." } }, { status: HTTP[status] ?? 500, headers });
       }
     },
-    async scheduled(_event, env) { if (env.AI_DB) await new ExplanationStore(env.AI_DB).purge(now()); },
+    async scheduled(_event, env) {
+      if (env.AI_DB) {
+        await new ExplanationStore(env.AI_DB).purge(now());
+        await env.AI_DB.prepare("DELETE FROM live_coaching_usage WHERE last_requested_at <= ?").bind(now() - 48 * 60 * 60 * 1000).run();
+      }
+    },
   };
 }
 

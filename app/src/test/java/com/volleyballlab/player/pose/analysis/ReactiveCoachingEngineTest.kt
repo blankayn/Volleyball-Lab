@@ -47,4 +47,12 @@ class ReactiveCoachingEngineTest {
         engine.onPosture(LivePostureUi(), 2000)
         assertNull(engine.drainDue(4000))
     }
+
+    @Test fun `new angle does not praise improvement based on a previous view`() {
+        val engine = ReactiveCoachingEngine()
+        engine.onPosture(bad(), 0)
+        engine.reset()
+        assertNull(engine.onRep(good(), 2, 1, 4000))
+        assertNull(engine.drainDue(8000))
+    }
 }

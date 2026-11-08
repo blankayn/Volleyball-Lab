@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.pose.analysis.LivePostureUi
+import com.volleyballlab.player.pose.analysis.PoseGuideLimb
 import com.volleyballlab.player.pose.model.Landmark
 import com.volleyballlab.player.pose.model.BodyPoint
 import com.volleyballlab.player.pose.model.PoseFrame
@@ -55,6 +56,7 @@ fun PoseOverlay(
     frame: PoseFrame?,
     posture: LivePostureUi? = null,
     modifier: Modifier = Modifier,
+    guide: List<PoseGuideLimb> = emptyList(),
 ) {
     val extended = MaterialTheme.vbColors
     val measuredStatuses = posture?.takeUnless {
@@ -89,6 +91,17 @@ fun PoseOverlay(
             imageWidth = frame.imageWidth.toFloat(),
             imageHeight = frame.imageHeight.toFloat(),
         )
+
+        // The guide uses the exact camera crop and mirror transform as tracking.
+        guide.forEach { limb ->
+            val color = Color(0xFFFFD87A).copy(alpha = alpha * .65f)
+            listOf(limb.anchor to limb.joint, limb.joint to limb.target).forEach { (a, b) ->
+                drawLine(color, transform.map(a, frame.mirrored), transform.map(b, frame.mirrored),
+                    strokeWidth = 1.25.dp.toPx(), cap = StrokeCap.Round)
+            }
+            drawCircle(color, radius = 3.dp.toPx(), center = transform.map(limb.target, frame.mirrored),
+                style = Stroke(width = 1.25.dp.toPx()))
+        }
 
         SkeletonBones.forEach { (from, to) ->
             val a = frame.image(from)
@@ -203,7 +216,7 @@ private data class CenterCropTransform(
 
 /** Indices 0 through 10 are the face cluster in the BlazePose topology. */
 private val FACE_LANDMARK_RANGE = 0..10
-private const val BONE_WIDTH_DP = 4
+private const val BONE_WIDTH_DP = 2
 private const val BONE_ALPHA = 0.9f
-private const val JOINT_RADIUS_DP = 5
-private const val JOINT_STROKE_DP = 3
+private const val JOINT_RADIUS_DP = 3
+private const val JOINT_STROKE_DP = 1.5f
