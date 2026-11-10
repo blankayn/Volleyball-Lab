@@ -1,0 +1,10 @@
+{
+  "name": "volleyball-lab-payments",
+  "account_id": "1dbc7ce81e2d4055f05061fa6379de00",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false }
+}
