@@ -120,17 +120,15 @@ test("a client cannot self-grant, modify expiry, revoke, or delete entitlement",
   await assertFails(deleteDoc(ref));
 });
 
-test("temporary demo code unlocks Pro coach requests only for the signed-in account", async () => {
+test("legacy demo codes cannot be redeemed or unlock Pro coach requests", async () => {
   const db = client("demo-player");
   const access = doc(db, "demoProAccess/demo-player");
+  await assertFails(setDoc(access, { code: "123456" }));
+  await seed("demoProAccess/demo-player", { code: "123456" });
+  await assertFails(getDoc(access));
   await assertFails(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
-  await assertFails(setDoc(access, { code: "000000" }));
-  await assertFails(setDoc(doc(db, "demoProAccess/other"), { code: "123456" }));
-  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "demoProAccess/demo-player"), { code: "123456" }));
-  await assertSucceeds(setDoc(access, { code: "123456" }));
-  await assertSucceeds(getDoc(access));
-  await assertSucceeds(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
-  await assertFails(getDoc(doc(client("other"), "demoProAccess/demo-player")));
+  await seed("billingConfig/pro", { liveMode: true, enabled: false });
+  await assertFails(setDoc(doc(db, "roster/coach/members/demo-player"), member("demo-player")));
 });
 test("billing configuration is signed-in read only and internal billing data stays private", async () => {
   await seed("billingConfig/pro", { enabled: false, priceCentavos: 0 });

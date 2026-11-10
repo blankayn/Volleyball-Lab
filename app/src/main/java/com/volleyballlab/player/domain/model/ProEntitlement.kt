@@ -11,7 +11,8 @@ object ProEntitlement {
     }
 }
 
-data class ProCheckoutConfiguration(val enabled: Boolean = false, val priceCentavos: Long = 0,
-    val durationDays: Int = 0, val liveMode: Boolean = false) {
-    val ready: Boolean get() = enabled && liveMode && priceCentavos >= 100 && durationDays in 0..365
-}
+data class ProCheckoutConfiguration(
+    val enabled: Boolean,
+    val priceCentavos: Long,
+    val durationDays: Long,
+)
