@@ -7,7 +7,9 @@ test("checkout remains disabled until live merchant price and return URL exist",
   assert.equal(validConfig({}), false);
   const cfg = { enabled: true, liveMode: true, priceCentavos: 19900, durationDays: 30, returnUrl: "https://volleyball-lab.web.app/payment-return.html" };
   assert.equal(validConfig(cfg), true);
-  for (const patch of [{ priceCentavos: 0 }, { liveMode: false }, { durationDays: -1 }, { returnUrl: "http://bad" }]) assert.equal(validConfig({ ...cfg, ...patch }), false);
+  for (const patch of [{ priceCentavos: 0 }, { liveMode: false }, { durationDays: -1 }, { returnUrl: "http://bad" }, { returnUrl: "https://" }]) {
+    assert.equal(validConfig({ ...cfg, ...patch }), false);
+  }
 });
 test("signature verifies original bytes and rejects tampering, test mode and replay", () => {
   const raw = Buffer.from('{"paid":true}'); const now = 1700000000;
