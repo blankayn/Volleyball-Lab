@@ -96,8 +96,8 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 24
-        versionName = "0.1.23"
+        versionCode = 25
+        versionName = "0.1.24"
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"\"")
@@ -117,7 +117,7 @@ android {
             // Android app in the Firebase console for
             // com.volleyballlab.player.debug and re-download the json.
             versionNameSuffix = "-debug"
-            buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"https://dev.xen.to/o5ptaweZ\"")
+            buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"https://dev.xen.to/QitKomS0\"")
         }
         release {
             isMinifyEnabled = true
