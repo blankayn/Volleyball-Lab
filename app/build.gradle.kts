@@ -35,6 +35,17 @@ if (recordingStorageUrl.isNotEmpty()) {
     }
 }
 
+val passwordRecoveryUrl = providers.gradleProperty("passwordRecoveryUrl")
+    .orElse(providers.environmentVariable("PASSWORD_RECOVERY_URL"))
+    .orElse("").get().trim()
+if (passwordRecoveryUrl.isNotEmpty()) {
+    val endpoint = URI(passwordRecoveryUrl)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
+        endpoint.userInfo == null && endpoint.query == null && endpoint.fragment == null) {
+        "passwordRecoveryUrl must be a public HTTPS address."
+    }
+}
+
 // Keep clean checkouts from silently producing an APK without live pose tracking.
 abstract class VerifyPoseModel : DefaultTask() {
     @get:org.gradle.api.tasks.Internal abstract val model: org.gradle.api.file.RegularFileProperty
@@ -96,8 +107,9 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 25
-        versionName = "0.1.24"
+        versionCode = 26
+        versionName = "0.1.25"
+        buildConfigField("String", "PASSWORD_RECOVERY_URL", "\"$passwordRecoveryUrl\"")
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"\"")
