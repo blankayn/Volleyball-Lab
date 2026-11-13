@@ -32,16 +32,16 @@ internal fun CoachFeedbackSessionCard(
             Box(Modifier.padding(top = 10.dp).size(8.dp).background(
                 if (submission.isPending) coachCardOutline() else MaterialTheme.colorScheme.primary, CircleShape))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(session?.skill?.name ?: "Shared session", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    CoachStatusPill(if (submission.isPending) "AWAITING FEEDBACK" else "REVIEWED", accent = !submission.isPending)
+                    CoachStatusPill(if (submission.isPending) "AWAITING FEEDBACK" else "REVIEWED", accent = !submission.isPending, compact = true)
                 }
                 Text(dateLabel(session?.startedAtEpochMs ?: submission.submittedAtEpochMs),
                     style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
             }
             session?.formScore()?.let { score ->
                 Surface(shape = RoundedCornerShape(13.dp), color = coachCardMuted().copy(alpha = .045f)) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                    Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(score.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("/100", style = MaterialTheme.typography.labelSmall, color = coachCardMuted())

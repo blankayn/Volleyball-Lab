@@ -168,10 +168,10 @@ fun MyCoachScreen(
                 CoachWorkspaceTab.Feedback -> {
                     item(key = "feedback-heading") { CoachSectionTitle("Your progress, with context", "Session feedback, coaching questions, and your reviews", state.submissions.size) }
                     item(key = "feedback-filters") {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("All sessions", "Reviewed", "Awaiting feedback").forEachIndexed { index, label ->
                                 FilterChip(selected = feedbackFilter == index, onClick = { feedbackFilter = index },
-                                    label = { Text(label) }, shape = RoundedCornerShape(20.dp),
+                                    label = { Text(label, style = MaterialTheme.typography.labelMedium, fontSize = 12.sp) }, shape = RoundedCornerShape(20.dp),
                                     colors = FilterChipDefaults.filterChipColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                                         labelColor = coachCardMuted(),
