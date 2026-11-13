@@ -17,8 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -172,7 +170,14 @@ fun MyCoachScreen(
                     item(key = "feedback-filters") {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("All sessions", "Reviewed", "Awaiting feedback").forEachIndexed { index, label ->
-                                FilterChip(selected = feedbackFilter == index, onClick = { feedbackFilter = index }, label = { Text(label) })
+                                FilterChip(selected = feedbackFilter == index, onClick = { feedbackFilter = index },
+                                    label = { Text(label) }, shape = RoundedCornerShape(20.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                                        labelColor = coachCardMuted(),
+                                        selectedContainerColor = MaterialTheme.colorScheme.onSurface,
+                                        selectedLabelColor = MaterialTheme.colorScheme.surface,
+                                    ))
                             }
                         }
                     }
@@ -185,34 +190,25 @@ fun MyCoachScreen(
                         val feedback = state.notes.filter { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }.sortedBy { it.createdAtEpochMs }
                         val review = reviews.firstOrNull { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }
                         val connected = active && link.coachUid == submission.coachUid
-                        CoachSectionCard {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    CoachEyebrow(if (submission.isPending) "Awaiting feedback" else "Reviewed session")
-                                    Text(session?.skill?.name ?: "Shared session", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                                    Text(dateLabel(submission.submittedAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                session?.formScore()?.let { score ->
-                                    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .07f)) {
-                                        Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(score.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                                            Text("FORM / 100", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+                        val question = questions.firstOrNull { it.coachUid == submission.coachUid && it.resolvedAt == null }
+                            ?: questions.firstOrNull { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }
+                        var questionOpen by rememberSaveable(submission.coachUid, submission.sessionId) { mutableStateOf(false) }
+                        CoachFeedbackSessionCard(submission, session, feedback) {
+                            if (!submission.isPending) {
+                                ReviewEditor(submission, review, connected, actions, busy, errors) {
+                                    if (connected || question != null) {
+                                        OutlinedButton(onClick = { questionOpen = !questionOpen },
+                                            shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
+                                            Text(if (questionOpen) "Hide question" else if (question != null) "Conversation" else "Ask question",
+                                                style = MaterialTheme.typography.labelMedium)
+                                            Spacer(Modifier.width(4.dp))
+                                            CoachingUnreadBadge(question?.unread(false) ?: 0)
+                                            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp), tint = coachCardMuted())
                                         }
                                     }
                                 }
-                            }
-                            if (feedback.isEmpty()) Text(if (submission.isPending) "Your session is with your coach. Their guidance will appear here." else "This session has been reviewed.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            feedback.forEach { note ->
-                                val rule = MaterialTheme.colorScheme.primary.copy(alpha = .5f)
-                                Column(Modifier.drawBehind { drawLine(rule, Offset.Zero, Offset(0f, size.height), 3.dp.toPx()) }.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    CoachEyebrow("Coach feedback")
-                                    Text(note.text, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                                    Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                            if (!submission.isPending) {
-                                CoachingQuestionCard(submission.coachUid, submission.sessionId, questions.firstOrNull { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }, connected, actions, busy, errors)
-                                ReviewEditor(submission, review, connected, actions, busy, errors)
+                                CoachingQuestionCard(submission.coachUid, submission.sessionId, question, connected,
+                                    actions, busy, errors, initiallyExpanded = true, visible = questionOpen)
                             }
                         }
                     }
@@ -287,17 +283,24 @@ private fun CoachAssignmentTile(assignment: CoachAssignment, onClick: () -> Unit
 
 @Composable
 private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question: CoachingQuestion?, connected: Boolean,
-    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>) {
+    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>,
+    initiallyExpanded: Boolean = false, visible: Boolean = true) {
     val key = "question-$coachUid-${sessionId ?: "intro"}"
-    var open by rememberSaveable(key) { mutableStateOf(false) }
-    var answerOpen by rememberSaveable(key) { mutableStateOf(false) }
+    var open by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
+    var answerOpen by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
     var text by rememberSaveable(key) { mutableStateOf("") }
     val topics = CoachingTopic.entries.filter { it.introductory == (sessionId == null) }
     var topic by rememberSaveable(key) { mutableStateOf(topics.first()) }
     val allQuestions by actions.hub.playerQuestions.collectAsStateWithLifecycle(emptyList())
     val current = allQuestions.firstOrNull { it.coachUid == coachUid && it.resolvedAt == null } ?: question
     var startNew by rememberSaveable(key) { mutableStateOf(false) }
-    LaunchedEffect(question?.id) { startNew = false; open = false }
+    LaunchedEffect(question?.id) { startNew = false; open = initiallyExpanded }
+    LaunchedEffect(visible) {
+        if (visible && initiallyExpanded) {
+            if (current != null) answerOpen = true else open = true
+        }
+    }
+    if (!visible) return
     if (current != null && !startNew) {
         TextButton(onClick = { answerOpen = !answerOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(if (answerOpen) "Hide training conversation" else "Open training conversation")
@@ -338,8 +341,11 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
 
 @Composable
 private fun ReviewEditor(submission: SessionSubmission, review: CoachReview?, connected: Boolean,
-    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>) {
-    if (!connected && review == null) return
+    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>, questionAction: @Composable () -> Unit) {
+    if (!connected && review == null) {
+        questionAction()
+        return
+    }
     val key = "review-${submission.coachUid}-${submission.sessionId}"
     var editing by rememberSaveable(key) { mutableStateOf(false) }
     var submitted by rememberSaveable(key) { mutableStateOf(false) }
@@ -355,13 +361,16 @@ private fun ReviewEditor(submission: SessionSubmission, review: CoachReview?, co
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-    if (!editing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(if (review == null) "How was the guidance?" else "Your coaching review", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            if (review != null) Text("★".repeat(review.rating.coerceIn(1, 5)), color = MaterialTheme.colorScheme.primary, letterSpacing = 2.sp)
-            else Text("Rate your coaching experience", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (!editing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (review != null) Text("★".repeat(review.rating.coerceIn(1, 5)), Modifier.align(Alignment.CenterVertically),
+                color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp, style = MaterialTheme.typography.labelMedium)
+            TextButton(onClick = { editing = true }, enabled = connected,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)) {
+                Text(if (review == null) "Rate session" else "Edit review", style = MaterialTheme.typography.labelMedium, color = coachCardMuted())
+            }
         }
-        TextButton(onClick = { editing = true }) { Text(if (review == null) "Rate session" else "Edit review") }
+        questionAction()
     } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         CoachEyebrow("Your experience")
         Text("Rate the coaching guidance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -446,4 +455,4 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     } }
 }
 private fun hubPadding(padding: PaddingValues) = PaddingValues(20.dp, padding.calculateTopPadding() + 12.dp, 20.dp, padding.calculateBottomPadding() + 24.dp)
-private fun dateLabel(time: Long): String = if (time == 0L) "Syncing…" else DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
+internal fun dateLabel(time: Long): String = if (time == 0L) "Syncing…" else DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
