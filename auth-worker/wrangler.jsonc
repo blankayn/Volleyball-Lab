@@ -1,0 +1,19 @@
+{
+  "$schema": "../ai-worker/node_modules/wrangler/config-schema.json",
+  "name": "volleyball-lab-auth",
+  "account_id": "1dbc7ce81e2d4055f05061fa6379de00",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "GMAIL_SENDER": "volleyballlab1@gmail.com" },
+  "d1_databases": [{
+    "binding": "AUTH_DB",
+    "database_name": "volleyball-lab-auth",
+    "database_id": "a7136907-16cd-41d5-b724-629d9981450e",
+    "migrations_dir": "migrations"
+  }],
+  "triggers": { "crons": ["31 * * * *"] },
+  "observability": { "enabled": false }
+}

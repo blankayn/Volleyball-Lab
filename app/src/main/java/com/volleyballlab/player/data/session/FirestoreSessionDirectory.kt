@@ -2,6 +2,7 @@ package com.volleyballlab.player.data.session
 
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.volleyballlab.player.data.cloud.CloudSchema
 import com.volleyballlab.player.data.cloud.awaitCloud
 import com.volleyballlab.player.data.cloud.snapshots
@@ -16,7 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
- * The player's own sessions, mirrored to the cloud.
+ * The player's own score summaries, mirrored to and restored from the cloud.
  *
  * Called from [DataStoreSessionRepository] after the local write lands, so the
  * on-device history never waits on the network and never fails because of it.
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.map
  * not silently un-share itself.
  */
 interface SessionCloudStore {
+    suspend fun loadHistory(ownerUid: String): List<SessionResult>
     suspend fun upload(ownerUid: String, session: SessionResult)
     suspend fun delete(ownerUid: String, sessionId: String)
 }
@@ -35,6 +37,14 @@ class FirestoreSessionCloudStore(
     private val authRepository: AuthRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) : SessionCloudStore {
+
+    override suspend fun loadHistory(ownerUid: String): List<SessionResult> =
+        db.collection(CloudSchema.SESSIONS)
+            .whereEqualTo("ownerUid", ownerUid)
+            .get(Source.SERVER)
+            .awaitCloud()
+            .documents
+            .mapNotNull { it.data?.let(CloudSchema::sessionOf) }
 
     override suspend fun upload(ownerUid: String, session: SessionResult) {
         if (authRepository.currentUid != ownerUid) return

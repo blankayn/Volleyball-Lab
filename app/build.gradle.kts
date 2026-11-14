@@ -35,6 +35,19 @@ if (recordingStorageUrl.isNotEmpty()) {
     }
 }
 
+val passwordRecoveryUrl = providers.gradleProperty("passwordRecoveryUrl")
+    .orElse(providers.environmentVariable("PASSWORD_RECOVERY_URL"))
+    .orElse("").get().trim()
+if (passwordRecoveryUrl.isNotEmpty()) {
+    val endpoint = URI(passwordRecoveryUrl)
+    require(endpoint.scheme == "https" && !endpoint.host.isNullOrBlank() &&
+        endpoint.userInfo == null && endpoint.query == null && endpoint.fragment == null) {
+        "passwordRecoveryUrl must be a public HTTPS address."
+    }
+}
+
+val xenditTestCheckoutUrl = "https://dev.xen.to/QitKomS0"
+
 // Keep clean checkouts from silently producing an APK without live pose tracking.
 abstract class VerifyPoseModel : DefaultTask() {
     @get:org.gradle.api.tasks.Internal abstract val model: org.gradle.api.file.RegularFileProperty
@@ -106,8 +119,9 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 24
-        versionName = "0.1.23"
+        versionCode = 29
+        versionName = "0.1.28"
+        buildConfigField("String", "PASSWORD_RECOVERY_URL", "\"$passwordRecoveryUrl\"")
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"\"")
@@ -127,7 +141,7 @@ android {
             // Android app in the Firebase console for
             // com.volleyballlab.player.debug and re-download the json.
             versionNameSuffix = "-debug"
-            buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"https://dev.xen.to/o5ptaweZ\"")
+            buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"$xenditTestCheckoutUrl\"")
         }
         release {
             isMinifyEnabled = true
@@ -141,6 +155,7 @@ android {
         // App Check provider, so they can update test phones without losing data.
         create("preview") {
             initWith(getByName("release"))
+            buildConfigField("String", "XENDIT_TEST_CHECKOUT_URL", "\"$xenditTestCheckoutUrl\"")
             signingConfig = signingConfigs.getByName("debug")
             versionNameSuffix = "-preview"
             matchingFallbacks += listOf("release")
@@ -176,6 +191,41 @@ android {
         }
     }
 }
+
+abstract class VerifyDevelopmentCheckout : DefaultTask() {
+    @get:org.gradle.api.tasks.InputFile abstract val debugConfig: org.gradle.api.file.RegularFileProperty
+    @get:org.gradle.api.tasks.InputFile abstract val previewConfig: org.gradle.api.file.RegularFileProperty
+    @get:org.gradle.api.tasks.InputFile abstract val releaseConfig: org.gradle.api.file.RegularFileProperty
+
+    @org.gradle.api.tasks.TaskAction
+    fun verify() {
+        fun checkout(file: java.io.File): String {
+            val field = Regex("XENDIT_TEST_CHECKOUT_URL = \"([^\"]*)\";")
+            return field.find(file.readText())?.groupValues?.get(1)
+                ?: error("The generated Xendit checkout field is missing.")
+        }
+        val debugUrl = checkout(debugConfig.get().asFile)
+        check(debugUrl.startsWith("https://dev.xen.to/")) {
+            "Debug builds must include the Xendit test checkout."
+        }
+        check(checkout(previewConfig.get().asFile) == debugUrl) {
+            "Preview builds must include the same Xendit test checkout as debug builds."
+        }
+        check(checkout(releaseConfig.get().asFile).isEmpty()) {
+            "Release builds must use the server-controlled live checkout."
+        }
+    }
+}
+val verifyDevelopmentCheckout = tasks.register<VerifyDevelopmentCheckout>("verifyDevelopmentCheckout") {
+    group = "verification"
+    description = "Checks that development APKs retain the Xendit test checkout."
+    debugConfig.set(layout.buildDirectory.file("generated/source/buildConfig/debug/com/volleyballlab/player/BuildConfig.java"))
+    previewConfig.set(layout.buildDirectory.file("generated/source/buildConfig/preview/com/volleyballlab/player/BuildConfig.java"))
+    releaseConfig.set(layout.buildDirectory.file("generated/source/buildConfig/release/com/volleyballlab/player/BuildConfig.java"))
+    dependsOn("generateDebugBuildConfig", "generatePreviewBuildConfig", "generateReleaseBuildConfig")
+}
+tasks.matching { it.name in listOf("assembleDebug", "assemblePreview") }
+    .configureEach { dependsOn(verifyDevelopmentCheckout) }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

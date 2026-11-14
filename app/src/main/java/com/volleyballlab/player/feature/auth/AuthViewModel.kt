@@ -368,37 +368,6 @@ class AuthViewModel(
         if (account.displayName.isNotBlank()) profileRepository.seedAccountName(account.displayName)
     }
 
-    /**
-     * Sends a reset mail, and says so whether or not the address has an account.
-     *
-     * Firebase already declines to reveal that distinction, and the wording here
-     * matches: "if that address has an account". Confirming which addresses are
-     * registered would turn this link into an account-enumeration tool.
-     */
-    fun sendPasswordReset() {
-        val form = _state.value
-        val complaint = validateEmail(form.email)
-        if (complaint != null) return fail(complaint)
-
-        viewModelScope.launch {
-            _state.update { it.copy(submitting = true, error = null, notice = null) }
-            val outcome = authRepository.sendPasswordReset(form.email)
-            _state.update {
-                when (outcome) {
-                    is AuthOutcome.Success ->
-                        it.copy(submitting = false, notice = R.string.auth_reset_sent)
-                    // Unreachable for a reset - there is no sheet to dismiss - but
-                    // spelled out rather than folded into an else, so adding a
-                    // fourth outcome later fails here loudly instead of silently
-                    // being treated as a cancellation.
-                    is AuthOutcome.Cancelled -> it.copy(submitting = false)
-                    is AuthOutcome.Failure ->
-                        it.copy(submitting = false, error = outcome.error.message)
-                }
-            }
-        }
-    }
-
     private fun submit(onSuccess: (UserRole) -> Unit, action: suspend () -> AuthOutcome) {
         if (_state.value.submitting) return
         _state.update { it.copy(submitting = true, error = null, notice = null) }
