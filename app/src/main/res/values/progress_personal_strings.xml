@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_progress_title">Your progress</string>
+    <string name="personal_progress_latest">Latest score</string>
+    <string name="personal_progress_previous">Previous score</string>
+    <string name="personal_progress_points">%1$d/100</string>
+    <string name="personal_progress_starting">Your starting score</string>
+    <string name="personal_progress_higher">%1$d points higher than your previous %2$s session.</string>
+    <string name="personal_progress_lower">%1$d points lower than your previous %2$s session.</string>
+    <string name="personal_progress_same">The same score as your previous %1$s session.</string>
+    <string name="personal_progress_recent">Last %1$d scored %2$s sessions</string>
+    <string name="personal_progress_recent_one">Your first scored %1$s session</string>
+    <string name="personal_progress_chart_hint">Tap a score to review that session.</string>
+    <string name="personal_progress_bar">%1$s, %2$s: %3$d out of 100. Open session.</string>
+    <string name="personal_progress_focus">Focus next</string>
+    <string name="personal_progress_more_evidence">Record another clear set with your arms and legs visible for a useful next-practice tip.</string>
+    <string name="personal_progress_no_score">No scored %1$s sessions yet</string>
+    <string name="personal_progress_first_session">Record your first session</string>
+    <string name="personal_progress_score_note">Form scores describe the visible movements measured in each session. Drills and camera views can affect the score.</string>
+</resources>

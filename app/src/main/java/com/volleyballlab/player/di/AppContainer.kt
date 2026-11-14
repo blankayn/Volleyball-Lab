@@ -200,7 +200,9 @@ class AppContainer(private val context: Context) {
     }
 
     val assessmentRepository: AssessmentRepository by lazy {
-        DataStoreAssessmentRepository(context, authRepository)
+        com.volleyballlab.player.data.assessment.SyncedAssessmentRepository(
+            DataStoreAssessmentRepository(context, authRepository), profileRepository, authRepository,
+        )
     }
 
     /** The install-level welcome, before any account exists. */

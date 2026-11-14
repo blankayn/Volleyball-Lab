@@ -119,8 +119,8 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 29
-        versionName = "0.1.28"
+        versionCode = 30
+        versionName = "0.1.29"
         buildConfigField("String", "PASSWORD_RECOVERY_URL", "\"$passwordRecoveryUrl\"")
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")

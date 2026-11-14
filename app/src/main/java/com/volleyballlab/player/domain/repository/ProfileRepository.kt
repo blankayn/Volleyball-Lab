@@ -8,12 +8,14 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * The athlete's own details.
  *
- * Identity and address sync through a private Firestore document. Training
- * preferences and device photo paths stay in the account-scoped local store.
+ * Identity, address, and confirmed training preferences sync privately. Device
+ * photo paths stay in the account-scoped local store.
  */
 interface ProfileRepository {
     val syncStatus: Flow<ProfileSyncStatus> get() = flowOf(ProfileSyncStatus.Saved)
     suspend fun retrySync() {}
+    /** Bounded first cloud read before choosing onboarding on a fresh installation. */
+    suspend fun awaitInitialRestore() {}
     suspend fun current(): AthleteProfile = profile.first()
 
     /** The current profile. Emits again on every edit. */

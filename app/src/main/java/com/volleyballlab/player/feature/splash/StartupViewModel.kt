@@ -143,7 +143,7 @@ class StartupViewModel(
         // uid, and asking for it while `currentUser` is still null would get the
         // default for nobody rather than the answer for this account.
         if (roleRepository.current() == UserRole.Coach) return StartDestination.CoachHome
-        return if (assessmentRepository.hasOnboarded.first()) {
+        return if (assessmentRepository.currentHasOnboarded()) {
             StartDestination.Home
         } else {
             StartDestination.Assessment

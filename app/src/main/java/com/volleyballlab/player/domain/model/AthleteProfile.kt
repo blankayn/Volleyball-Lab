@@ -54,6 +54,7 @@ data class AthleteProfile(
     val firstName: String = "",
     val lastName: String = "",
     val address: ProfileAddress? = null,
+    val trainingSetup: SavedTrainingSetup? = null,
 ) {
     val hasName: Boolean get() = name.isNotBlank()
 

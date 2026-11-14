@@ -207,6 +207,7 @@ class ProfileViewModel(
 fun ProfileScreen(
     onSignedOut: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier,
     onBrowseCoaches: () -> Unit = {},
+    onRefreshPlan: () -> Unit = {},
 ) {
     val model: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
     val state by model.uiState.collectAsStateWithLifecycle()
@@ -229,14 +230,14 @@ fun ProfileScreen(
                 onMediaRequestHandled = { mediaRequest = null }, showControls = false, onMediaBusyChanged = { mediaBusy = it })
             }
         },
-        sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut) },
+        sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut, onRefreshPlan) },
     )
 }
 
 @Composable
 private fun StudentAccountSectionContent(
     section: AccountSection, state: ProfileUiState, model: ProfileViewModel,
-    onBrowseCoaches: () -> Unit, onSignedOut: () -> Unit,
+    onBrowseCoaches: () -> Unit, onSignedOut: () -> Unit, onRefreshPlan: () -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -251,12 +252,13 @@ private fun StudentAccountSectionContent(
             }
             AccountSection.Plan -> ProPlanCard(onBrowseCoaches = onBrowseCoaches)
             AccountSection.Settings -> InlineAccountSettings(coach = false) { selected ->
-                StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut)
+                StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut, onRefreshPlan)
             }
             AccountSection.Training -> {
                 CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged,
                     model::onPoseGuideChanged, model::onDetailedAiChanged)
                 ProfileTrainingTools(section = ProfileToolSection.Training)
+                TrainingSetupPlanCard(onRefreshPlan)
             }
             AccountSection.Security -> AccountSecurityCard()
             AccountSection.Notifications -> NotificationInboxEntry()

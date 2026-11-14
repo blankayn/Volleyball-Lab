@@ -12,6 +12,7 @@ import com.volleyballlab.player.domain.model.CourtPosition
 import com.volleyballlab.player.domain.model.DominantHand
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.ProfileAddress
+import com.volleyballlab.player.domain.model.SavedTrainingSetup
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.ProfileRepository
 import java.io.IOException
@@ -83,6 +84,7 @@ class DataStoreProfileRepository(
             firstName = preferences[scope.string("first_name")].orEmpty(),
             lastName = preferences[scope.string("last_name")].orEmpty(),
             address = preferences[scope.string("address")]?.toAddressOrNull(),
+                trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
         )
     }
 
@@ -108,6 +110,7 @@ class DataStoreProfileRepository(
                 firstName = preferences[scope.string("first_name")].orEmpty(),
                 lastName = preferences[scope.string("last_name")].orEmpty(),
                 address = preferences[scope.string("address")]?.toAddressOrNull(),
+                trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
             )
         }
 
@@ -125,6 +128,7 @@ class DataStoreProfileRepository(
                 firstName = preferences[scope.string("first_name")].orEmpty(),
                 lastName = preferences[scope.string("last_name")].orEmpty(),
                 address = preferences[scope.string("address")]?.toAddressOrNull(),
+                trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
             ))
             val name = profile.name.trim().take(AthleteProfile.MAX_NAME_LENGTH)
             if (name.isEmpty()) {
@@ -155,6 +159,8 @@ class DataStoreProfileRepository(
                 if (it.isEmpty()) preferences.remove(scope.string("last_name"))
                 else preferences[scope.string("last_name")] = it
             }
+            profile.trainingSetup?.let { preferences[scope.string("training_setup")] = Json.encodeToString(it) }
+                ?: preferences.remove(scope.string("training_setup"))
             profile.address?.let { preferences[scope.string("address")] = Json.encodeToString(it) }
                 ?: preferences.remove(scope.string("address"))
         }
@@ -176,3 +182,6 @@ private fun String.toAddressOrNull(): ProfileAddress? =
 
 internal suspend fun clearProfileAccount(context: Context, uid: String) =
     com.volleyballlab.player.data.account.clearAccountPreferences(context.athleteProfileStore, uid)
+
+private fun String.toSetupOrNull(): SavedTrainingSetup? =
+    runCatching { AddressJson.decodeFromString<SavedTrainingSetup>(this) }.getOrNull()

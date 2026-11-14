@@ -3,6 +3,7 @@ package com.volleyballlab.player.data.profile
 import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.domain.repository.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
@@ -49,7 +50,7 @@ class ProfileSyncTest {
     @Test fun freshDeviceRestoresCloudAddressAndKeepsLocalPreferencesAndPhoto() = runTest {
         val local = Local(); val cloud = Cloud()
         local.updateFor("a") { it.copy(position = CourtPosition.Libero, photoPath = "local.jpg") }
-        cloud.snapshots("a").value = ProfileCloudSnapshot(ProfileCloudSchema.fields(AthleteProfile(name = "Kirt", address = ph)), false)
+        cloud.snapshots("a").value = ProfileCloudSnapshot(ProfileCloudSchema.fields(AthleteProfile(name = "Kirt", address = ph)).filterKeys { it in setOf("name", "firstName", "lastName", "address") }, false)
         val repo = SyncedProfileRepository(local, auth, cloud, backgroundScope); runCurrent()
         assertEquals(ph, repo.profile.value.address)
         assertEquals(CourtPosition.Libero, repo.profile.value.position)
@@ -117,4 +118,16 @@ class ProfileSyncTest {
         assertEquals(AthleteProfile.Anonymous, repo.profile.value)
         assertTrue(cloud.writes.isEmpty())
     }
+    @Test fun initialRestoreIsBoundedOfflineAndAConfirmedCloudSnapshotUnblocksIt() = runTest {
+        val cloud = Cloud(); val repo = SyncedProfileRepository(Local(), auth, cloud, backgroundScope)
+        runCurrent()
+        val waiting = async { repo.awaitInitialRestore() }; runCurrent()
+        assertFalse(waiting.isCompleted)
+        advanceTimeBy(4_000); runCurrent()
+        assertTrue(waiting.isCompleted)
+        cloud.snapshots("a").value = ProfileCloudSnapshot(emptyMap(), false); runCurrent()
+        val confirmed = async { repo.awaitInitialRestore() }; runCurrent()
+        assertTrue(confirmed.isCompleted)
+    }
+
 }

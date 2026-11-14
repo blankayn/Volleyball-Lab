@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { SESSION_CUES, DEFAULT_GROQ_MODEL } from "../../functions/session-explanation-policy.mjs";
 import { ApiError, candidateIdentity, firestoreRead } from "./firebase.mjs";
+import { reserveUsage as reserve } from "./usage.mjs";
 
 const VOICE_MODEL = "canopylabs/orpheus-v1-english";
 const PREVIEW = "I'm here to coach you. Keep your whole body in view, and listen for one clear tip at a time.";
@@ -80,18 +81,6 @@ export async function generateLiveAdvice({ apiKey, cue, skill, fetchImpl = fetch
   });
   const body = JSON.parse((await boundedBytes(response, 12_000)).toString("utf8"));
   return validateLiveAdvice(body.choices?.[0]?.message?.content, cue.id);
-}
-
-async function reserve(db, actor, kind, now, limit, interval) {
-  const day = new Date(now).toISOString().slice(0, 10);
-  const result = await db.prepare(`INSERT INTO live_coaching_usage(actor,kind,day,count,last_requested_at)
-    VALUES (?,?,?,1,?) ON CONFLICT(actor,kind) DO UPDATE SET day=excluded.day,
-    count=CASE WHEN live_coaching_usage.day=excluded.day THEN live_coaching_usage.count+1 ELSE 1 END,
-    last_requested_at=excluded.last_requested_at
-    WHERE (live_coaching_usage.day!=excluded.day OR live_coaching_usage.count<?)
-      AND live_coaching_usage.last_requested_at<=?`)
-    .bind(actor, kind, day, now, limit, now - interval).run();
-  return result.meta.changes === 1;
 }
 
 async function voice(text, env, actor, now, fetchImpl) {

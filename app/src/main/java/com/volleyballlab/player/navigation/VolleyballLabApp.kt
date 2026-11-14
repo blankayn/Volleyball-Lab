@@ -43,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -650,6 +653,9 @@ private fun VbNavHost(
     val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
+    val setupScope = rememberCoroutineScope()
+    val setupGraph = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container
+
     NavHost(
         navController = navController,
         startDestination = when (start) {
@@ -692,7 +698,15 @@ private fun VbNavHost(
                 // whole shell for the coach one. Navigating first would show a
                 // frame of the athlete's dashboard on the way past.
                 onAuthenticated = { role ->
-                    if (role == UserRole.Player) navController.leaveAuth(hasOnboarded())
+                    if (role == UserRole.Player) setupScope.launch {
+                        val uid = setupGraph.authRepository.currentUid ?: return@launch
+                        val onboarded = try { setupGraph.assessmentRepository.currentHasOnboarded() }
+                            catch (failure: CancellationException) { throw failure }
+                            catch (_: Exception) { hasOnboarded() }
+                        if (setupGraph.authRepository.currentUid == uid && setupGraph.roleRepository.current() == UserRole.Player) {
+                            navController.leaveAuth(onboarded)
+                        }
+                    }
                 },
                 onSignUp = { navController.navigate(SignUpRoute) },
             )
@@ -927,6 +941,7 @@ private fun VbNavHost(
         }
         composable<ProfileRoute> {
             ProfileScreen(
+                onRefreshPlan = { navController.navigate(AssessmentRoute) },
                 onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.

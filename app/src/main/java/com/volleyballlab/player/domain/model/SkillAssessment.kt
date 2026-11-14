@@ -2,6 +2,7 @@ package com.volleyballlab.player.domain.model
 
 import androidx.annotation.StringRes
 import com.volleyballlab.player.R
+import kotlinx.serialization.Serializable
 
 /**
  * How an athlete rates themselves at one skill.
@@ -15,6 +16,7 @@ import com.volleyballlab.player.R
  * Persisted by [Enum.name], so the same wire-format caution as [CourtPosition]
  * applies: add entries, never repurpose or rename them.
  */
+@Serializable
 enum class SelfRating(@param:StringRes val label: Int) {
     Struggling(R.string.rating_struggling),
     Okay(R.string.rating_okay),
@@ -22,6 +24,7 @@ enum class SelfRating(@param:StringRes val label: Int) {
 }
 
 /** Same wire-format caution as [SelfRating]. */
+@Serializable
 enum class ExperienceLevel(@param:StringRes val label: Int) {
     New(R.string.experience_new),
     Developing(R.string.experience_developing),
@@ -46,6 +49,7 @@ enum class ExperienceLevel(@param:StringRes val label: Int) {
  * @param completedAtEpochMs when the questionnaire was finished, so the dashboard
  *   can say how old the advice it is giving actually is.
  */
+@Serializable
 data class SkillAssessment(
     val ratings: Map<Skill, SelfRating> = emptyMap(),
     val experience: ExperienceLevel? = null,

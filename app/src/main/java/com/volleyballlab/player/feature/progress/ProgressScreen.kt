@@ -1,11 +1,14 @@
 package com.volleyballlab.player.feature.progress
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,31 +17,35 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -66,14 +73,12 @@ import com.volleyballlab.player.ui.component.VbSectionHeader
 import com.volleyballlab.player.ui.component.scoreColor
 import com.volleyballlab.player.ui.component.SkillAccentRule
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
-import com.volleyballlab.player.ui.theme.vbColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
 import com.volleyballlab.player.ui.component.calendarDayFlow
@@ -202,6 +207,12 @@ fun ProgressScreen(
 ) {
     val viewModel: ProgressViewModel = viewModel(factory = ProgressViewModel.Factory)
     val summary by viewModel.summary.collectAsStateWithLifecycle()
+    var selectedSkillName by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedSkill = selectedSkillName?.let { name -> Skill.entries.firstOrNull { it.name == name } }
+        ?: SkillScoreProgress.defaultSkill(summary.history)
+    val skillProgress = remember(summary.history, selectedSkill) {
+        SkillScoreProgress.from(selectedSkill, summary.history)
+    }
 
     if (!summary.loaded) {
         GhostLoadingScreen(GhostLayout.Progress, contentPadding, modifier)
@@ -224,10 +235,19 @@ fun ProgressScreen(
         if (!summary.hasSessions) {
             item {
                 EntranceAnimation(index = 1) {
-                    NoDataCard(
-                        onStartTraining = onStartTraining,
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        VbSectionHeader(
+                            text = stringResource(R.string.personal_progress_title),
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                        PersonalProgressCard(
+                            progress = skillProgress,
+                            onSelectSkill = { selectedSkillName = it.name },
+                            onOpenSession = onOpenSession,
+                            onStartTraining = onStartTraining,
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                    }
                 }
             }
             return@LazyColumn
@@ -239,20 +259,22 @@ fun ProgressScreen(
             }
         }
 
-        if (summary.trend.size >= MIN_TREND_POINTS) {
-            item {
-                EntranceAnimation(index = 2) {
-                    VbSectionHeader(
-                        text = stringResource(R.string.progress_section_trend),
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
+        item {
+            EntranceAnimation(index = 2) {
+                VbSectionHeader(
+                    text = stringResource(R.string.personal_progress_title),
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
             }
-            item {
-                EntranceAnimation(index = 3) {
-                    TrendCard(summary.trend, Modifier.padding(horizontal = 20.dp))
-                }
-            }
+        }
+        item {
+            PersonalProgressCard(
+                progress = skillProgress,
+                onSelectSkill = { selectedSkillName = it.name },
+                onOpenSession = onOpenSession,
+                onStartTraining = onStartTraining,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
         }
 
         item {
@@ -367,187 +389,154 @@ private fun StatTile(
     }
 }
 
-/**
- * Form score over the last few sessions, as bars.
- *
- * Bars rather than a line, because the sessions are discrete events at uneven
- * intervals; a line implies the score moved continuously between two Tuesdays,
- * and its slope invites reading a rate of improvement out of what is really two
- * data points. Each bar is scored on the full 0-100 axis rather than a zoomed one
- * so that a run of 70s does not look like wild swings.
- */
+/** Plain score comparison above a compact, directly reviewable session chart. */
 @Composable
-private fun TrendCard(trend: List<Int>, modifier: Modifier = Modifier) {
-    val latest = trend.last()
-    val previous = trend[trend.lastIndex - 1]
-    val delta = latest - previous
-    val average = trend.average().roundToInt()
-    val chartColor = MaterialTheme.colorScheme.tertiary
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val averageColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    val chartDescription = stringResource(
-        R.string.progress_chart_description,
-        trend.size,
-        trend.joinToString(", "),
-        latest,
-    )
-
+internal fun PersonalProgressCard(
+    progress: SkillScoreProgress,
+    onSelectSkill: (Skill) -> Unit,
+    onOpenSession: (String) -> Unit,
+    onStartTraining: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val skillLabel = stringResource(progress.skill.displayName)
     StudentCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-            Text(
-                text = stringResource(R.string.progress_chart_recent, trend.size).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.progress_chart_latest_score),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Skill.All.forEach { skill ->
+                    FilterChip(
+                        selected = progress.skill == skill,
+                        onClick = { onSelectSkill(skill) },
+                        label = { Text(stringResource(skill.displayName)) },
                     )
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = latest.toString(),
-                            style = MaterialTheme.typography.displaySmall.merge(VbTabularNumerals),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = stringResource(R.string.progress_chart_out_of),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 3.dp, bottom = 5.dp),
-                        )
+                }
+            }
+            val latest = progress.latest
+            if (latest == null) {
+                Text(stringResource(R.string.personal_progress_no_score, skillLabel),
+                    style = MaterialTheme.typography.titleMedium)
+                Button(onClick = onStartTraining) {
+                    Text(stringResource(R.string.personal_progress_first_session))
+                }
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ScoreSummaryValue(stringResource(R.string.personal_progress_latest), latest.score)
+                    progress.previous?.let {
+                        ScoreSummaryValue(stringResource(R.string.personal_progress_previous), it.score)
                     }
                 }
-                val deltaColor = when {
-                    delta > 0 -> MaterialTheme.vbColors.onSuccessContainer
-                    delta < 0 -> MaterialTheme.colorScheme.onErrorContainer
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                StudentCard(
-                    color = when {
-                        delta > 0 -> MaterialTheme.vbColors.successContainer
-                        delta < 0 -> MaterialTheme.colorScheme.errorContainer
-                        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                val change = progress.change
+                Text(
+                    text = when {
+                        change == null -> stringResource(R.string.personal_progress_starting)
+                        change > 0 -> stringResource(R.string.personal_progress_higher, change, skillLabel)
+                        change < 0 -> stringResource(R.string.personal_progress_lower, -change, skillLabel)
+                        else -> stringResource(R.string.personal_progress_same, skillLabel)
                     },
-                    shape = CircleShape,
-                ) {
-                    Text(
-                        text = when {
-                            delta > 0 -> stringResource(R.string.progress_chart_change_up, delta)
-                            delta < 0 -> stringResource(R.string.progress_chart_change_down, delta)
-                            else -> stringResource(R.string.progress_chart_change_flat)
-                        },
-                        style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
-                        color = deltaColor,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = if (progress.points.size == 1) {
+                        stringResource(R.string.personal_progress_recent_one, skillLabel)
+                    } else stringResource(R.string.personal_progress_recent, progress.points.size, skillLabel),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SessionScoreBars(progress, onOpenSession)
+                Text(stringResource(R.string.personal_progress_chart_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.personal_progress_focus), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    progress.focusCue?.let { stringResource(it.coachingTip) }
+                        ?: stringResource(R.string.personal_progress_more_evidence),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(stringResource(R.string.personal_progress_score_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(22.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.height(CHART_HEIGHT).width(28.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    listOf("100", "50", "0").forEach { tick ->
-                        Text(
-                            text = tick,
-                            style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Canvas(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(CHART_HEIGHT)
-                        .semantics { contentDescription = chartDescription },
-                ) {
-                    listOf(0f, 0.5f, 1f).forEach { fraction ->
-                        val y = size.height * fraction
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1.dp.toPx(),
-                        )
-                    }
-                    val averageY = size.height * (1f - average / 100f)
-                    drawLine(
-                        color = averageColor,
-                        start = Offset(0f, averageY),
-                        end = Offset(size.width, averageY),
-                        strokeWidth = 1.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(
-                            floatArrayOf(5.dp.toPx(), 5.dp.toPx())
-                        ),
-                    )
+        }
+    }
+}
 
-                    val slotWidth = size.width / trend.size
-                    val barWidth = minOf(slotWidth * 0.56f, 36.dp.toPx())
-                    trend.forEachIndexed { index, score ->
-                        if (score == 0) return@forEachIndexed
-                        val barHeight = size.height * score.coerceIn(0, 100) / 100f
-                        val left = slotWidth * (index + 0.5f) - barWidth / 2f
+@Composable
+private fun ScoreSummaryValue(label: String, score: Int) {
+    Column {
+        Text(label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.personal_progress_points, score),
+            style = MaterialTheme.typography.headlineMedium.merge(VbTabularNumerals))
+    }
+}
+
+/** Each complete column is a real button with an accessible date and score. */
+@Composable
+private fun SessionScoreBars(progress: SkillScoreProgress, onOpenSession: (String) -> Unit) {
+    val scroll = rememberScrollState()
+    val chartColor = MaterialTheme.colorScheme.tertiary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val skillLabel = stringResource(progress.skill.displayName)
+    LaunchedEffect(progress.skill, progress.points, scroll.maxValue) {
+        scroll.scrollTo(scroll.maxValue)
+    }
+    // Horizontal scrolling keeps every session target at least 48dp wide when
+    // the device is narrow or the athlete uses larger text.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.width(IntrinsicSize.Min).height(CHART_HEIGHT)) {
+            listOf("100" to Alignment.TopStart, "50" to Alignment.CenterStart, "0" to Alignment.BottomStart)
+                .forEach { (label, alignment) ->
+                    Text(label, modifier = Modifier.align(alignment),
+                        style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+        }
+        Row(
+            Modifier.weight(1f).horizontalScroll(scroll),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            progress.points.forEachIndexed { index, point ->
+                val date = Instant.ofEpochMilli(point.startedAtEpochMs).atZone(ZoneId.systemDefault())
+                val fullDate = date.format(SessionDateTime)
+                val description = stringResource(R.string.personal_progress_bar, skillLabel, fullDate, point.score)
+                Column(
+                    modifier = Modifier.width(48.dp)
+                        .clickable(role = Role.Button) { onOpenSession(point.sessionId) }
+                        .clearAndSetSemantics {
+                            contentDescription = description
+                            role = Role.Button
+                            onClick { onOpenSession(point.sessionId); true }
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Canvas(Modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+                        listOf(0f, 0.5f, 1f).forEach { fraction ->
+                            val y = size.height * fraction
+                            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                        }
+                        // A thin baseline marker makes a real zero visible;
+                        // missing measurements never enter this chart.
+                        val height = (size.height * point.score / 100f).coerceAtLeast(2.dp.toPx())
+                        val width = 24.dp.toPx()
                         drawRoundRect(
-                            color = chartColor.copy(alpha = if (index == trend.lastIndex) 1f else 0.50f),
-                            topLeft = Offset(left, size.height - barHeight),
-                            size = Size(barWidth, barHeight),
-                            cornerRadius = CornerRadius(
-                                minOf(barWidth / 3f, barHeight / 2f)
-                            ),
+                            color = chartColor.copy(alpha = if (index == progress.points.lastIndex) 1f else 0.55f),
+                            topLeft = Offset((size.width - width) / 2, size.height - height),
+                            size = Size(width, height),
+                            cornerRadius = CornerRadius(minOf(6.dp.toPx(), height / 2)),
                         )
                     }
+                    Text(point.score.toString(), style = MaterialTheme.typography.labelLarge.merge(VbTabularNumerals),
+                        modifier = Modifier.padding(top = 5.dp))
+                    Text(date.format(ChartDate), style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth().padding(start = 28.dp)) {
-                Text(
-                    text = stringResource(R.string.progress_trend_oldest),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = stringResource(R.string.progress_trend_newest),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(18.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Canvas(Modifier.size(width = 20.dp, height = 2.dp)) {
-                    drawLine(
-                        color = averageColor,
-                        start = Offset.Zero,
-                        end = Offset(size.width, 0f),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        pathEffect = PathEffect.dashPathEffect(
-                            floatArrayOf(5.dp.toPx(), 5.dp.toPx())
-                        ),
-                    )
-                }
-                Spacer(Modifier.width(7.dp))
-                Text(
-                    text = stringResource(R.string.progress_chart_average, average),
-                    style = MaterialTheme.typography.labelSmall.merge(VbTabularNumerals),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -619,46 +608,9 @@ private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modif
     }
 }
 
-@Composable
-private fun NoDataCard(onStartTraining: () -> Unit, modifier: Modifier = Modifier) {
-    StudentCard(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.progress_empty_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.progress_empty_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(18.dp))
-            androidx.compose.material3.Button(
-                onClick = onStartTraining,
-                shape = com.volleyballlab.player.ui.theme.VbButtonShape,
-            ) {
-                Text(stringResource(R.string.progress_empty_cta))
-            }
-        }
-    }
-}
-
-/** Fewer bars than this is not a trend, it is a number with a rectangle around it. */
-private const val MIN_TREND_POINTS = 2
-
-private val CHART_HEIGHT = 154.dp
+private val CHART_HEIGHT = 96.dp
+private val ChartDate = DateTimeFormatter.ofPattern("d/M")
+private val SessionDateTime = DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a")
 
 private val SkillDate = DateTimeFormatter.ofPattern("d MMM")
 

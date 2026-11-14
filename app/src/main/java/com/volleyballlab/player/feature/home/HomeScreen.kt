@@ -262,20 +262,19 @@ private fun FocusCard(recommendation: SkillRecommendation?, savedGoal: Boolean, 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(if (recommendation == null) "Find your starting point" else "Your training focus",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text(if (recommendation == null) stringResource(R.string.home_assessment_title)
+                Text(if (recommendation == null) "Build your starting plan"
                     else stringResource(recommendation.skill.displayName),
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text(if (recommendation == null) stringResource(R.string.home_assessment_body)
+                Text(if (recommendation == null) "A few short cards to find a useful starting practice."
                     else stringResource(recommendation.skill.description),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 if (recommendation != null) {
-                    Text(stringResource(R.string.home_skill_level, recommendation.level.number, stringResource(recommendation.level.label)),
+                    if (recommendation.isMeasured) Text(stringResource(R.string.home_skill_level, recommendation.level.number, stringResource(recommendation.level.label)),
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     if (savedGoal) Text("From your saved training goal", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
-                    Text(stringResource(
-                        if (recommendation.isMeasured) R.string.home_focus_source_measured else R.string.home_focus_source_assessment),
+                    Text(if (recommendation.isMeasured) stringResource(R.string.home_focus_source_measured) else "Based on your answers",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
                 }
             }

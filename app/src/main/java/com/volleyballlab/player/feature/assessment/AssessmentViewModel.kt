@@ -6,183 +6,156 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.appContainer
-import com.volleyballlab.player.domain.model.CourtPosition
-import com.volleyballlab.player.domain.model.DominantHand
-import com.volleyballlab.player.domain.model.ExperienceLevel
-import com.volleyballlab.player.domain.model.SelfRating
-import com.volleyballlab.player.domain.model.Skill
-import com.volleyballlab.player.domain.model.SkillAssessment
-import com.volleyballlab.player.domain.model.relevantSkills
+import com.volleyballlab.player.data.ai.CloudTrainingSetupRepository
+import com.volleyballlab.player.data.ai.TrainingSetupPersonalizer
+import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.domain.repository.AssessmentRepository
 import com.volleyballlab.player.domain.repository.ProfileRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/**
- * The three steps of onboarding.
- *
- * An enum rather than an Int so that the screen cannot render a fourth step that
- * does not exist, and so [AssessmentUiState.progress] has something real to count.
- */
-enum class AssessmentStep {
-    Position,
-    Experience,
-    Ratings;
-
-    companion object {
-        val All: List<AssessmentStep> = entries
-    }
+enum class AssessmentStep { Goal, Experience, FollowUp, Schedule, Review;
+    companion object { val All = entries }
 }
 
 data class AssessmentUiState(
-    val step: AssessmentStep = AssessmentStep.Position,
-    val position: CourtPosition? = null,
-    val hand: DominantHand? = null,
+    val step: AssessmentStep = AssessmentStep.Goal,
+    val goal: Skill? = null,
+    val goalChosen: Boolean = false,
+    val note: String = "",
     val experience: ExperienceLevel? = null,
-    val ratings: Map<Skill, SelfRating> = emptyMap(),
-    val saving: Boolean = false,
+    val weeklyGoal: Int = 3,
+    val followUp: SetupFollowUp? = null,
+    val optionId: String? = null,
+    val suggestion: SetupSuggestion? = null,
+    val aiEnabled: Boolean = true,
+    val busy: Boolean = true,
+    val error: String? = null,
 ) {
-    val progress: Float
-        get() = (step.ordinal + 1).toFloat() / AssessmentStep.All.size
-
-    /**
-     * The skills this athlete is actually asked about.
-     *
-     * Narrowed by position, so a libero answers three questions rather than five and
-     * is never asked to rate a skill the rules do not let them perform. With no
-     * position given there is nothing to narrow by, so all five are asked.
-     */
-    val skillsToRate: List<Skill>
-        get() = position?.let { pos -> Skill.All.filter { it in pos.relevantSkills } } ?: Skill.All
-
-    val allRated: Boolean get() = skillsToRate.all { it in ratings }
-
-    val canAdvance: Boolean
-        get() = when (step) {
-            // Position drives which skills get asked about and is the one answer
-            // the recommendation genuinely needs, so it is the only required field.
-            // Dominant hand is collected here because it is the natural moment to
-            // ask, not because anything is waiting on it.
-            AssessmentStep.Position -> position != null
-            AssessmentStep.Experience -> experience != null
-            AssessmentStep.Ratings -> allRated && !saving
-        }
-
-    val isLastStep: Boolean get() = step == AssessmentStep.Ratings
+    val progress get() = (step.ordinal + 1) / 5f
+    val canAdvance get() = !busy && when(step) {
+        AssessmentStep.Goal -> goalChosen || note.isNotBlank()
+        AssessmentStep.Experience -> experience != null
+        AssessmentStep.FollowUp -> optionId != null
+        AssessmentStep.Schedule -> weeklyGoal in 1..14
+        AssessmentStep.Review -> suggestion != null
+    }
+    fun answers() = SetupAnswers(goal, experience ?: ExperienceLevel.New, note.trim(), followUp?.questionId, optionId, weeklyGoal)
 }
 
-/**
- * Drives the onboarding questionnaire.
- *
- * Answers live here until the athlete finishes, then land in two places at once:
- * position and hand belong to [ProfileRepository] because that is where the rest of
- * the app already looks for them, and the self-ratings belong to
- * [AssessmentRepository]. Writing position into the assessment as well would give
- * the app two copies of one fact and a way for them to disagree.
- */
+/** Five bounded cards. One follow-up call and one summary call at most per opened setup. */
 class AssessmentViewModel(
     private val assessmentRepository: AssessmentRepository,
     private val profileRepository: ProfileRepository,
+    private val personalizer: TrainingSetupPersonalizer,
+    private val currentUid: () -> String?,
 ) : ViewModel() {
-
+    private val uid = currentUid()
     private val _state = MutableStateFlow(AssessmentUiState())
-    val state: StateFlow<AssessmentUiState> = _state.asStateFlow()
-
+    val state = _state.asStateFlow()
+    private var nextRequested = false
+    private var summaryRequested = false
     init {
-        // Prefills from whatever is already known, so retaking the assessment starts
-        // from the athlete's current answers rather than from blank.
         viewModelScope.launch {
-            val profile = profileRepository.profile.first()
-            val existing = assessmentRepository.assessment.first()
-            _state.update {
-                it.copy(
-                    position = profile.position,
-                    hand = profile.dominantHand,
-                    experience = existing.experience,
-                    ratings = existing.ratings,
-                )
-            }
+            try {
+                val profile = profileRepository.profile.first()
+                val existing = assessmentRepository.assessment.first()
+                checkAccount()
+                _state.update { it.copy(goal = profile.goalSkill, goalChosen = profile.goalSkill != null,
+                    note = profile.goalText.take(160), experience = existing.experience,
+                    weeklyGoal = profile.weeklySessionGoal.coerceIn(1, 14), busy = false) }
+            } catch (failure: CancellationException) { throw failure }
+            catch (_: Exception) { _state.update { it.copy(busy = false, error = "Could not load your saved choices. You can still use quick setup.", aiEnabled = false) } }
         }
     }
-
-    /** Tapping the selected chip clears it, matching how the Profile tab behaves. */
-    fun onPositionSelected(position: CourtPosition) = _state.update {
-        val next = if (it.position == position) null else position
-        // Ratings for skills the new position excludes are dropped rather than kept
-        // out of sight: they would otherwise be saved, and go on driving a
-        // recommendation for a skill the athlete was never shown a question about.
-        val allowed = next?.relevantSkills ?: Skill.All.toSet()
-        it.copy(position = next, ratings = it.ratings.filterKeys { skill -> skill in allowed })
+    private fun checkAccount() { check(uid != null && currentUid() == uid) { "Your account changed. Reopen setup to continue." } }
+    private fun changeAnswers(change: (AssessmentUiState) -> AssessmentUiState) = _state.update {
+        if (it.busy) it else change(it).copy(followUp = null, optionId = null, suggestion = null,
+            aiEnabled = it.aiEnabled && !nextRequested && !summaryRequested, error = null)
     }
-
-    fun onHandSelected(hand: DominantHand) = _state.update {
-        it.copy(hand = if (it.hand == hand) null else hand)
-    }
-
-    fun onExperienceSelected(level: ExperienceLevel) = _state.update {
-        it.copy(experience = if (it.experience == level) null else level)
-    }
-
-    fun onRatingSelected(skill: Skill, rating: SelfRating) = _state.update {
-        it.copy(ratings = it.ratings + (skill to rating))
-    }
-
-    fun onBack() = _state.update { current ->
-        val previous = AssessmentStep.All.getOrNull(current.step.ordinal - 1)
-        if (previous == null) current else current.copy(step = previous)
-    }
-
+    fun onGoalSelected(skill: Skill?) = changeAnswers { it.copy(goal = skill, goalChosen = true) }
+    fun onNoteChanged(text: String) = changeAnswers { it.copy(note = text.take(160)) }
+    fun onExperienceSelected(level: ExperienceLevel) = changeAnswers { it.copy(experience = level) }
+    fun onOptionSelected(id: String) { _state.update { if (it.busy) it else it.copy(optionId = id, suggestion = null, error = null) } }
+    fun onWeeklyGoalSelected(value: Int) { _state.update { if (it.busy) it else it.copy(weeklyGoal = value.coerceIn(1, 14), suggestion = null) } }
+    fun onReviewGoalSelected(skill: Skill) { _state.update {
+        if (it.busy) it else it.copy(goal = skill, goalChosen = true, aiEnabled = false,
+            followUp = SetupFollowUp(skill, TrainingSetupQuestions.forSkill(skill).id, "", "local"), optionId = "not_sure",
+            suggestion = TrainingSetupQuestions.localSuggestion(it.answers().copy(goalSkill = skill)))
+    } }
+    fun onReviewWeeklyGoalSelected(value: Int) { _state.update {
+        if (it.busy) it else it.copy(weeklyGoal = value.coerceIn(1, 14), suggestion = TrainingSetupQuestions.localSuggestion(it.answers().copy(goalSkill = it.suggestion?.focusSkill, weeklySessionGoal = value.coerceIn(1, 14))))
+    } }
+    fun useQuickSetup() { _state.update { if (it.busy) it else it.copy(aiEnabled = false, goalChosen = true) } }
+    fun onBack() { _state.update { if (it.busy) it else it.copy(step = AssessmentStep.All[(it.step.ordinal - 1).coerceAtLeast(0)], error = null) } }
     fun onNext(onFinished: () -> Unit) {
-        val current = _state.value
-        if (!current.canAdvance) return
-        val next = AssessmentStep.All.getOrNull(current.step.ordinal + 1)
-        if (next != null) {
-            _state.update { it.copy(step = next) }
-            return
+        val state = _state.value
+        if (!state.canAdvance) return
+        viewModelScope.launch {
+            _state.update { it.copy(busy = true, error = null) }
+            try {
+                checkAccount()
+                when (state.step) {
+                    AssessmentStep.Goal -> _state.update { it.copy(step = AssessmentStep.Experience) }
+                    AssessmentStep.Experience -> {
+                        val answers = state.answers().copy(followUpQuestionId = null, followUpOptionId = null, weeklySessionGoal = null)
+                        val follow = if (state.followUp != null) state.followUp else if (state.aiEnabled && !nextRequested) {
+                            nextRequested = true
+                            try { personalizer.nextCard(answers) }
+                            catch (_: TimeoutCancellationException) { TrainingSetupQuestions.localFollowUp(answers) }
+                            catch (failure: CancellationException) { throw failure }
+                            catch (_: Exception) { TrainingSetupQuestions.localFollowUp(answers) }
+                        } else TrainingSetupQuestions.localFollowUp(answers)
+                        checkAccount()
+                        _state.update { it.copy(step = AssessmentStep.FollowUp, followUp = follow, aiEnabled = it.aiEnabled && follow.source == "groq") }
+                    }
+                    AssessmentStep.FollowUp -> _state.update { it.copy(step = AssessmentStep.Schedule) }
+                    AssessmentStep.Schedule -> {
+                        val suggestion = state.suggestion ?: if (state.aiEnabled && !summaryRequested) {
+                            summaryRequested = true
+                            try { personalizer.summary(state.answers()) }
+                            catch (_: TimeoutCancellationException) { TrainingSetupQuestions.localSuggestion(state.answers()) }
+                            catch (failure: CancellationException) { throw failure }
+                            catch (_: Exception) { TrainingSetupQuestions.localSuggestion(state.answers()) }
+                        } else TrainingSetupQuestions.localSuggestion(state.answers())
+                        checkAccount()
+                        _state.update { it.copy(step = AssessmentStep.Review, suggestion = suggestion, aiEnabled = it.aiEnabled && suggestion.source == "groq") }
+                    }
+                    AssessmentStep.Review -> {
+                        val suggestion = requireNotNull(state.suggestion)
+                        assessmentRepository.saveTrainingSetup(TrainingSetup(
+                            focusSkill = suggestion.focusSkill, weeklySessionGoal = state.weeklyGoal,
+                            goalText = state.note.trim(), experience = state.experience,
+                            concern = TrainingSetupQuestions.optionLabel(state.answers()), summary = suggestion.summary,
+                            source = suggestion.source, starterDrillId = TrainingSetupQuestions.starterDrill(suggestion.focusSkill),
+                            completedAtEpochMs = System.currentTimeMillis(), reason = suggestion.reason,
+                            questionId = state.followUp?.questionId.orEmpty(), optionId = state.optionId.orEmpty(),
+                        ))
+                        checkAccount()
+                        onFinished()
+                    }
+                }
+            } catch (failure: CancellationException) { throw failure }
+            catch (_: Exception) { _state.update { it.copy(error = if (currentUid() != uid) "Your account changed. Reopen setup to continue." else "Could not save your plan. Your choices are still here; please try again.") } }
+            finally { _state.update { it.copy(busy = false) } }
         }
-        finish(current, onFinished)
     }
-
-    /** Records that onboarding happened, without answers, and leaves. */
     fun onSkip(onFinished: () -> Unit) {
+        if (_state.value.busy) return
         viewModelScope.launch {
-            assessmentRepository.skip()
-            onFinished()
+            _state.update { it.copy(busy = true, error = null) }
+            try { checkAccount(); assessmentRepository.skip(); checkAccount(); onFinished() }
+            catch (failure: CancellationException) { throw failure }
+            catch (_: Exception) { _state.update { it.copy(error = "Could not finish setup. Check your account and try again.") } }
+            finally { _state.update { it.copy(busy = false) } }
         }
     }
-
-    private fun finish(current: AssessmentUiState, onFinished: () -> Unit) {
-        viewModelScope.launch {
-            _state.update { it.copy(saving = true) }
-            // Read-modify-write against the stored profile rather than against a
-            // fresh one, so onboarding cannot wipe a name the athlete already has.
-            val profile = profileRepository.profile.first()
-            profileRepository.save(
-                profile.copy(position = current.position, dominantHand = current.hand),
-            )
-            assessmentRepository.save(
-                SkillAssessment(
-                    ratings = current.ratings,
-                    experience = current.experience,
-                    completedAtEpochMs = System.currentTimeMillis(),
-                ),
-            )
-            onFinished()
-        }
-    }
-
     companion object {
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer {
-                AssessmentViewModel(
-                    assessmentRepository = appContainer.assessmentRepository,
-                    profileRepository = appContainer.profileRepository,
-                )
-            }
-        }
+        val Factory: ViewModelProvider.Factory = viewModelFactory { initializer {
+            AssessmentViewModel(appContainer.assessmentRepository, appContainer.profileRepository,
+                CloudTrainingSetupRepository(), { appContainer.authRepository.currentUid })
+        } }
     }
 }
