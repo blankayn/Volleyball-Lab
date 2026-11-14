@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.volleyballlab.player.data.UserScope
 import com.volleyballlab.player.domain.model.SessionResult
@@ -14,11 +15,22 @@ import com.volleyballlab.player.domain.repository.SessionDirectory
 import com.volleyballlab.player.domain.repository.SessionRepository
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 /** One DataStore per file for the process, as the API requires. */
@@ -54,18 +66,54 @@ private val Context.sessionStore: DataStore<Preferences> by preferencesDataStore
  * would matter at thousands, which is what [MAX_SESSIONS] is for: history is capped
  * at the most recent sessions rather than allowed to grow without bound.
  */
-class DataStoreSessionRepository(
-    private val context: Context,
+class DataStoreSessionRepository internal constructor(
+    private val store: DataStore<Preferences>,
     private val authRepository: AuthRepository,
-    /**
-     * Best-effort cloud mirror. Runs after the local write lands, so history on
-     * this phone never waits on the network and never fails because of it. Null
-     * in unit tests, where there is no backend.
-     */
-    private val cloud: SessionCloudStore? = null,
+    private val cloud: SessionCloudStore?,
+    private val deletePrivateVideo: (String) -> Unit,
+    scope: CoroutineScope,
 ) : SessionRepository, SessionDirectory {
+    constructor(context: Context, authRepository: AuthRepository, cloud: SessionCloudStore? = null) :
+        this(context.sessionStore, authRepository, cloud, { deletePrivateVideo(context, it) },
+            CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
-    private val cloudMirror = cloud?.let { SessionCloudMirror(it, { authRepository.currentUid }) }
+    private val cloudMirror = cloud?.let { SessionCloudMirror(it, { authRepository.currentUid }, scope) }
+
+    init {
+        if (cloud != null) {
+            scope.launch {
+                authRepository.currentUser.map { it?.uid.orEmpty() }.distinctUntilChanged().collectLatest { uid ->
+                    val userScope = UserScope.of(uid) ?: return@collectLatest
+                    flow { emit(cloud.loadHistory(uid)) }
+                        .onEach { restoreMissingSessions(uid, userScope, it) }
+                        .retryWhen { error, attempt ->
+                            Log.w(TAG, "Could not restore cloud session history", error)
+                            delay((attempt + 1).coerceAtMost(30) * 1_000)
+                            true
+                        }
+                        .collect()
+                }
+            }
+        }
+    }
+
+    private suspend fun restoreMissingSessions(uid: String, scope: UserScope, restored: List<SessionResult>) {
+        store.edit { preferences ->
+            if (authRepository.currentUid != uid) return@edit
+            val key = scope.string(KEY_SESSIONS)
+            val local = preferences[key].decodeSessions()
+            val knownIds = local.mapTo(mutableSetOf()) { it.id }
+            knownIds += preferences[deletedSessionsKey(scope)].orEmpty()
+            // Preserve full local results, including recordings and assignment links.
+            val missing = restored.sortedByDescending { it.startedAtEpochMs }
+                .filter { knownIds.add(it.id) }
+                .take((MAX_SESSIONS - local.size).coerceAtLeast(0))
+            if (missing.isNotEmpty()) {
+                val history = (local + missing).sortedByDescending { it.startedAtEpochMs }
+                preferences[key] = json.encodeToString(history.map { it.toRecord() })
+            }
+        }
+    }
 
     /**
      * One athlete's sessions, never the phone's.
@@ -77,7 +125,7 @@ class DataStoreSessionRepository(
      */
     override val sessions: Flow<List<SessionResult>> = combine(
         authRepository.currentUser,
-        context.sessionStore.data
+        store.data
             // An unreadable file must not take the app down on launch. The athlete
             // loses history they can no longer have either way; a crash loop would
             // additionally cost them the app.
@@ -101,7 +149,7 @@ class DataStoreSessionRepository(
      * See [SessionDirectory] for who is allowed to call this and why.
      */
     override fun sessionsOf(uid: String): Flow<List<SessionResult>> =
-        context.sessionStore.data
+        store.data
             .catch { failure ->
                 if (failure is IOException) emit(emptyPreferences()) else throw failure
             }
@@ -114,7 +162,7 @@ class DataStoreSessionRepository(
         val ownerUid = authRepository.currentUid ?: return
         val scope = UserScope.of(ownerUid) ?: return
         val evictedVideos = mutableListOf<String>()
-        context.sessionStore.edit { preferences ->
+        store.edit { preferences ->
             val current = preferences[scope.string(KEY_SESSIONS)].decodeSessions()
             val all = (current.filterNot { it.id == session.id } + session)
                 // Replace by id rather than append, so re-saving a session after a
@@ -124,10 +172,13 @@ class DataStoreSessionRepository(
             evictedVideos += all.drop(MAX_SESSIONS).mapNotNull { it.videoPath }
             preferences[scope.string(KEY_SESSIONS)] =
                 json.encodeToString(updated.map { it.toRecord() })
+            val deletedKey = deletedSessionsKey(scope)
+            preferences[deletedKey]?.let { deleted ->
+                if (session.id in deleted) preferences[deletedKey] = deleted - session.id
+            }
         }
-        evictedVideos.forEach(::deletePrivateVideo)
-        // After the local write, never before: the phone's history is the source
-        // of truth and the cloud row is what the coach portal reads.
+        evictedVideos.forEach(deletePrivateVideo)
+        // Save locally before attempting the cloud mirror.
         cloudMirror?.upload(ownerUid, session)
     }
 
@@ -138,14 +189,18 @@ class DataStoreSessionRepository(
         val ownerUid = authRepository.currentUid ?: return
         val scope = UserScope.of(ownerUid) ?: return
         var deletedVideo: String? = null
-        context.sessionStore.edit { preferences ->
+        store.edit { preferences ->
             val key = scope.string(KEY_SESSIONS)
             val sessions = preferences[key].decodeSessions()
             deletedVideo = sessions.firstOrNull { it.id == id }?.videoPath
             val remaining = sessions.filterNot { it.id == id }
             preferences[key] = json.encodeToString(remaining.map { it.toRecord() })
+            if (cloud != null) {
+                val deletedKey = deletedSessionsKey(scope)
+                preferences[deletedKey] = preferences[deletedKey].orEmpty() + id
+            }
         }
-        deletedVideo?.let(::deletePrivateVideo)
+        deletedVideo?.let(deletePrivateVideo)
         cloudMirror?.delete(ownerUid, id)
     }
 
@@ -154,7 +209,7 @@ class DataStoreSessionRepository(
         val scope = UserScope.of(ownerUid) ?: return
         var deletedVideo: String? = null
         var updatedSession: SessionResult? = null
-        context.sessionStore.edit { preferences ->
+        store.edit { preferences ->
             val key = scope.string(KEY_SESSIONS)
             val sessions = preferences[key].decodeSessions()
             val target = sessions.firstOrNull { it.id == id } ?: return@edit
@@ -164,19 +219,8 @@ class DataStoreSessionRepository(
                 sessions.map { if (it.id == id) target.copy(videoPath = null) else it }.map { it.toRecord() },
             )
         }
-        deletedVideo?.let(::deletePrivateVideo)
+        deletedVideo?.let(deletePrivateVideo)
         updatedSession?.let { cloudMirror?.upload(ownerUid, it) }
-    }
-
-    private fun deletePrivateVideo(path: String) {
-        runCatching {
-            val directory = File(context.filesDir, "training_videos").canonicalFile
-            val video = File(path).canonicalFile
-            if (video.parentFile == directory) {
-                VideoReviewCache.delete(context, path)
-                video.delete()
-            }
-        }.onFailure { Log.w(TAG, "Could not delete session video", it) }
     }
 
     /**
@@ -211,9 +255,24 @@ class DataStoreSessionRepository(
          * bounded so the rewrite-everything cost stays bounded too.
          */
         const val MAX_SESSIONS = 200
-
-        const val TAG = "SessionStore"
     }
+}
+
+private const val TAG = "SessionStore"
+
+// Keep local deletes hidden even if the best-effort cloud delete is offline.
+private fun deletedSessionsKey(scope: UserScope) =
+    stringSetPreferencesKey(scope.scoped("deleted_sessions"))
+
+private fun deletePrivateVideo(context: Context, path: String) {
+    runCatching {
+        val directory = File(context.filesDir, "training_videos").canonicalFile
+        val video = File(path).canonicalFile
+        if (video.parentFile == directory) {
+            VideoReviewCache.delete(context, path)
+            video.delete()
+        }
+    }.onFailure { Log.w(TAG, "Could not delete session video", it) }
 }
 
 internal suspend fun clearSessionAccount(context: Context, uid: String) =

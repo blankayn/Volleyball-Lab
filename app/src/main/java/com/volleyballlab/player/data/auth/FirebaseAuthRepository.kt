@@ -261,7 +261,7 @@ private const val CONFIGURATION_NOT_FOUND = "CONFIGURATION_NOT_FOUND"
  * Awaits a [Task], propagating failure and cancellation rather than flattening
  * either into a null result.
  */
-private suspend fun <T> Task<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
+internal suspend fun <T> Task<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
     addOnCompleteListener { task ->
         val failure = task.exception
         when {

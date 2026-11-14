@@ -85,16 +85,16 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
             }
             val testCheckoutUrl = BuildConfig.XENDIT_TEST_CHECKOUT_URL
             if (testCheckoutUrl.isNotEmpty()) {
-                Text("Test checkout uses simulated payments and won't unlock Pro.", style = MaterialTheme.typography.bodySmall)
+                Text("Simulated payments won't unlock Pro.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = {
                     message = null
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
                     } catch (_: ActivityNotFoundException) {
-                        message = "Install a browser to open the Xendit test checkout."
+                        message = "Install a browser to open checkout."
                     }
                 }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open Xendit test checkout")
+                    Text("Checkout")
                 }
             }
             if (plan.isPro && onBrowseCoaches != null) {

@@ -21,6 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,6 +60,11 @@ fun LoginScreen(
 ) {
     val viewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var recoveringPassword by rememberSaveable { mutableStateOf(false) }
+    if (recoveringPassword) {
+        PasswordRecoveryScreen(state.email, onClose = { recoveringPassword = false }, modifier = modifier)
+        return
+    }
     // Credential Manager renders a system sheet, so it needs the Activity that is
     // hosting this composable. LocalContext is not guaranteed to be one - Compose
     // can hand back a ContextWrapper - so it is unwrapped rather than cast, which
@@ -108,7 +116,7 @@ fun LoginScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = LinkColor,
                 modifier = Modifier.clickable(enabled = !state.submitting) {
-                    viewModel.sendPasswordReset()
+                    recoveringPassword = true
                 },
             )
         }

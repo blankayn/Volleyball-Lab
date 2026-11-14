@@ -17,6 +17,7 @@ class SessionCloudMirrorTest {
         val gate = CompletableDeferred<Unit>()
         val calls = mutableListOf<String>()
         val cloud = object : SessionCloudStore {
+            override suspend fun loadHistory(ownerUid: String) = emptyList<SessionResult>()
             override suspend fun upload(ownerUid: String, session: SessionResult) {
                 calls += "upload:$ownerUid"
                 gate.await()
@@ -38,6 +39,7 @@ class SessionCloudMirrorTest {
         var uid = "original"
         val calls = mutableListOf<String>()
         val cloud = object : SessionCloudStore {
+            override suspend fun loadHistory(ownerUid: String) = emptyList<SessionResult>()
             override suspend fun upload(ownerUid: String, session: SessionResult) { calls += ownerUid }
             override suspend fun delete(ownerUid: String, sessionId: String) { calls += ownerUid }
         }
@@ -55,6 +57,7 @@ class SessionCloudMirrorTest {
     @Test fun `a failed background mirror does not block later operations`() = runTest {
         var deleted = false
         val cloud = object : SessionCloudStore {
+            override suspend fun loadHistory(ownerUid: String) = emptyList<SessionResult>()
             override suspend fun upload(ownerUid: String, session: SessionResult) { error("Offline") }
             override suspend fun delete(ownerUid: String, sessionId: String) { deleted = true }
         }

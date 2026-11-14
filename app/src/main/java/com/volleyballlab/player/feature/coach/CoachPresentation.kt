@@ -33,6 +33,21 @@ import java.util.Locale
 
 internal val CoachInk = Color(0xFF242925)
 
+@Composable internal fun coachCardOutline() = if (MaterialTheme.colorScheme.surface.luminance() < .4f)
+    MaterialTheme.colorScheme.outlineVariant else Color(0xFFE4ECF5)
+
+@Composable internal fun coachCardMuted() = if (MaterialTheme.colorScheme.surface.luminance() < .4f)
+    MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF647D9C)
+
+@Composable internal fun CoachStatusPill(label: String, accent: Boolean = true, compact: Boolean = false) {
+    val ink = if (accent) MaterialTheme.colorScheme.primary else coachCardMuted()
+    Surface(shape = RoundedCornerShape(20.dp), color = ink.copy(alpha = .065f),
+        border = if (accent) BorderStroke(1.dp, ink.copy(alpha = .16f)) else null) {
+        Text(label, Modifier.padding(horizontal = if (compact) 6.dp else 8.dp, vertical = if (compact) 2.dp else 3.dp),
+            style = MaterialTheme.typography.labelSmall, fontSize = if (compact) 9.sp else 10.sp, color = ink)
+    }
+}
+
 @Composable internal fun Modifier.coachPageBackground(): Modifier = background(
     if (MaterialTheme.colorScheme.background.luminance() < .4f) MaterialTheme.colorScheme.background else Color(0xFFF6F5F1)
 )
@@ -148,15 +163,15 @@ internal enum class CoachWorkspaceTab(val label: String) { Overview("Overview"),
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             count?.let { Text(it.toString().padStart(2, '0'), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = coachCardMuted()) }
     }
 }
 
 @Composable internal fun CoachSectionCard(modifier: Modifier = Modifier, tint: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), shadowElevation = 1.dp,
         color = if (tint) MaterialTheme.colorScheme.primary.copy(alpha = .055f).compositeOver(MaterialTheme.colorScheme.surfaceContainerLowest) else MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
+        border = BorderStroke(1.dp, coachCardOutline())) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
 

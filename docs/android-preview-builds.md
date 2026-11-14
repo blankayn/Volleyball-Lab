@@ -3,6 +3,10 @@
 Use `./gradlew.bat :app:assemblePreview` for Android sideload previews. The APK is
 written to `app/build/outputs/apk/preview/app-preview.apk`.
 
+Debug and preview builds share the Xendit simulated checkout link. The
+`verifyDevelopmentCheckout` build check compares their generated configuration
+and checks that release builds use the server-controlled live checkout.
+
 This variant enables R8 optimization and resource shrinking and is not debuggable.
 It uses the existing debug signing certificate and development App Check provider
 so an installed development copy can be updated with `adb install -r` while
