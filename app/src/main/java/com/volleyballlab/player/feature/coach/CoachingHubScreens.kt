@@ -141,22 +141,17 @@ fun MyCoachScreen(
                 CoachWorkspaceTab.Training -> {
                     item(key = "training-heading") { CoachSectionTitle("Your training plan", "Clear next steps from your coach", assignments.size) }
                     if (active) {
-                        state.latestSession?.let { latest -> item(key = "latest-session") {
-                            CoachSectionCard(tint = true) {
-                                CoachEyebrow(if (state.latestIsSubmitted) "Shared with your coach" else "Ready for feedback")
-                                Text("${latest.skill.name} · ${latest.repCount} reps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                                Text(dateLabel(latest.startedAtEpochMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (state.latestIsSubmitted) Text("Your coach can review this session in their queue.", style = MaterialTheme.typography.bodyMedium)
-                                else {
-                                    Text(if (latest.videoPath == null) "Share this session’s form summary with your coach." else "Share the recording and form feedback from this session.", style = MaterialTheme.typography.bodyMedium)
-                                    submitError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                                    Button(onClick = { model.submit(latest.id) }, enabled = !sending, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                                        if (sending) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
-                                        Text(if (sending) "Sharing session…" else "Send session for review")
-                                    }
-                                }
-                            }
-                        } }
+                        item(key = "share-heading") {
+                            CoachSectionTitle("Share a training session", "Choose any saved session for your coach to review", state.sessions.size)
+                            submitError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        }
+                        items(state.sessions, key = { "share-session-${it.id}" }) { session ->
+                            val submitted = state.submissions.any { it.sessionId == session.id && it.coachUid == link?.coachUid }
+                            TrainingSessionShareCard(session, submitted, sending) { model.submit(session.id) }
+                        }
+                        if (state.sessions.isEmpty()) item(key = "no-saved-sessions") {
+                            CoachEmptyState("No saved sessions yet", "Complete a training session, then choose it here to share with your coach.")
+                        }
                     }
                     if (assignments.isEmpty()) item(key = "no-assignments") {
                         CoachEmptyState("Your plan starts here", if (active) "Your coach’s assigned drills will appear here. You can ask for a starting drill from Overview." else "Connect with a coach to receive a training plan.")
@@ -456,3 +451,20 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
 }
 private fun hubPadding(padding: PaddingValues) = PaddingValues(20.dp, padding.calculateTopPadding() + 12.dp, 20.dp, padding.calculateBottomPadding() + 24.dp)
 internal fun dateLabel(time: Long): String = if (time == 0L) "Syncing…" else DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
+
+@Composable
+internal fun TrainingSessionShareCard(session: SessionResult, submitted: Boolean, sending: Boolean, onShare: () -> Unit) {
+    CoachSectionCard(tint = true) {
+        CoachEyebrow(if (submitted) "Shared with your coach" else "Ready for feedback")
+        Text("${session.skill.name} · ${session.repCount} reps", style = MaterialTheme.typography.titleLarge)
+        Text(dateLabel(session.startedAtEpochMs), style = MaterialTheme.typography.bodySmall)
+        if (submitted) Text("Your coach can review this session in their queue.")
+        else {
+            Text(if (session.videoPath == null) "Share this session’s form summary with your coach." else "Share this session’s recording and Coach Reel privately with your coach.")
+            Button(onClick = onShare, enabled = !sending, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                Text("Send session for review")
+            }
+            if (sending) Text("A session is being shared. Please wait.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
