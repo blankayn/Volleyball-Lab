@@ -24,6 +24,8 @@ JOINT_INDEX = dict(zip(JOINTS, (11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28))
 REQUIRED = {"clip", "skill", "frame", "joint", "x_mm", "y_mm", "z_mm"}
 SKILLS = ("serve", "pass", "set", "spike", "block")
 SKILL_ALIASES = {
+    "volleyball_unspecified": "volleyball_unspecified",
+    "general": "general", "general_3d_pose": "general",
     "serve": "serve", "serving": "serve",
     "pass": "pass", "passing": "pass", "receive": "pass",
     "receiving": "pass", "forearm passing": "pass",
@@ -122,7 +124,8 @@ def evaluate(predictions_dir: Path, annotations: dict, min_visibility: float = 0
         by_joint[joint].append(error_mm)
         used_frames.add((clip, frame))
     overall = summary(errors)
-    skill_summaries = {key: summary(by_skill[key]) for key in SKILLS}
+    report_skills = (*SKILLS, *(s for s in ('general', 'volleyball_unspecified') if s in by_skill))
+    skill_summaries = {key: summary(by_skill[key]) for key in report_skills}
     missing_skills = [key for key in SKILLS if not by_skill[key]]
     return {
         "metric": "3D MPJPE, raw hip-centred coordinates, millimetres",

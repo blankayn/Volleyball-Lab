@@ -45,6 +45,18 @@ class MpjpeTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "calibrated 3D"):
                 read_annotations(path)
 
+    def test_general_benchmark_does_not_claim_any_volleyball_skill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            np.savez(root/'general_landmarks.npz', schema_version=2,
+                     world=np.zeros((1, 33, 3)), visibility=np.ones((1, 33)))
+            truth = root/'truth.csv'
+            truth.write_text('clip,skill,frame,joint,x_mm,y_mm,z_mm\ngeneral,general,0,LEFT_WRIST,30,0,0\n')
+            result = evaluate(root, read_annotations(truth))
+            self.assertEqual(result['by_skill']['general']['mpjpe_mm'], 30.)
+            self.assertEqual(len(result['skills_without_valid_annotations']), 5)
+            self.assertIsNone(result['five_skill_target_met'])
+
 
 if __name__ == "__main__":
     unittest.main()

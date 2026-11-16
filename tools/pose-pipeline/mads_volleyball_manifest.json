@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "dataset": "MADS 2017",
+  "project": "https://visal.cs.cityu.edu.hk/research/mads/",
+  "source_folder": "https://drive.google.com/drive/folders/0B0AquUC4V8cFU2otR3l3WWRUVVk?resourcekey=0-KC-rxBAHiIIpylFRCTESNQ&usp=sharing",
+  "camera_selection": "C1 fixed before inference: smallest single volleyball camera member",
+  "archive_index_sha256": "399de0fbad2d652cd6593a834e21fe1c812ad617db81fab646ac65232d3bdbfb",
+  "members": [
+    {
+      "name": "MADS/multi_view_data/Sports/Sports_Volleyball_C1.avi",
+      "flags": 0,
+      "method": 8,
+      "crc32": 1639354229,
+      "compressed_bytes": 143964698,
+      "bytes": 144468126,
+      "disk": 9,
+      "offset": 45195944,
+      "file": "Sports_Volleyball_C1.avi",
+      "sha256": "39843a4977912a8f76d042084727e23bc67a475102805f009b29a2664b0b27d9",
+      "part": "MADS_multiview.z10",
+      "public_source": "https://drive.google.com/file/d/0B0AquUC4V8cFMGhlM2VIc1gxY0k/view?usp=drivesdk&resourcekey=0-hHQlQCS7ltyXXANOER5-sQ",
+      "part_bytes": 1073741824
+    },
+    {
+      "name": "MADS/multi_view_data/Sports/Sports_Volleyball_GT.mat",
+      "flags": 0,
+      "method": 8,
+      "crc32": 233196813,
+      "compressed_bytes": 400921,
+      "bytes": 400871,
+      "disk": 10,
+      "offset": 391648017,
+      "file": "Sports_Volleyball_GT.mat",
+      "sha256": "01924d75ee51e557c628c11445c3296af49ecb7caa91d2162e6d389760189f82",
+      "part": "MADS_multiview.zip",
+      "public_source": "https://drive.google.com/file/d/0B0AquUC4V8cFZXhmeG1ZbktMSVE/view?usp=drivesdk&resourcekey=0-LEMH6kbtAeE5E1qxw-vcpA",
+      "part_bytes": 1063647217
+    },
+    {
+      "name": "MADS/multi_view_data/Sports/Calib_Cam1.mat",
+      "flags": 0,
+      "method": 8,
+      "crc32": 1964165131,
+      "compressed_bytes": 457,
+      "bytes": 628,
+      "disk": 10,
+      "offset": 772091023,
+      "file": "Calib_Cam1.mat",
+      "sha256": "cc3f00dc0f79bcac6679fdd6f0f678796296b03049b66ed1828f831f0b204134",
+      "part": "MADS_multiview.zip",
+      "public_source": "https://drive.google.com/file/d/0B0AquUC4V8cFZXhmeG1ZbktMSVE/view?usp=drivesdk&resourcekey=0-LEMH6kbtAeE5E1qxw-vcpA",
+      "part_bytes": 1063647217
+    }
+  ]
+}
