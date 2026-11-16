@@ -4,9 +4,8 @@ Volleyball Lab is an Android volleyball training app with a companion coach web
 portal. Players practice five skills, review camera-based form feedback, track
 training progress, and share sessions with a coach.
 
-BSIT capstone project · University of Cebu, College of Computer Studies.
 
-## Project overview
+ Project overview
 
 - **Player app:** serving, receiving, setting, spiking, and blocking practice;
   guided drills; pose capture; session results; and progress history.
