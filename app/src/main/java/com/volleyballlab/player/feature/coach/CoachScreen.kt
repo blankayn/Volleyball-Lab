@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
+import com.volleyballlab.player.domain.model.isPoseCue
 import com.volleyballlab.player.domain.model.AiCoachMessage
 import com.volleyballlab.player.domain.model.AiCoachRequest
 import com.volleyballlab.player.domain.model.FormCue
@@ -134,7 +135,7 @@ data class CoachAdvice(
             var unmeasured = 0
 
             val insights = sessions
-                .flatMap { session -> session.cueScores.map { session.skill to it } }
+                .flatMap { session -> session.cueScores.filter { it.cueId.isPoseCue }.map { session.skill to it } }
                 .onEach { (_, cueScore) -> if (cueScore.isMeasured) measured++ else unmeasured++ }
                 .filter { (_, cueScore) -> cueScore.isMeasured }
                 .groupBy { (skill, cueScore) -> skill to cueScore.cueId }
@@ -364,17 +365,6 @@ fun CoachScreen(
             }
         }
 
-        item {
-            Text(
-                text = stringResource(R.string.coach_provenance),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 8.dp),
-            )
-        }
     }
 }
 
