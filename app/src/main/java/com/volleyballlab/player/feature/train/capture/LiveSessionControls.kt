@@ -25,6 +25,9 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.pose.analysis.LivePostureUi
+import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
+import com.volleyballlab.player.pose.analysis.LiveRepFeedback
+import com.volleyballlab.player.pose.analysis.LiveRepVerdict
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.RustPrimary40
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
@@ -77,7 +83,22 @@ internal fun CaptureControls(
     cameraContent: @Composable () -> Unit = {},
     onTestVoice: () -> Unit = {},
     voiceTesting: Boolean = false,
+    voiceStatus: String = "",
+    onEndEarly: () -> Unit = onStop,
+    coachingPlan: LiveCoachingPlan? = null,
+    repFeedback: LiveRepFeedback? = null,
+    /** A coach line that is not about one rep, shown beside the rep verdict. */
+    coachLine: String? = null,
+    onSayAgain: () -> Unit = {},
 ) {
+    var confirmEarly by remember { mutableStateOf(false) }
+    if (confirmEarly) AlertDialog(
+        onDismissRequest = { confirmEarly = false },
+        title = { Text("Save this session early?") },
+        text = { Text("Your recording is saved. Missing required views will be labelled as an incomplete assessment.") },
+        confirmButton = { TextButton(onClick = { confirmEarly = false; onEndEarly() }) { Text("Save and end") } },
+        dismissButton = { TextButton(onClick = { confirmEarly = false }) { Text("Keep practicing") } },
+    )
     BoxWithConstraints(
         modifier = modifier.background(Brush.verticalGradient(listOf(Color(0xFF10151D), Color(0xFF1B2634))))
             .systemBarsPadding(),
@@ -108,7 +129,7 @@ internal fun CaptureControls(
                         Box(Modifier.size(cameraWidth, cameraWidth / 0.75f).testTag("capture-camera-content")) { cameraContent() }
                     }
                     val recording = state as? CaptureUiState.Recording
-                    val view = recording?.rotation?.requestedAngle ?: recording?.angle ?: CameraAngle.Front
+                    val view = recording?.displayedProgress(guidedOptions)?.angle ?: CameraAngle.Front
                     Surface(
                         modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                         shape = RoundedCornerShape(12.dp), color = Color(0xBB111821),
@@ -130,7 +151,9 @@ internal fun CaptureControls(
                     }
                     when (state) {
                         is CaptureUiState.Framing -> if (state.isHoldingStill) HoldStillRing(state)
-                        is CaptureUiState.CountingDown -> CountdownDisplay(state.secondsLeft)
+                        is CaptureUiState.CountingDown -> if (state.instruction != null) {
+                            Text(state.instruction, color = Color.White, modifier = Modifier.padding(20.dp).background(Color.Black.copy(alpha = 0.7f)).padding(12.dp))
+                        } else CountdownDisplay(state.secondsLeft)
                         is CaptureUiState.Recording -> state.rotation?.secondsLeft?.let { CountdownDisplay(it) }
                         CaptureUiState.Initialising -> CircularProgressIndicator(color = Color.White)
                         CaptureUiState.Analysing -> AnalysingDisplay()
@@ -146,21 +169,48 @@ internal fun CaptureControls(
                     SessionRepStats(state, guidedOptions, compact)
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState())) {
-                        if (state.rotation != null) {
+                        if (state.finishingAfterRep) {
+                            SessionClosing(state, coachingPlan)
+                        } else if (state.rotation != null) {
                             SessionRotationGuidance(state.rotation, onRetryAngle, onSkipAngle)
+                        } else if (repFeedback != null && !livePosture.trackingLost) {
+                            SessionRepFeedback(repFeedback, coachingPlan, coachLine)
                         } else {
                             LivePostureCard(livePosture, state.suspensionHint ?: coachingText, Modifier.fillMaxWidth())
                         }
                         if (compact) SessionMetricsLine(state, Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
                         if (coachContext.hasHumanCoach) SessionCoachContext(coachContext)
                     }
-                    SessionPrimaryButton(onStop, stringResource(R.string.capture_finish_session))
+                    state.blockedReason?.let { Text(it, color = Color.White) }
+                    if (guidedOptions.enabled && (state.blockedReason != null || state.rotation?.required == true)) {
+                        TextButton(onClick = { confirmEarly = true }) { Text("End session early", color = Color.White) }
+                    }
+                    // Touch only, and large: the athlete is reaching for it between reps.
+                    if (!voiceMuted && !audioUnavailable && !state.finishingAfterRep) OutlinedButton(onSayAgain,
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("live-say-again"),
+                        shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
+                        Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Say again", style = MaterialTheme.typography.titleMedium)
+                    }
+                    SessionPrimaryButton(onStop, if (guidedOptions.enabled && state.angle == CameraAngle.Front && state.rotation == null)
+                        "Continue to side" else stringResource(R.string.capture_finish_session))
                 }
                 is CaptureUiState.Framing -> {
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
+                        coachingPlan?.let { plan ->
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(plan.title, color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                Text(plan.focusLabel, color = LiveSessionProgress, style = MaterialTheme.typography.bodySmall)
+                                Text("Spoken rep counts, form feedback and one correction at a time.",
+                                    color = LiveSessionMuted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         FramingGuidance(state.quality, state.autoStartArmed)
+                        if (voiceStatus.isNotEmpty()) Text(voiceStatus, color = Color.White, style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = onTestVoice, enabled = !voiceTesting) {
                             Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(18.dp), tint = LiveSessionProgress)
                             Spacer(Modifier.width(6.dp))
@@ -174,6 +224,43 @@ internal fun CaptureControls(
                         enabled = state.quality.isAcceptable && state.angleReady)
                 }
                 else -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionRepFeedback(feedback: LiveRepFeedback, plan: LiveCoachingPlan?, coachLine: String? = null) {
+    val verdictColor = when (feedback.verdict) {
+        LiveRepVerdict.Good -> LiveSessionProgress
+        LiveRepVerdict.Adjust -> Color(0xFFFFD166)
+        LiveRepVerdict.Partial, LiveRepVerdict.Unrated -> LiveSessionMuted
+    }
+    Surface(Modifier.fillMaxWidth().testTag("live-rep-feedback"), shape = RoundedCornerShape(20.dp), color = LiveSessionPanel) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(plan?.title ?: "Your live coach", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+            Text("${feedback.countText} · ${feedback.verdict.label}", style = MaterialTheme.typography.titleMedium,
+                color = verdictColor, fontWeight = FontWeight.SemiBold)
+            Text(feedback.detail, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            coachLine?.takeIf { it.isNotBlank() && it != feedback.detail }?.let {
+                Text("Coach says: $it", style = MaterialTheme.typography.bodySmall, color = LiveSessionProgress)
+            }
+            plan?.let { Text(it.focusLabel, style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted) }
+        }
+    }
+}
+
+/** The closing turn in writing, for a muted session and for the optional AI carry-forward. */
+@Composable
+private fun SessionClosing(state: CaptureUiState.Recording, plan: LiveCoachingPlan?) {
+    Surface(Modifier.fillMaxWidth().testTag("live-session-closing"), shape = RoundedCornerShape(20.dp), color = LiveSessionPanel) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(plan?.title ?: "Your live coach", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+            state.closing.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White) }
+            state.closingAdvice?.let { advice ->
+                Text(stringResource(if (advice.aiGenerated) R.string.coaching_ai_advice else R.string.coaching_local_advice),
+                    style = MaterialTheme.typography.labelMedium, color = LiveSessionProgress)
+                Text(advice.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
         }
     }
@@ -230,7 +317,7 @@ private fun SessionTimer(elapsedMs: Long) {
 
 @Composable
 private fun SessionRepStats(state: CaptureUiState.Recording, options: GuidedCaptureOptions, compact: Boolean) {
-    val metrics = if (options.enabled) state.stageMetrics else state.totalMetrics
+    val metrics = state.displayedProgress(options).metrics
     val numberStyle = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium
     Surface(shape = RoundedCornerShape(20.dp), color = LiveSessionPanel, border = BorderStroke(1.dp, LiveSessionOutline)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
@@ -302,6 +389,8 @@ private fun SessionRotationGuidance(rotation: RotationUi, onRetry: () -> Unit, o
                     Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(28.dp))
                     Text(rotation.instruction, style = MaterialTheme.typography.bodyLarge, color = Color.White)
                 }
+                if (rotation.required) Text("Side view required", color = Color.White)
+                rotation.blockedReason?.let { Text(it, color = Color.White) }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(onRetry, Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
@@ -310,7 +399,7 @@ private fun SessionRotationGuidance(rotation: RotationUi, onRetry: () -> Unit, o
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.capture_retry_angle))
                     }
-                    OutlinedButton(onSkip, Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
+                    if (!rotation.required) OutlinedButton(onSkip, Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
                         Icon(Icons.Rounded.SkipNext, null, Modifier.size(20.dp))
