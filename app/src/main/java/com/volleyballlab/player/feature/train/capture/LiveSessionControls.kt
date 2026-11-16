@@ -25,6 +25,9 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.pose.analysis.LivePostureUi
+import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
+import com.volleyballlab.player.pose.analysis.LiveRepFeedback
+import com.volleyballlab.player.pose.analysis.LiveRepVerdict
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.RustPrimary40
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
@@ -77,7 +83,22 @@ internal fun CaptureControls(
     cameraContent: @Composable () -> Unit = {},
     onTestVoice: () -> Unit = {},
     voiceTesting: Boolean = false,
+    voiceStatus: String = "",
+    onEndEarly: () -> Unit = onStop,
+    coachingPlan: LiveCoachingPlan? = null,
+    repFeedback: LiveRepFeedback? = null,
+    /** A coach line that is not about one rep, shown beside the rep verdict. */
+    coachLine: String? = null,
+    onSayAgain: () -> Unit = {},
 ) {
+    var confirmEarly by remember { mutableStateOf(false) }
+    if (confirmEarly) AlertDialog(
+        onDismissRequest = { confirmEarly = false },
+        title = { Text("Save this session early?") },
+        text = { Text("Your recording is saved. Missing required views will be labelled as an incomplete assessment.") },
+        confirmButton = { TextButton(onClick = { confirmEarly = false; onEndEarly() }) { Text("Save and end") } },
+        dismissButton = { TextButton(onClick = { confirmEarly = false }) { Text("Keep practicing") } },
+    )
     BoxWithConstraints(
         modifier = modifier.background(Brush.verticalGradient(listOf(Color(0xFF10151D), Color(0xFF1B2634))))
             .systemBarsPadding(),
@@ -85,8 +106,10 @@ internal fun CaptureControls(
         // Long coaching notes and larger accessibility text scroll in their own
         // panel, keeping both the camera and the finish action on screen.
         val compact = maxHeight < 700.dp || LocalDensity.current.fontScale > 1.15f
-        val guidanceHeight = if (compact) (maxHeight * 0.23f).coerceIn(100.dp, 160.dp)
-            else (maxHeight * 0.36f).coerceAtLeast(110.dp)
+        // The camera is the point of this screen. Guidance gets a bounded share
+        // and scrolls inside it, so the viewfinder never collapses.
+        val guidanceHeight = if (compact) (maxHeight * 0.2f).coerceIn(92.dp, 150.dp)
+            else (maxHeight * 0.24f).coerceIn(110.dp, 220.dp)
         Column(
             Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -108,7 +131,7 @@ internal fun CaptureControls(
                         Box(Modifier.size(cameraWidth, cameraWidth / 0.75f).testTag("capture-camera-content")) { cameraContent() }
                     }
                     val recording = state as? CaptureUiState.Recording
-                    val view = recording?.rotation?.requestedAngle ?: recording?.angle ?: CameraAngle.Front
+                    val view = recording?.displayedProgress(guidedOptions)?.angle ?: CameraAngle.Front
                     Surface(
                         modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                         shape = RoundedCornerShape(12.dp), color = Color(0xBB111821),
@@ -130,7 +153,9 @@ internal fun CaptureControls(
                     }
                     when (state) {
                         is CaptureUiState.Framing -> if (state.isHoldingStill) HoldStillRing(state)
-                        is CaptureUiState.CountingDown -> CountdownDisplay(state.secondsLeft)
+                        is CaptureUiState.CountingDown -> if (state.instruction != null) {
+                            Text(state.instruction, color = Color.White, modifier = Modifier.padding(20.dp).background(Color.Black.copy(alpha = 0.7f)).padding(12.dp))
+                        } else CountdownDisplay(state.secondsLeft)
                         is CaptureUiState.Recording -> state.rotation?.secondsLeft?.let { CountdownDisplay(it) }
                         CaptureUiState.Initialising -> CircularProgressIndicator(color = Color.White)
                         CaptureUiState.Analysing -> AnalysingDisplay()
@@ -143,24 +168,56 @@ internal fun CaptureControls(
 
             when (state) {
                 is CaptureUiState.Recording -> {
-                    SessionRepStats(state, guidedOptions, compact)
+                    // During a turn the upcoming view has no counts yet; the space goes to the camera.
+                    if (state.rotation == null) SessionRepStats(state, guidedOptions, compact)
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState())) {
-                        if (state.rotation != null) {
+                        if (state.finishingAfterRep) {
+                            SessionClosing(state, coachingPlan)
+                        } else if (state.rotation != null) {
                             SessionRotationGuidance(state.rotation, onRetryAngle, onSkipAngle)
+                        } else if (repFeedback != null && !livePosture.trackingLost) {
+                            SessionRepFeedback(repFeedback, coachingPlan, coachLine)
                         } else {
                             LivePostureCard(livePosture, state.suspensionHint ?: coachingText, Modifier.fillMaxWidth())
                         }
                         if (compact) SessionMetricsLine(state, Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
                         if (coachContext.hasHumanCoach) SessionCoachContext(coachContext)
                     }
-                    SessionPrimaryButton(onStop, stringResource(R.string.capture_finish_session))
+                    state.blockedReason?.let { Text(it, color = Color.White) }
+                    if (guidedOptions.enabled && (state.blockedReason != null || state.rotation?.required == true)) {
+                        TextButton(onClick = { confirmEarly = true }) { Text("End session early", color = Color.White) }
+                    }
+                    // One row: "Say again" is touch only and sits beside the finish action
+                    // instead of taking a row of its own from the camera.
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (!voiceMuted && !audioUnavailable && !state.finishingAfterRep && state.rotation == null) {
+                            OutlinedButton(onSayAgain, Modifier.heightIn(min = 56.dp).testTag("live-say-again"),
+                                shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
+                                Icon(Icons.Rounded.Refresh, null, Modifier.size(20.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Say again", style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                        SessionPrimaryButton(onStop, if (guidedOptions.enabled && state.angle == CameraAngle.Front && state.rotation == null)
+                            "Continue to side" else stringResource(R.string.capture_finish_session), modifier = Modifier.weight(1f))
+                    }
                 }
                 is CaptureUiState.Framing -> {
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
+                        coachingPlan?.let { plan ->
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(plan.title, color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                Text(plan.focusLabel, color = LiveSessionProgress, style = MaterialTheme.typography.bodySmall)
+                                Text("Spoken rep counts, form feedback and one correction at a time.",
+                                    color = LiveSessionMuted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                         FramingGuidance(state.quality, state.autoStartArmed)
+                        if (voiceStatus.isNotEmpty()) Text(voiceStatus, color = Color.White, style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = onTestVoice, enabled = !voiceTesting) {
                             Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(18.dp), tint = LiveSessionProgress)
                             Spacer(Modifier.width(6.dp))
@@ -174,6 +231,43 @@ internal fun CaptureControls(
                         enabled = state.quality.isAcceptable && state.angleReady)
                 }
                 else -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionRepFeedback(feedback: LiveRepFeedback, plan: LiveCoachingPlan?, coachLine: String? = null) {
+    val verdictColor = when (feedback.verdict) {
+        LiveRepVerdict.Good -> LiveSessionProgress
+        LiveRepVerdict.Adjust -> Color(0xFFFFD166)
+        LiveRepVerdict.Partial, LiveRepVerdict.Unrated -> LiveSessionMuted
+    }
+    Surface(Modifier.fillMaxWidth().testTag("live-rep-feedback"), shape = RoundedCornerShape(20.dp), color = LiveSessionPanel) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(plan?.title ?: "Your live coach", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+            Text("${feedback.countText} · ${feedback.verdict.label}", style = MaterialTheme.typography.titleMedium,
+                color = verdictColor, fontWeight = FontWeight.SemiBold)
+            Text(feedback.detail, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            coachLine?.takeIf { it.isNotBlank() && it != feedback.detail }?.let {
+                Text("Coach says: $it", style = MaterialTheme.typography.bodySmall, color = LiveSessionProgress)
+            }
+            plan?.let { Text(it.focusLabel, style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted) }
+        }
+    }
+}
+
+/** The closing turn in writing, for a muted session and for the optional AI carry-forward. */
+@Composable
+private fun SessionClosing(state: CaptureUiState.Recording, plan: LiveCoachingPlan?) {
+    Surface(Modifier.fillMaxWidth().testTag("live-session-closing"), shape = RoundedCornerShape(20.dp), color = LiveSessionPanel) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(plan?.title ?: "Your live coach", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+            state.closing.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White) }
+            state.closingAdvice?.let { advice ->
+                Text(stringResource(if (advice.aiGenerated) R.string.coaching_ai_advice else R.string.coaching_local_advice),
+                    style = MaterialTheme.typography.labelMedium, color = LiveSessionProgress)
+                Text(advice.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
         }
     }
@@ -230,7 +324,7 @@ private fun SessionTimer(elapsedMs: Long) {
 
 @Composable
 private fun SessionRepStats(state: CaptureUiState.Recording, options: GuidedCaptureOptions, compact: Boolean) {
-    val metrics = if (options.enabled) state.stageMetrics else state.totalMetrics
+    val metrics = state.displayedProgress(options).metrics
     val numberStyle = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium
     Surface(shape = RoundedCornerShape(20.dp), color = LiveSessionPanel, border = BorderStroke(1.dp, LiveSessionOutline)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = if (compact) 12.dp else 16.dp, vertical = 12.dp),
@@ -276,10 +370,11 @@ private fun SessionMetricsLine(state: CaptureUiState.Recording, modifier: Modifi
 }
 
 @Composable
+@Suppress("UNUSED_PARAMETER")
 private fun SessionRotationGuidance(rotation: RotationUi, onRetry: () -> Unit, onSkip: () -> Unit) {
     Surface(shape = RoundedCornerShape(20.dp), color = LiveSessionPanel, border = BorderStroke(1.dp, LiveSessionOutline)) {
         Column(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.055f)).padding(14.dp),
+            Row(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.055f)).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Rounded.Info, null, tint = LiveSessionProgress, modifier = Modifier.size(22.dp))
                 Text(when {
@@ -290,33 +385,25 @@ private fun SessionRotationGuidance(rotation: RotationUi, onRetry: () -> Unit, o
                     else -> stringResource(R.string.capture_next_view)
                 }, style = MaterialTheme.typography.bodyMedium, color = Color.White)
             }
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 rotation.advice?.let { advice ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(stringResource(if (advice.aiGenerated) R.string.coaching_ai_advice else R.string.coaching_local_advice),
                             style = MaterialTheme.typography.labelMedium, color = LiveSessionProgress)
-                        Text(advice.text, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                        Text(advice.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Rounded.Cameraswitch, null, tint = Color.White, modifier = Modifier.size(24.dp))
                     Text(rotation.instruction, style = MaterialTheme.typography.bodyLarge, color = Color.White)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onRetry, Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
-                        Icon(Icons.Rounded.Refresh, null, Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.capture_retry_angle))
-                    }
-                    OutlinedButton(onSkip, Modifier.weight(1f).heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
-                        Icon(Icons.Rounded.SkipNext, null, Modifier.size(20.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.capture_skip_angle))
-                    }
+                if (rotation.required) Text("Side view required", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+                rotation.blockedReason?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.White) }
+                // The view is confirmed from the camera, so there is nothing to retry by hand.
+                if (!rotation.required) TextButton(onSkip, Modifier.heightIn(min = 44.dp)) {
+                    Icon(Icons.Rounded.SkipNext, null, Modifier.size(20.dp), tint = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.capture_skip_angle), color = Color.White)
                 }
             }
         }
@@ -339,15 +426,15 @@ private fun SessionCoachContext(context: LiveCoachContext) {
 }
 
 @Composable
-private fun SessionPrimaryButton(onClick: () -> Unit, text: String, enabled: Boolean = true) {
-    Button(onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+private fun SessionPrimaryButton(onClick: () -> Unit, text: String, enabled: Boolean = true, modifier: Modifier = Modifier.fillMaxWidth()) {
+    Button(onClick, enabled = enabled, modifier = modifier.heightIn(min = 56.dp),
         shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(
             containerColor = RustPrimary40, contentColor = Color.White,
             disabledContainerColor = LiveSessionPanel, disabledContentColor = LiveSessionMuted,
         )) {
         Icon(Icons.Rounded.CheckCircle, null, Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
-        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 

@@ -10,8 +10,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.text.font.FontWeight
+import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.ui.theme.vbColors
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
@@ -27,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -118,7 +130,7 @@ class SessionResultViewModel(
      * be honest about a cue that was only readable twice out of ten.
      */
     private fun summarise(session: SessionResult): List<CueSummary> =
-        FormCueCatalog.forSkill(session.skill).map { cue ->
+        FormCueCatalog.poseCues(session.skill).map { cue ->
             val scores = session.reps
                 .flatMap { it.cueScores }
                 .filter { it.cueId == cue.id && it.score != null }
@@ -216,153 +228,92 @@ private fun ResultContent(
     val score = assessment.overallScore
     val playableVideo = session.videoPath?.takeIf { File(it).isFile }
     var confirmDeleteVideo by remember { mutableStateOf(false) }
+    val stages = session.angleStages.sortedBy { it.stageIndex }
+    val missingViews = if (stages.isEmpty()) emptyList() else {
+        val captured = stages.filter { it.liveRepCount > 0 }.map { it.angle }.toSet()
+        listOf(CameraAngle.Front, CameraAngle.Side).filter { it !in captured }
+    }
+    val side = Modifier.padding(horizontal = 20.dp)
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         item {
             EntranceAnimation(index = 0) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(top = 12.dp),
-                ) {
-                    Text(
-                        text = stringResource(session.skill.displayName),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    if (score != null) {
-                        ScoreArc(
-                            score = score,
-                            label = stringResource(R.string.coach_assessment_score),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = pluralStringResource(
-                                R.plurals.result_reps_detected,
-                                session.repCount,
-                                session.repCount,
-                            ),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        if (session.repCount == 0) NoRepsCard() else Text(
-                            stringResource(R.string.coach_assessment_more_evidence),
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                ResultHero(session, score, stages, missingViews, side.padding(top = 12.dp))
+            }
+        }
+
+        item { EntranceAnimation(index = 1) { SessionReportCard(session.repCount, assessment, side) } }
+
+        if (stages.isNotEmpty()) item {
+            ResultSection(
+                title = stringResource(R.string.result_angle_summary_title),
+                caption = stringResource(R.string.result_angle_summary_body),
+                modifier = side,
+            ) {
+                ResultPanel {
+                    stages.forEachIndexed { index, stage ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        AngleStageRow(session, stage)
                     }
                 }
             }
-        }
-
-        if (session.angleStages.isNotEmpty()) {
-            item {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                    Text(
-                        text = stringResource(R.string.result_angle_summary_title),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.result_angle_summary_body),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            itemsIndexed(
-                session.angleStages.sortedBy { it.stageIndex },
-                key = { _, stage -> stage.stageIndex },
-            ) { _, stage ->
-                AngleStageCard(session, stage, Modifier.padding(horizontal = 20.dp))
-            }
-        }
-
-        item { CoachAssessmentCard(assessment, Modifier.padding(horizontal = 20.dp)) }
-        item { DetailedReportCard(session, Modifier.padding(horizontal = 20.dp)) }
-
-        if (playableVideo != null) {
-            item {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                    Text(
-                        text = stringResource(R.string.result_review_video),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    AnnotatedSessionVideo(session, playableVideo)
-                    TextButton(onClick = { confirmDeleteVideo = true }) {
-                        Text(
-                            text = stringResource(R.string.session_delete_video),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-        } else {
-            item {
-                Text(
-                    text = stringResource(R.string.result_video_unavailable),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                )
-            }
-        }
-
-        if (score != null) {
-            session.weakestCue()?.let { weakest ->
-                item {
-                    EntranceAnimation(index = 1) {
-                        FocusCard(
-                            cue = FormCueCatalog.byId(weakest),
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                        )
-                    }
-                }
-            }
-
-            item {
-                EntranceAnimation(index = 2) {
-                    Text(
-                        text = stringResource(R.string.result_breakdown),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                    )
-                }
-            }
-
-            itemsIndexed(state.summaries, key = { _, summary -> summary.cue.id }) { index, summary ->
-                EntranceAnimation(index = index + 3) {
-                    CueRow(
-                        summary = summary,
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                }
-            }
-        }
-
-        if (assignmentId != null) {
-            item { AssignmentResultActions(assignmentId, session, Modifier.padding(horizontal = 20.dp)) }
         }
 
         item {
-            EntranceAnimation(index = 8) {
-                Button(
-                    onClick = onDone,
-                    shape = VbButtonShape,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                ) {
-                    Text(doneLabel ?: if (assignmentId != null) "Back to assignment" else stringResource(R.string.result_save))
+            ResultSection(title = stringResource(R.string.result_review_video), modifier = side) {
+                if (playableVideo != null) {
+                    AnnotatedSessionVideo(session, playableVideo)
+                    TextButton(onClick = { confirmDeleteVideo = true }, modifier = Modifier.align(Alignment.End)) {
+                        Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.session_delete_video), color = MaterialTheme.colorScheme.error)
+                    }
+                } else ResultPanel {
+                    Text(
+                        text = stringResource(R.string.result_video_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        }
+
+        if (score != null && state.summaries.isNotEmpty()) item {
+            EntranceAnimation(index = 2) {
+                ResultSection(title = stringResource(R.string.result_breakdown), modifier = side) {
+                    ResultPanel {
+                        state.summaries.forEachIndexed { index, summary ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            CueRow(summary)
+                        }
+                    }
+                }
+            }
+        }
+
+        item { SessionCoachFeedback(session.id, side) }
+
+        if (assignmentId != null) {
+            item { AssignmentResultActions(assignmentId, session, side) }
+        }
+
+        item {
+            EntranceAnimation(index = 3) {
+                Column(side.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Button(
+                        onClick = onDone,
+                        shape = VbButtonShape,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    ) {
+                        Text(doneLabel ?: if (assignmentId != null) "Back to assignment" else stringResource(R.string.result_save))
+                    }
+                    PoseBenchmarkDisclosure()
+                    Spacer(Modifier.height(4.dp))
                 }
             }
         }
@@ -395,12 +346,109 @@ private fun ResultContent(
     }
 }
 
+/** The one thing to read first: the score, then the three counts that explain it. */
 @Composable
-private fun AngleStageCard(
+private fun ResultHero(
     session: SessionResult,
-    stage: SessionAngleStage,
+    score: Int?,
+    stages: List<SessionAngleStage>,
+    missingViews: List<CameraAngle>,
     modifier: Modifier = Modifier,
 ) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                if (score != null) ScoreArc(score = score, diameter = 124.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = stringResource(R.string.coach_assessment_score).uppercase(Locale.getDefault()),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = stringResource(session.skill.displayName),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = pluralStringResource(R.plurals.result_reps_detected, session.repCount, session.repCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (score == null) Text(
+                        text = stringResource(R.string.result_score_unavailable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (stages.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatTile(stages.sumOf { it.liveRepCount }.toString(), stringResource(R.string.result_stat_completed), Modifier.weight(1f))
+                StatTile(stages.sumOf { it.validRepCount }.toString(), stringResource(R.string.capture_good_reps), Modifier.weight(1f))
+                StatTile(stages.maxOf { it.bestStreak }.toString(), stringResource(R.string.result_stat_best_run), Modifier.weight(1f))
+            }
+            if (missingViews.isNotEmpty()) Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.vbColors.warningContainer,
+            ) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Rounded.Info, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = "Session incomplete: ${missingViews.joinToString { it.name.lowercase() }} view not captured",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.padding(vertical = 12.dp, horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, style = MaterialTheme.typography.titleLarge.merge(VbTabularNumerals), fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun ResultSection(
+    title: String,
+    modifier: Modifier = Modifier,
+    caption: String? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            caption?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        content()
+    }
+}
+
+@Composable
+private fun ResultPanel(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) { Column(content = content) }
+}
+
+@Composable
+private fun AngleStageRow(session: SessionResult, stage: SessionAngleStage) {
     // Do not attribute a repetition that crosses a turning/countdown boundary.
     val finalReps = session.reps.filter {
         it.startMs >= stage.startMs && it.endMs <= stage.endMs
@@ -416,89 +464,33 @@ private fun AngleStageCard(
         }
     )
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(angleLabel, style = MaterialTheme.typography.titleSmall)
             Text(
-                text = stringResource(R.string.result_angle_stage_title, stage.stageIndex + 1, angleLabel),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = stringResource(
-                    R.string.result_angle_live_reps, stage.validRepCount, stage.liveRepCount, stage.bestStreak,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = stage.estimatedFormScore?.let {
-                    stringResource(R.string.result_angle_live_score, it)
-                } ?: stringResource(R.string.result_angle_live_unassessed),
+                text = stringResource(R.string.result_view_reps, stage.validRepCount, stage.liveRepCount, stage.bestStreak),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = finalScore?.let {
-                    stringResource(R.string.result_angle_final_score, it, finalReps.size)
-                } ?: stringResource(R.string.result_angle_final_unassessed, finalReps.size),
+                text = stage.estimatedFormScore?.let { stringResource(R.string.result_angle_live_score, it) }
+                    ?: stringResource(R.string.result_angle_live_unassessed),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-    }
-}
-
-@Composable
-private fun NoRepsCard() {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.padding(horizontal = 20.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+        Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = stringResource(R.string.result_no_reps_title),
-                style = MaterialTheme.typography.titleMedium,
+                text = finalScore?.toString() ?: "—",
+                style = MaterialTheme.typography.headlineSmall.merge(VbTabularNumerals),
+                fontWeight = FontWeight.Bold,
+                color = finalScore?.let { scoreColor(it) } ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.result_no_reps_body),
-                style = MaterialTheme.typography.bodyMedium,
+                text = pluralStringResource(R.plurals.result_view_final, finalReps.size, finalReps.size),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FocusCard(cue: FormCue?, modifier: Modifier = Modifier) {
-    if (cue == null) return
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Text(
-                text = stringResource(R.string.result_weakest_cue),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(cue.label),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(cue.coachingTip),
-                style = MaterialTheme.typography.bodyMedium,
             )
         }
     }
@@ -516,42 +508,34 @@ private fun CueRow(summary: CueSummary, modifier: Modifier = Modifier) {
         label = "cueProgress",
     )
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(summary.cue.label),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
-                if (summary.meanScore != null) {
-                    Text(
-                        text = "$percent",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = scoreColor(percent),
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp),
-                color = scoreColor(percent),
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            )
-            Spacer(Modifier.height(8.dp))
+    Column(modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = measurementLine(summary),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = stringResource(summary.cue.label),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = if (summary.meanScore != null) "$percent" else "—",
+                style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
+                fontWeight = FontWeight.SemiBold,
+                color = if (summary.meanScore != null) scoreColor(percent) else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (summary.meanScore != null) LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = scoreColor(percent),
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        )
+        Text(
+            text = measurementLine(summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

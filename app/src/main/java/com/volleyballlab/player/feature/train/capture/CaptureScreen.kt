@@ -78,6 +78,9 @@ import com.volleyballlab.player.ui.coaching.CoachingAudio
 import com.volleyballlab.player.ui.coaching.CoachingAudioStatus
 import com.volleyballlab.player.pose.analysis.PoseGuide
 import com.volleyballlab.player.ui.coaching.SpeechPriority
+import com.volleyballlab.player.ui.coaching.SpeechStyle
+import com.volleyballlab.player.pose.analysis.CoachingEventType
+import com.volleyballlab.player.pose.analysis.CoachPhrasebook
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.volleyballlab.player.pose.PoseDetectorUnavailableException
@@ -162,6 +165,9 @@ private fun GrantedCaptureScreen(
     val coachContext by viewModel.coachContext.collectAsStateWithLifecycle()
     val guidedOptions by viewModel.guidedOptions.collectAsStateWithLifecycle()
     val coachingMessage by viewModel.coachingMessage.collectAsStateWithLifecycle()
+    val coachingPlan by viewModel.coachingPlan.collectAsStateWithLifecycle()
+    val repFeedback by viewModel.repFeedback.collectAsStateWithLifecycle()
+    val speechWindowOpen by viewModel.speechWindowOpen.collectAsStateWithLifecycle()
     val preferences by viewModel.coachingPreferences.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val feedbackView = LocalView.current
@@ -170,23 +176,28 @@ private fun GrantedCaptureScreen(
     var voiceTesting by remember { mutableStateOf(false) }
     val voiceTestScope = androidx.compose.runtime.rememberCoroutineScope()
     val liveCoachingRepository = (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.liveCoachingRepository
+    val submittedEvents = remember { mutableMapOf<String, Long>() }
     val audio = remember(context, feedbackView) {
-        CoachingAudio(context) {
+        CoachingAudio(context, onValidRepHaptic = {
             feedbackView.performHapticFeedback(
                 if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM
                 else android.view.HapticFeedbackConstants.VIRTUAL_KEY,
             )
-        }
+        }, onDropped = { key -> submittedEvents.remove(key)?.let(viewModel::onSpeechDropped) })
     }
     val audioStatus by audio.status.collectAsStateWithLifecycle()
     val isRecording = state is CaptureUiState.Recording
-    val audioSessionActive = isRecording || state is CaptureUiState.Framing || state is CaptureUiState.CountingDown
+    // Analysing stays active so a closing sentence already being spoken can finish.
+    val audioSessionActive = isRecording || state is CaptureUiState.Framing || state is CaptureUiState.CountingDown ||
+        state is CaptureUiState.Analysing
     val isTurning = (state as? CaptureUiState.Recording)?.rotation != null
     var wasTurning by remember { mutableStateOf(false) }
     var wasTrackingLost by remember { mutableStateOf(false) }
     LaunchedEffect(audio, isTurning, livePosture.trackingLost) {
         // Drop a pending turn/tracking instruction once that guidance is obsolete.
-        if (wasTurning && !isTurning || wasTrackingLost && !livePosture.trackingLost) audio.stop()
+        if (wasTurning && !isTurning) audio.stop()
+        // On recovery, let the sentence being spoken finish rather than cutting it off.
+        else if (wasTrackingLost && !livePosture.trackingLost) audio.stopAfterCurrent()
         wasTurning = isTurning
         wasTrackingLost = livePosture.trackingLost
     }
@@ -209,6 +220,9 @@ private fun GrantedCaptureScreen(
         audio.setSessionActive(audioSessionActive)
         viewModel.setVoiceGuidanceEnabled(preferences.voiceEnabled && !muted)
     }
+    LaunchedEffect(audio, speechWindowOpen) {
+        audio.setCorrectionWindow(speechWindowOpen)
+    }
     val rotation = (state as? CaptureUiState.Recording)?.rotation
     DisposableEffect(audio, rotation?.guidanceId) {
         onDispose { audio.stop() }
@@ -216,30 +230,79 @@ private fun GrantedCaptureScreen(
     LaunchedEffect(audio, rotation?.guidanceId, rotation?.loadingCoaching, rotation?.speechPending) {
         val turn = rotation ?: return@LaunchedEffect
         if (turn.loadingCoaching || !turn.speechPending || !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
-        val text = turn.advice?.text ?: turn.message.removeSuffix(turn.instruction).trim()
-        audio.playGuidance(text, turn.advice?.voicePath, turn.instruction) {
+        viewModel.onRotationSpeechStarted(turn.guidanceId)
+        val debrief = turn.segments.ifEmpty { listOf(turn.message.removeSuffix(turn.instruction).trim()) }
+        // The instruction may wait briefly for AI advice, never longer than the bounded hold.
+        audio.playGuidance(debrief, instruction = turn.instruction,
+            lateJoinWaitMs = if (turn.awaitingAdvice) 1_500 else 0) {
             viewModel.onRotationSpeechFinished(turn.guidanceId)
         }
     }
+    LaunchedEffect(viewModel, audio) {
+        viewModel.lateAdviceSpeech.collect { (guidanceId, text) ->
+            val current = (viewModel.uiState.value as? CaptureUiState.Recording)?.rotation
+            // Joins the turn before its instruction, or stays on the card.
+            if (current?.guidanceId == guidanceId && current.speechPending) audio.appendToGuidance(text)
+        }
+    }
+    val finishingSessionId = (state as? CaptureUiState.Recording)?.takeIf { it.finishingAfterRep }?.sessionId
+    LaunchedEffect(audio, finishingSessionId) {
+        val id = finishingSessionId ?: return@LaunchedEffect
+        val closing = (viewModel.uiState.value as? CaptureUiState.Recording)?.closing.orEmpty()
+        audio.playGuidance(closing) { viewModel.onFinalRepSpeechFinished(id) }
+    }
+    val opening = (state as? CaptureUiState.CountingDown)?.instruction
+    LaunchedEffect(opening) {
+        if (opening != null) {
+            val brief = (state as? CaptureUiState.CountingDown)?.segments.orEmpty().ifEmpty { listOf(opening) }
+            if (preferences.voiceEnabled && !muted && audioStatus != CoachingAudioStatus.Unavailable && audioStatus != CoachingAudioStatus.Degraded) audio.playGuidance(brief) { viewModel.onOpeningFinished() }
+            else { delay(2_500); viewModel.onOpeningFinished() }
+        }
+    }
+    // Setup is coached too: the main framing problem once it has persisted, and
+    // the moment the hold starts. The pacer's repeat rule prevents nagging.
+    val framing = state as? CaptureUiState.Framing
+    val framingIssue = framing?.quality?.primaryIssue
+    val framingIssueText = framingIssue?.let { stringResource(it.message) }
+    LaunchedEffect(audio, framingIssueText) {
+        val text = framingIssueText ?: return@LaunchedEffect
+        delay(1_500)
+        audio.setCorrectionWindow(true)
+        audio.submit(text, "framing:$text", SpeechPriority.Milestone)
+    }
+    val holdingStill = framing?.isHoldingStill == true
+    LaunchedEffect(audio, holdingStill) {
+        if (!holdingStill) return@LaunchedEffect
+        audio.setCorrectionWindow(true)
+        audio.submit(CoachPhrasebook.HOLD_STILL, "framing:hold", SpeechPriority.Milestone)
+    }
     val countdown = (state as? CaptureUiState.CountingDown)?.secondsLeft ?: rotation?.secondsLeft
     LaunchedEffect(audio, countdown, rotation?.guidanceId) {
-        countdown?.let(audio::announceCountdown)
+        countdown?.takeIf { it > 0 }?.let {
+            audio.announceCountdown(it)
+            if (preferences.hapticsEnabled) feedbackView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        }
     }
     LaunchedEffect(viewModel, audio, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             launch {
                 viewModel.coachingEvents.collect { event ->
-                    val kind = event.type.name.lowercase()
-                    val priority = when {
-                        "rotation" in kind -> SpeechPriority.Rotation
-                        "tracking" in kind -> SpeechPriority.Tracking
-                        "improv" in kind -> SpeechPriority.Improvement
-                        "milestone" in kind -> SpeechPriority.Milestone
-                        else -> SpeechPriority.Correction
-                    }
+                    val recording = viewModel.uiState.value as? CaptureUiState.Recording ?: return@collect
+                    // The target rep is included in the complete angle/final turn.
+                    if (event.repNumber != null && (recording.rotation != null || recording.finishingAfterRep)) return@collect
+                    val delivery = speechDelivery(event.type, event.repNumber != null)
+                    val priority = delivery.priority
                     if (priority == SpeechPriority.Rotation || priority == SpeechPriority.Tracking) audio.stop()
-                    audio.submit(event.text, "${event.type}:${event.text.lowercase()}", priority,
-                        expiresInMs = if (priority == SpeechPriority.Rotation) 15_000 else 5_000)
+                    // Session lines that are not about a rep do not wait for the rep window.
+                    audio.setCorrectionWindow(priority == SpeechPriority.Tracking || event.repNumber == null ||
+                        viewModel.speechWindowOpen.value)
+                    val key = event.repNumber?.let { "rep:${recording.sessionId}:$it" }
+                        ?: "${event.type}:${event.text.lowercase()}"
+                    // Remember which event this key carries, so a line that is
+                    // never spoken can be handed back to the director.
+                    if (submittedEvents.size > 32) submittedEvents.clear()
+                    submittedEvents[key] = event.id
+                    audio.submit(event.text, key, priority, delivery.expiresInMs, delivery.style)
                 }
             }
             launch { viewModel.validRepEvents.collect { audio.feedbackValidRep() } }
@@ -262,8 +325,17 @@ private fun GrantedCaptureScreen(
         coachContext = coachContext,
         guidedOptions = guidedOptions,
         coachingText = coachingMessage?.text,
+        coachLine = coachingMessage?.takeIf { it.repNumber == null }?.text,
+        onSayAgain = { audio.repeatLast() },
+        coachingPlan = coachingPlan,
+        repFeedback = repFeedback,
         voiceMuted = muted || !preferences.voiceEnabled,
-        audioUnavailable = audioStatus == CoachingAudioStatus.Unavailable,
+        voiceStatus = when (audioStatus) {
+            CoachingAudioStatus.Ready -> "Voice ready"
+            CoachingAudioStatus.Initializing -> "Preparing voice…"
+            else -> "Voice unavailable — visual coaching remains available"
+        },
+        audioUnavailable = audioStatus == CoachingAudioStatus.Unavailable || audioStatus == CoachingAudioStatus.Degraded,
         onToggleMute = {
             if (preferences.voiceEnabled) muted = !muted
             else android.widget.Toast.makeText(context, "Enable voice coaching in Profile", android.widget.Toast.LENGTH_SHORT).show()
@@ -274,7 +346,8 @@ private fun GrantedCaptureScreen(
         onRetryAngle = viewModel::onRetryAngle,
         onSkipAngle = viewModel::onSkipAngle,
         onStart = viewModel::onStartRequested,
-        onStop = viewModel::onStopRequested,
+        onStop = { viewModel.onStopRequested() },
+        onEndEarly = viewModel::onEndEarlyConfirmed,
         onCancelCountdown = viewModel::onCancelCountdown,
         onRetry = viewModel::onRetryDetector,
         onRetrySave = viewModel::onRetrySaveRequested,
@@ -327,6 +400,20 @@ private fun GrantedCaptureScreen(
             }
         },
     )
+}
+
+internal data class SpeechDelivery(val priority: SpeechPriority, val style: SpeechStyle, val expiresInMs: Long)
+
+/** How one coaching event is queued and voiced. A correction outranks a plain count. */
+internal fun speechDelivery(type: CoachingEventType, isRep: Boolean): SpeechDelivery = when {
+    type == CoachingEventType.Rotation -> SpeechDelivery(SpeechPriority.Rotation, SpeechStyle.Guidance, 15_000)
+    type == CoachingEventType.Tracking -> SpeechDelivery(SpeechPriority.Tracking, SpeechStyle.Urgent, 5_000)
+    isRep && type == CoachingEventType.Correction -> SpeechDelivery(SpeechPriority.Coaching, SpeechStyle.Correction, 6_000)
+    isRep && type == CoachingEventType.Improvement -> SpeechDelivery(SpeechPriority.Coaching, SpeechStyle.Praise, 6_000)
+    isRep -> SpeechDelivery(SpeechPriority.RepFeedback, SpeechStyle.Count, 3_000)
+    type == CoachingEventType.Improvement -> SpeechDelivery(SpeechPriority.Improvement, SpeechStyle.Praise, 5_000)
+    type == CoachingEventType.RepMilestone -> SpeechDelivery(SpeechPriority.Milestone, SpeechStyle.Guidance, 5_000)
+    else -> SpeechDelivery(SpeechPriority.Correction, SpeechStyle.Correction, 5_000)
 }
 
 @Composable
