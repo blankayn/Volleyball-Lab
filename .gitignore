@@ -1,18 +1,11 @@
 *.iml
 .gradle/
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
 .DS_Store
 /build
 build/
 app/build/
 **/build/
-.idea/build/
 captures/
 /captures
 .externalNativeBuild
@@ -46,3 +39,12 @@ test_write.txt
 *.keystore
 *.p12
 *.pem
+
+# Personal editor and assistant configuration.
+/.idea/
+/opencode.json
+
+# Local device screenshots and checkout captures.
+/app-login-screen.png
+/xendit-gcash-checkout.jpg
+/codex-clipboard-*.png
