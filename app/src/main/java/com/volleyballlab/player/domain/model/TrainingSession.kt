@@ -78,7 +78,8 @@ data class RepResult(
      * says so rather than printing a score.
      */
     fun formScore(skill: Skill): Int? {
-        val cues = FormCueCatalog.forSkill(skill).associateBy { it.id }
+        // Pose cues only: the jump-height proxy is outside the study and never scored.
+        val cues = FormCueCatalog.poseCues(skill).associateBy { it.id }
         var weighted = 0.0
         var totalWeight = 0.0
         cueScores.forEach { cueScore ->
@@ -135,7 +136,7 @@ data class SessionResult(
      */
     fun weakestCue(): CueId? = reps
         .flatMap { it.cueScores }
-        .filter { it.score != null }
+        .filter { it.score != null && it.cueId.isPoseCue }
         .groupBy { it.cueId }
         .filterValues { it.size >= MIN_REPS_FOR_RECOMMENDATION }
         .mapValues { (_, scores) -> scores.mapNotNull { it.score }.average() }

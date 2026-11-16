@@ -31,7 +31,7 @@ fun SkillLearningDialog(skill: Skill, onDismiss: () -> Unit) {
             Text("Common form mistakes", style = MaterialTheme.typography.titleSmall)
             content.mistakes.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
             Text("What the camera checks", style = MaterialTheme.typography.titleSmall)
-            FormCueCatalog.forSkill(skill).forEach { cue -> Text("${stringResource(cue.label)}: ${stringResource(cue.coachingTip)}", style = MaterialTheme.typography.bodySmall) }
+            FormCueCatalog.poseCues(skill).forEach { cue -> Text("${stringResource(cue.label)}: ${stringResource(cue.coachingTip)}", style = MaterialTheme.typography.bodySmall) }
             TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://usavolleyball.org/resources-for-athletes/volleyball-specific-skills/"))) }) { Text("USA Volleyball learning resources") }
         }
     }, confirmButton = { TextButton(onDismiss) { Text("Back to drills") } })

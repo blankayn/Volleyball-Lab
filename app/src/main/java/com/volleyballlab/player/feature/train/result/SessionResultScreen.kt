@@ -130,7 +130,7 @@ class SessionResultViewModel(
      * be honest about a cue that was only readable twice out of ten.
      */
     private fun summarise(session: SessionResult): List<CueSummary> =
-        FormCueCatalog.forSkill(session.skill).map { cue ->
+        FormCueCatalog.poseCues(session.skill).map { cue ->
             val scores = session.reps
                 .flatMap { it.cueScores }
                 .filter { it.cueId == cue.id && it.score != null }

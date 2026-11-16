@@ -89,6 +89,9 @@ enum class CueId {
  * @param weight this cue's share of the rep score. Weights within a skill sum to
  *   1.0, which [FormCueCatalog] verifies at class-load time.
  */
+/** False only for the jump-height proxy, which is outside the pose study. */
+val CueId.isPoseCue: Boolean get() = this != CueId.SpikeJumpHeight
+
 data class FormCue(
     val id: CueId,
     val phase: RepPhase,
@@ -369,6 +372,13 @@ object FormCueCatalog {
     }
 
     fun forSkill(skill: Skill): List<FormCue> = bySkill.getValue(skill)
+
+    /**
+     * The cues the study reports: body pose only. Jump height is a camera-derived
+     * proxy, not a pose measurement, so it is still recorded but never scored,
+     * listed or coached.
+     */
+    fun poseCues(skill: Skill): List<FormCue> = forSkill(skill).filter { it.id.isPoseCue }
 
     fun byId(id: CueId): FormCue? = bySkill.values.flatten().firstOrNull { it.id == id }
 }

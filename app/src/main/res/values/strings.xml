@@ -33,11 +33,11 @@
     <string name="skill_setting">Setting</string>
     <string name="skill_spiking">Spiking</string>
     <string name="skill_blocking">Blocking</string>
-    <string name="skill_serving_desc">Toss, contact and follow through</string>
+    <string name="skill_serving_desc">Balanced stance and overhead reach</string>
     <string name="skill_receiving_desc">Platform angle and body position</string>
-    <string name="skill_setting_desc">Hand shape and release</string>
+    <string name="skill_setting_desc">Hand position and arm extension</string>
     <string name="skill_spiking_desc">In-place reach and arm swing</string>
-    <string name="skill_blocking_desc">Timing, penetration and hand shape</string>
+    <string name="skill_blocking_desc">Balanced stance and overhead arm alignment</string>
 
     <!-- Drill selection -->
     <string name="drill_select_title">%1$s drills</string>
@@ -148,7 +148,6 @@
     <string name="coach_empty_body_no_sessions">Record a session and the cue you are losing most points on shows up here, with what to do about it.</string>
     <string name="coach_empty_body_too_few_reps">A cue needs at least %1$d measured reps before it is worth acting on. Record a longer session.</string>
     <string name="coach_empty_cta">Start training</string>
-    <string name="coach_provenance">Scores and cue selection are computed on this phone. AI Coach sends the selected skill and cue, aggregate score, measurement count, camera-quality summary, and approved coaching tip to Firebase AI for wording. Video and pose landmarks are not uploaded.</string>
     <string name="coach_ai_label">Grounded AI coach</string>
     <string name="coach_ai_loading">Writing from your verified session results…</string>
     <string name="coach_ai_action">Try this: %1$s</string>
@@ -185,7 +184,7 @@
     <string name="result_weakest_cue">Focus next on</string>
     <string name="result_save">Save session</string>
     <string name="result_review_video">Review your recording</string>
-    <string name="result_video_unavailable">No video was saved for this session. Your pose analysis is still available.</string>
+    <string name="result_video_unavailable">This session has no recording on this phone. Recordings stay on the phone that filmed them, so sessions restored from your account show the pose analysis only.</string>
     <string name="session_delete_video">Delete video</string>
     <string name="session_delete_video_title">Delete this video?</string>
     <string name="session_delete_video_body">Your scores and session history stay. The recording is permanently removed from this device.</string>
@@ -216,54 +215,54 @@
          ==================================================================== -->
 
     <!-- Serving -->
-    <string name="cue_serve_arm_extension">Extend at contact</string>
-    <string name="cue_serve_arm_extension_tip">Meet the ball with a straight hitting arm. A bent elbow at contact costs both power and accuracy.</string>
+    <string name="cue_serve_arm_extension">Extend the raised arm</string>
+    <string name="cue_serve_arm_extension_tip">Reach upward and extend your elbow comfortably above your shoulder.</string>
     <string name="cue_serve_reach">Reach high</string>
-    <string name="cue_serve_reach_tip">Contact the ball at the top of your reach, not out in front of your chest.</string>
+    <string name="cue_serve_reach_tip">Raise your arm overhead while keeping your trunk controlled.</string>
     <string name="cue_serve_trunk">Stay tall</string>
-    <string name="cue_serve_trunk_tip">Keep the trunk close to upright. Leaning back sends the serve long.</string>
-    <string name="cue_serve_toss_arm">Lift the toss arm</string>
-    <string name="cue_serve_toss_arm_tip">Raise the tossing arm and hold it up. Dropping it early pulls the hitting shoulder down with it.</string>
+    <string name="cue_serve_trunk_tip">Keep your trunk comfortably upright and your weight balanced over your feet.</string>
+    <string name="cue_serve_toss_arm">Lift the guiding arm</string>
+    <string name="cue_serve_toss_arm_tip">Raise your guiding arm steadily while preparing the other elbow.</string>
 
     <!-- Receiving -->
-    <string name="cue_pass_platform">Lock the platform</string>
-    <string name="cue_pass_platform_tip">Keep both elbows straight and joined. Bending them makes the pass unpredictable.</string>
+    <string name="cue_pass_platform">Steady the platform</string>
+    <string name="cue_pass_platform_tip">Join your forearms and extend both elbows comfortably to form a steady platform.</string>
     <string name="cue_pass_knees">Bend the knees</string>
-    <string name="cue_pass_knees_tip">Load into an athletic stance. Passing with straight legs takes away your control.</string>
-    <string name="cue_pass_trunk">Lean into the ball</string>
-    <string name="cue_pass_trunk_tip">Angle the chest forward over the platform rather than standing upright.</string>
+    <string name="cue_pass_knees_tip">Bend your knees comfortably while keeping a balanced stance.</string>
+    <string name="cue_pass_trunk">Lean from the hips</string>
+    <string name="cue_pass_trunk_tip">Lean slightly forward from your hips while keeping your base balanced.</string>
     <string name="cue_pass_shoulders">Level the shoulders</string>
-    <string name="cue_pass_shoulders_tip">Square, level shoulders keep the platform flat and the pass on target.</string>
+    <string name="cue_pass_shoulders_tip">Keep your shoulders level to steady your forearm platform.</string>
 
     <!-- Setting -->
     <string name="cue_set_hand_height">Hands above the forehead</string>
-    <string name="cue_set_hand_height_tip">Meet the ball above and slightly in front of the forehead, not down at chin height.</string>
+    <string name="cue_set_hand_height_tip">Position your hands above and slightly in front of your forehead.</string>
     <string name="cue_set_elbows">Load the elbows</string>
-    <string name="cue_set_elbows_tip">Elbows bent and out on contact, so you can push through the ball.</string>
-    <string name="cue_set_knees">Set with the legs</string>
-    <string name="cue_set_knees_tip">Bend the knees before the set. The power comes from the legs, not the wrists.</string>
+    <string name="cue_set_elbows_tip">Keep your elbows comfortably bent before extending your arms upward.</string>
+    <string name="cue_set_knees">Soften the knees</string>
+    <string name="cue_set_knees_tip">Start with softly bent knees, then extend under control.</string>
     <string name="cue_set_follow">Finish extended</string>
-    <string name="cue_set_follow_tip">Follow through until the arms are straight and the hands finish toward the target.</string>
+    <string name="cue_set_follow_tip">Extend both arms upward evenly, then return to your starting posture.</string>
 
     <!-- Spiking -->
     <string name="cue_spike_load">Load the knees</string>
     <string name="cue_spike_load_tip">Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.</string>
     <string name="cue_spike_arm">Swing through full extension</string>
-    <string name="cue_spike_arm_tip">Contact with the hitting arm straight, above the shoulder.</string>
+    <string name="cue_spike_arm_tip">Extend the raised arm above your shoulder within a comfortable range.</string>
     <string name="cue_spike_jump">Get off the floor</string>
     <string name="cue_spike_jump_tip">Drive the hips upward. Measured against your own standing hip height.</string>
-    <string name="cue_spike_trunk">Drive the trunk</string>
-    <string name="cue_spike_trunk_tip">Snap the chest forward through contact instead of hanging back.</string>
+    <string name="cue_spike_trunk">Control the trunk</string>
+    <string name="cue_spike_trunk_tip">Keep your trunk controlled as your raised arm extends overhead.</string>
 
     <!-- Blocking -->
     <string name="cue_block_arms">Straight arms</string>
-    <string name="cue_block_arms_tip">Lock both elbows at the top of the block. Bent arms collapse under a hard hit.</string>
+    <string name="cue_block_arms_tip">Extend both elbows comfortably during the overhead reach.</string>
     <string name="cue_block_hands">Hand spacing</string>
-    <string name="cue_block_hands_tip">Close enough that the ball cannot pass between the hands, wide enough to cover the seam.</string>
-    <string name="cue_block_penetration">Penetrate the net</string>
-    <string name="cue_block_penetration_tip">Reach the hands over and past the net line rather than straight up.</string>
+    <string name="cue_block_hands_tip">Keep your hands evenly spaced above your shoulders.</string>
+    <string name="cue_block_penetration">Reach slightly forward</string>
+    <string name="cue_block_penetration_tip">Position your hands slightly in front of your shoulders during the overhead reach.</string>
     <string name="cue_block_knees">Load before the jump</string>
-    <string name="cue_block_knees_tip">Bend the knees to load. Blocking flat-footed means late hands.</string>
+    <string name="cue_block_knees_tip">Bend your knees from a balanced stance before the upward movement.</string>
 
     <!-- Debug-only fallback when the pose model cannot be loaded -->
     <string name="capture_use_demo">Use demo pose data</string>
@@ -555,7 +554,6 @@
     <string name="coach_player_assignments">Assignments</string>
     <string name="coach_player_new_assignment">Set a drill</string>
     <string name="coach_player_focus">Lowest-scoring cue</string>
-    <string name="coach_player_focus_source">Pooled across every rep this player has recorded of it. Not a model — the same arithmetic their own app shows them.</string>
     <string name="coach_player_no_training_title">Nothing recorded yet</string>
     <string name="coach_player_no_training_body">This player has not shared a training session yet. Their form breakdown appears after they submit a result.</string>
     <string name="coach_player_no_assignments">No drills set yet.</string>
@@ -579,7 +577,6 @@
     <string name="coach_review_framing">Most cues could not be measured in this recording — %1$d%% came back blank. That is a camera-angle problem, not a technique problem, so read the score with that in mind.</string>
     <string name="coach_review_missing">This shared session is no longer available.</string>
     <string name="coach_review_analysis">Cue breakdown</string>
-    <string name="coach_review_analysis_source">Computed on this phone from the athlete\'s stored pose data. Thresholds are first-pass coaching values, not measured ones — Experiment 2 has not run yet.</string>
     <string name="review_safety_clear">Clear</string>
     <string name="review_safety_watch">Worth a look</string>
     <string name="review_safety_unknown">Not visible</string>
@@ -757,7 +754,15 @@
     <string name="coach_assessment_confidence">Validated model confidence: %1$s</string>
     <string name="coach_assessment_unavailable">Not established</string>
     <string name="coach_assessment_duration">Mean detected movement window: %1$.2f s</string>
-    <string name="coach_assessment_mpjpe">3D joint error (MPJPE): not independently measured</string>
+    <string name="coach_assessment_mpjpe">This session’s 3D joint error: not measured</string>
+    <string name="pose_benchmark_open">About 3D accuracy</string>
+    <string name="pose_benchmark_title">3D pose benchmark</string>
+    <string name="pose_benchmark_value">MADS benchmark: %1$.1f mm MPJPE</string>
+    <string name="pose_benchmark_definition">MPJPE measures the average distance between predicted and reference 3D joints. Lower is better. The research target is less than 50 mm.</string>
+    <string name="pose_benchmark_sample">Compared with independent motion capture: %1$d valid reference frames and %2$d joint comparisons.</string>
+    <string name="pose_benchmark_scope">One athlete and one camera view, evaluated offline. This does not establish accuracy for all five skills or live phone recordings.</string>
+    <string name="pose_benchmark_session">This is a test of the pose model, not your technique score or the error in your recording. Your session needs its own reference measurements to calculate MPJPE.</string>
+    <string name="pose_benchmark_close">Close</string>
     <string name="coach_assessment_more_evidence">Record at least three clear repetitions with your arms and legs visible for an overall estimate.</string>
     <string name="coach_assessment_evidence">Median observed position: %1$s across %2$d measurable repetitions</string>
     <string name="coach_assessment_reference">Reference range: %1$s–%2$s</string>
