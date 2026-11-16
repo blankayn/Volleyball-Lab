@@ -36,6 +36,21 @@ data class LiveCaptureMetrics(
     fun interrupted(): LiveCaptureMetrics = copy(streak = 0)
 }
 
+/** The view label and counters presented together on the live screen. */
+data class CaptureProgressDisplay(val angle: CameraAngle, val metrics: LiveCaptureMetrics)
+
+fun CaptureUiState.Recording.displayedProgress(options: GuidedCaptureOptions): CaptureProgressDisplay =
+    CaptureProgressDisplay(
+        angle = rotation?.requestedAngle ?: angle,
+        metrics = when {
+            !options.enabled -> totalMetrics
+            // During a turn, stageMetrics still belongs to the completed view.
+            // The screen labels the upcoming view, whose counters start at zero.
+            rotation != null -> LiveCaptureMetrics()
+            else -> stageMetrics
+        },
+    )
+
 data class RotationUi(
     val requestedAngle: CameraAngle,
     val stageIndex: Int,
@@ -48,6 +63,12 @@ data class RotationUi(
     val loadingCoaching: Boolean = false,
     val speechPending: Boolean = false,
     val advice: LiveCoachingAdvice? = null,
+    val required: Boolean = false,
+    val blockedReason: String? = null,
+    /** The spoken debrief, one sentence per segment. The instruction follows them. */
+    val segments: List<String> = emptyList(),
+    /** An AI line is still on its way and may join this turn's speech if it arrives in time. */
+    val awaitingAdvice: Boolean = false,
 ) {
     val timedOut: Boolean get() = elapsedMs >= 10_000
 }
@@ -55,6 +76,22 @@ data class RotationUi(
 /** Shared by the controller and tests; never advances on a posture score. */
 object GuidedCaptureProgress {
     val angles = listOf(CameraAngle.Front, CameraAngle.Side, CameraAngle.Rear)
+    val requiredAngles = setOf(CameraAngle.Front, CameraAngle.Side)
+    fun isRequired(index: Int) = angles.getOrNull(index) in requiredAngles
+    fun canSkip(index: Int) = angles.getOrNull(index) == CameraAngle.Rear
+    sealed interface StopDecision {
+        data object Finish : StopDecision
+        data class ContinueToSide(val stageIndex: Int = 1) : StopDecision
+        data class Blocked(val repsRemaining: Int) : StopDecision
+    }
+    fun stopDecision(stageIndex: Int, stageReps: Int, options: GuidedCaptureOptions): StopDecision = when {
+        !options.enabled -> StopDecision.Finish
+        stageIndex == 0 -> StopDecision.ContinueToSide()
+        stageIndex == 1 && stageReps < options.repsPerAngle -> StopDecision.Blocked(options.repsPerAngle - stageReps)
+        else -> StopDecision.Finish
+    }
+    fun recordingLimit(options: GuidedCaptureOptions): Long =
+        if (options.enabled) maxOf(300_000L, options.repsPerAngle * 3 * 12_000L) else 90_000L
     fun reachedTarget(options: GuidedCaptureOptions, metrics: LiveCaptureMetrics): Boolean =
         options.enabled && metrics.reps >= options.repsPerAngle
     fun nextStage(stageIndex: Int): Int? = (stageIndex + 1).takeIf { it < angles.size }
