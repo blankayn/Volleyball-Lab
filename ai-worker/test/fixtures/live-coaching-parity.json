@@ -1,0 +1,33 @@
+{
+  "description": "Shared by ai-worker/test/live-coaching.test.mjs and the app's LiveCoachingEvidenceTest. The app and the worker must choose the same focus cue and direction from the same completed-rep measurements.",
+  "cases": [
+    { "name": "a repeated bent hitting arm", "skill": "Serving", "angle": "Front",
+      "reps": [[{ "cueId": "ServeContactArmExtension", "measured": 120 }], [{ "cueId": "ServeContactArmExtension", "measured": 118 }],
+        [{ "cueId": "ServeContactArmExtension", "measured": 122 }], [{ "cueId": "ServeContactArmExtension", "measured": 120 }]],
+      "expect": { "cueId": "ServeContactArmExtension", "position": "below" } },
+    { "name": "every rep inside the practice range", "skill": "Serving", "angle": "Front",
+      "reps": [[{ "cueId": "ServeContactArmExtension", "measured": 170 }], [{ "cueId": "ServeContactArmExtension", "measured": 172 }],
+        [{ "cueId": "ServeContactArmExtension", "measured": 168 }]],
+      "expect": null },
+    { "name": "one outlier among good reps", "skill": "Serving", "angle": "Side",
+      "reps": [[{ "cueId": "ServeContactArmExtension", "measured": 100 }], [{ "cueId": "ServeContactArmExtension", "measured": 172 }],
+        [{ "cueId": "ServeContactArmExtension", "measured": 175 }], [{ "cueId": "ServeContactArmExtension", "measured": 176 }]],
+      "expect": null },
+    { "name": "knees staying too straight", "skill": "Receiving", "angle": "Side",
+      "reps": [[{ "cueId": "PassKneeFlexion", "measured": 175 }], [{ "cueId": "PassKneeFlexion", "measured": 176 }],
+        [{ "cueId": "PassKneeFlexion", "measured": 174 }], [{ "cueId": "PassKneeFlexion", "measured": 175 }]],
+      "expect": { "cueId": "PassKneeFlexion", "position": "above" } },
+    { "name": "knees sinking too deep", "skill": "Receiving", "angle": "Side",
+      "reps": [[{ "cueId": "PassKneeFlexion", "measured": 80 }], [{ "cueId": "PassKneeFlexion", "measured": 78 }],
+        [{ "cueId": "PassKneeFlexion", "measured": 82 }]],
+      "expect": { "cueId": "PassKneeFlexion", "position": "below" } },
+    { "name": "the worse of two repeated cues", "skill": "Receiving", "angle": "Front",
+      "reps": [[{ "cueId": "PassPlatformStraight", "measured": 120 }, { "cueId": "PassKneeFlexion", "measured": 158 }],
+        [{ "cueId": "PassPlatformStraight", "measured": 122 }, { "cueId": "PassKneeFlexion", "measured": 159 }],
+        [{ "cueId": "PassPlatformStraight", "measured": 118 }, { "cueId": "PassKneeFlexion", "measured": 158 }]],
+      "expect": { "cueId": "PassPlatformStraight", "position": "below" } },
+    { "name": "too few measurements to judge", "skill": "Setting", "angle": "Rear",
+      "reps": [[], [], [{ "cueId": "SetElbowFlexion", "measured": 40 }]],
+      "expect": null }
+  ]
+}
