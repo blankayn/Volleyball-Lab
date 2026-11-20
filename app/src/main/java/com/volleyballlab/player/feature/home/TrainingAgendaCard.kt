@@ -1,7 +1,6 @@
 package com.volleyballlab.player.feature.home
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -10,7 +9,6 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -35,8 +33,6 @@ fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modi
     val workspace = graph.trainingWorkspaceRepository
     val schedule by workspace.schedule.collectAsStateWithLifecycle(emptyList())
     val assignments by graph.coachRepository.assignmentsForMe.collectAsStateWithLifecycle(emptyList())
-    val reports by workspace.reports.collectAsStateWithLifecycle(emptyList())
-    val plan by graph.planRepository.plan.collectAsStateWithLifecycle(UserPlan.Free)
     val profile by graph.profileRepository.profile.collectAsStateWithLifecycle(AthleteProfile.Anonymous)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ScheduledTraining?>(null) }
@@ -45,7 +41,6 @@ fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modi
     val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
     val today by dayFlow.collectAsStateWithLifecycle(LocalDate.now())
     val items = TrainingAgenda.today(schedule, assignments, today)
-    val usage = ReportAllowance.usage(reports, plan, today)
     fun change(block: suspend () -> Unit) { scope.launch { runCatching { block() }.onFailure { message = "The plan could not be saved. Please retry." } } }
     StudentCard(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -106,15 +101,6 @@ fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modi
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton({ editing = item }) { Icon(Icons.Rounded.Edit, "Edit upcoming training", Modifier.size(20.dp)) }
-                }
-            }
-            Surface(shape = RoundedCornerShape(16.dp), color = Color.Transparent,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-                Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (usage.unlimited) "Pro · Unlimited detailed reports" else "${usage.remaining} of ${usage.limit} reports available this week",
-                        style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Text("Resets ${usage.resetDate}. Saved reports use no extra credit.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             message?.let { Text(it, color = MaterialTheme.colorScheme.error) }

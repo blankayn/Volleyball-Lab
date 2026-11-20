@@ -38,7 +38,15 @@ Automated verification for this build passed:
 | Backend policy and notification unit tests | 11 passed |
 | Firestore, Storage and account-cleanup emulator suite | 29 passed |
 | Python geometry parity and jump-baseline checks | Passed |
-| MPJPE evaluator unit tests | 2 passed; these validate the evaluator, not real-world accuracy |
+| Pose / MPJPE / subset-download tests | 31 passed on 5 November, including app-export checks; fixtures validate software behavior. Measured benchmarks: MADS volleyball video 172.716 mm, general-pose pilot 143.274 mm; bounded MADS acquisition and independent numerical verification also passed. See `mpjpe-3d-benchmark-status.md`. |
+
+MADS integration follow-up, 5 November: the assessment card now offers **About 3D
+accuracy**, backed by a verified aggregate benchmark asset. Debug assembly and
+lint passed (0 errors, 187 warnings and 8 hints in the current worktree). The
+packaged benchmark/model hashes matched, and the build rejected intentionally
+mismatched copied metadata. These checks do not replace physical-phone testing;
+no phone was connected. The historical checks above were not all repeated for
+this small integration.
 
 Install the dependencies documented in the root, portal and pose-pipeline READMEs.
 From the repository root in PowerShell:
@@ -66,7 +74,7 @@ by Git. Earlier verification records describe earlier builds.
 | Paid checkout | Supply verified merchant credentials, price and access period, then deploy and test payment, renewal and revocation per `gcash-checkout-setup.md`. Checkout remains disabled. |
 | Distribution | Supply the release signing configuration and verify the signed release on the target devices and distribution channel. |
 | Coaching validation | Obtain coach-reviewed movement labels and review the cue thresholds and illustrations. Automated tests do not validate coaching quality. |
-| 3D accuracy benchmark | Obtain independent calibrated metric 3D ground truth for all five skills and run the MPJPE evaluator. No measured accuracy claim has been made. |
+| Five-skill 3D accuracy benchmark | MADS volleyball video measured at 172.716 mm on 969 valid frames, without individual skill labels. General-pose pilot: 143.274 mm. Both exceed 50 mm; five-skill coverage remains incomplete. |
 
 The GitHub CLI was absent locally. The public GitHub Issues page showed no open
 issues during inspection; no tracker changes were made.

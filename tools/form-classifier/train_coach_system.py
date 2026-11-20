@@ -236,7 +236,7 @@ def main():
             counts = {name: int((data.y == index).sum()) for index, name in enumerate(CLASSES)}
             for row in data.rows:
                 registry_rows.append({key: row.get(key, "") for key in (
-                    "sample_id", "skill", "label", "task_scope", "observed_arm", "source_group", "athlete_id", "session_id", "source_sha256",
+                    "sample_id", "skill", "label", "task_scope", "observed_arm", "source_group", "source_family", "athlete_id", "session_id", "source_sha256",
                     "partition", "label_verified", "actor_verified", "complete_rep", "athlete_verified")})
             if set(data.y.tolist()) != {0, 1}:
                 result = {"status": "needs_data", "reason": "Both correct and faulty examples required"}

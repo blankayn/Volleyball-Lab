@@ -10,8 +10,8 @@ Run the packaging audit against exact model/report files:
 
 ```powershell
 tools/pose-pipeline/.venv/Scripts/python.exe tools/form-classifier/deployment_readiness.py `
-  --model-dir outputs/ai-coach-block-arm-time-v2/block/tcn-0.001 `
-  --report outputs/ai-coach-block-arm-time-v2/report.json `
+  --model-dir outputs/ai-coach-block-arm-time-v2-bound/block/tcn-0.001 `
+  --report outputs/ai-coach-block-arm-time-v2-bound/report.json `
   --out outputs/blocking-v2-deployment-readiness.json
 ```
 
@@ -59,10 +59,19 @@ not a production winner.
 Build `:app:assembleDebug` and `:app:assembleDebugAndroidTest` with
 `--offline --no-configuration-cache`. Install both APKs with `adb install -r`;
 do not uninstall/reset the student's app. Run the SDK instrumentation runner
-with classes `com.volleyballlab.player.pose.BlockingArmRuntimeDeviceTest` and
-`com.volleyballlab.player.pose.BlockingArmPipelineDeviceTest`. The direct SDK
-runner avoids the unavailable offline UTP dependency. Check `OK (2 tests)`, not
+with classes `com.volleyballlab.player.pose.BlockingArmRuntimeDeviceTest`,
+`com.volleyballlab.player.pose.SequentialVideoDecoderDeviceTest` and
+`com.volleyballlab.player.pose.BlockingArmPipelineDeviceTest`, and pass
+`-e pipelineBudgetMs 150`. The direct SDK
+runner avoids the unavailable offline UTP dependency. Check `OK (6 tests)`, not
 just the shell exit status.
+
+The final harness uses one detector for the session, matching capture lifetime;
+each replay resets feature windows. The optional `benchmarkInferences=12` is a
+diagnostic only and cannot satisfy the 100-inference gate. Use
+`install -r --no-streaming` when wireless streaming installation is unreliable.
+The training metadata and phone evidence must also match the exact pose-asset
+SHA-256, not just its detector settings.
 
 The full test decodes a repeatedly replayed public video through the **actual
 LIVE_STREAM app detector**, production feature builder and native candidate. It

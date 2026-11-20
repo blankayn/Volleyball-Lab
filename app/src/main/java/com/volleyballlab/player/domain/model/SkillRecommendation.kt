@@ -46,10 +46,11 @@ enum class SkillLevel(val number: Int, @param:StringRes val label: Int) {
  * What the dashboard should tell this athlete to work on next.
  *
  * @param level where they currently sit at [skill].
- * @param measuredScore their mean form score for [skill], or null if they have not
- *   recorded any measurable reps of it yet. Its presence is what separates a claim
- *   the app measured from a claim the athlete made, and the card says which it is
- *   showing rather than letting the reader assume.
+ * @param measuredScore their mean form score over their most recent sessions of
+ *   [skill] (see [recentScoreFor]), or null if they have not recorded any measurable
+ *   reps of it yet. Its presence is what separates a claim the app measured from a
+ *   claim the athlete made, and the card says which it is showing rather than
+ *   letting the reader assume.
  */
 data class SkillRecommendation(
     val skill: Skill,
@@ -86,7 +87,7 @@ data class SkillRecommendation(
             sessions: List<SessionResult>,
         ): SkillRecommendation? {
             val skill = profile.goalSkill ?: assessment.weakestSkill(profile.position) ?: return null
-            val measured = meanScoreFor(skill, sessions)
+            val measured = recentScoreFor(skill, sessions)
             val level = when {
                 measured != null -> SkillLevel.fromScore(measured)
                 else -> assessment.ratings[skill]?.let(SkillLevel::fromRating) ?: SkillLevel.Beginner
@@ -107,5 +108,34 @@ data class SkillRecommendation(
             if (scores.isEmpty()) return null
             return scores.average().roundToInt().coerceIn(0, 100)
         }
+
+        /**
+         * Mean form score over the [RECENT_SESSIONS] most recent sessions of one
+         * skill that produced a measurable score, or null if none did.
+         *
+         * ## Why the level uses this and not [meanScoreFor]
+         *
+         * A level describes how good the athlete is *now*. An all-time mean lets
+         * ten early sessions outvote five recent ones, so a player who has clearly
+         * improved keeps being called a beginner, and one in a slump never hears
+         * it. A handful of recent sessions still smooths over a single bad day.
+         *
+         * "Recent" is by start time, not list order, so it holds however the
+         * repository happens to sort. Sessions are weighted equally, as in
+         * [meanScoreFor]. The all-time mean is still what the skill page shows as
+         * its "avg form".
+         */
+        fun recentScoreFor(skill: Skill, sessions: List<SessionResult>): Int? {
+            val scores = sessions.filter { it.skill == skill }
+                .mapNotNull { session -> session.formScore()?.let { session.startedAtEpochMs to it } }
+                .sortedByDescending { it.first }
+                .take(RECENT_SESSIONS)
+                .map { it.second }
+            if (scores.isEmpty()) return null
+            return scores.average().roundToInt().coerceIn(0, 100)
+        }
+
+        /** How many of the latest scored sessions decide the level. A first guess, like the bands. */
+        const val RECENT_SESSIONS = 5
     }
 }

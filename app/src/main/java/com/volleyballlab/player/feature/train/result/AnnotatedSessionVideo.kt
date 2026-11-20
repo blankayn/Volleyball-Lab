@@ -58,6 +58,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.volleyballlab.player.pose.analysis.CuePlainWords
+import com.volleyballlab.player.ui.component.CueGauge
 import com.volleyballlab.player.R
 import com.volleyballlab.player.data.session.VideoReviewCache
 import com.volleyballlab.player.domain.model.CueUnit
@@ -122,10 +124,14 @@ private class VideoReviewViewModel(context: Context, private val path: String, p
 }
 
 @Composable
-fun AnnotatedSessionVideo(session: SessionResult, path: String) {
+/**
+ * @param showMeasurements true for the coach's view of a shared recording, which keeps
+ *   the exact measured value and practice range. Players see plain words and a gauge.
+ */
+fun AnnotatedSessionVideo(session: SessionResult, path: String, showMeasurements: Boolean = false) {
     val context = LocalContext.current
     val model: VideoReviewViewModel = viewModel(
-        key = "video-review-${session.id}",
+        key = "video-review-${session.id}-$path",
         factory = viewModelFactory { initializer { VideoReviewViewModel(context, path, session.skill) } },
     )
     val state by model.state.collectAsStateWithLifecycle()
@@ -147,6 +153,7 @@ fun AnnotatedSessionVideo(session: SessionResult, path: String) {
                 TextButton(onClick = model::load) { Text(stringResource(R.string.review_retry)) }
             }
             is ReviewState.Ready -> {
+                CoachReelPlayer(path, current.review, playback, showMeasurements)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.review_skeleton), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                     Switch(checked = skeleton, onCheckedChange = { skeleton = it })
@@ -163,7 +170,7 @@ fun AnnotatedSessionVideo(session: SessionResult, path: String) {
                 } else {
                     Text(stringResource(R.string.review_corrections), style = MaterialTheme.typography.titleSmall)
                     current.review.issues.take(shownIssues).forEach { issue ->
-                        ReviewIssueCard(issue, onJump = { skeleton = true; playback.seek(issue.timestampMs) })
+                        ReviewIssueCard(issue, showMeasurements, onJump = { playback.cancelReel(); skeleton = true; playback.seek(issue.timestampMs) })
                     }
                     if (shownIssues < current.review.issues.size) {
                         TextButton(onClick = { shownIssues += 12 }) { Text(stringResource(R.string.review_more)) }
@@ -175,7 +182,8 @@ fun AnnotatedSessionVideo(session: SessionResult, path: String) {
 }
 
 /** All player operations run on the UI thread; the overlay follows actual playback position. */
-private class ReviewPlayback {
+internal class ReviewPlayback {
+    var cancelReel: () -> Unit = {}
     var view: VideoView? = null
     var media: MediaPlayer? = null
     var prepared by mutableStateOf(false)
@@ -230,7 +238,7 @@ private fun ReviewPlayer(path: String, playback: ReviewPlayback, review: VideoRe
     }
     DisposableEffect(host, owner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) playback.pause()
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) { playback.cancelReel(); playback.pause() }
         }
         owner.lifecycle.addObserver(observer)
         onDispose {
@@ -271,7 +279,7 @@ private fun ReviewPlayer(path: String, playback: ReviewPlayback, review: VideoRe
         Box(Modifier.fillMaxWidth()) {
             Slider(
                 value = scrub ?: playback.positionMs.toFloat(),
-                onValueChange = { playback.pause(); scrub = it },
+                onValueChange = { playback.cancelReel(); playback.pause(); scrub = it },
                 onValueChangeFinished = { scrub?.let { playback.seek(it.toLong()) }; scrub = null },
                 valueRange = 0f..playback.durationMs.coerceAtLeast(1).toFloat(),
                 enabled = playback.prepared,
@@ -279,7 +287,7 @@ private fun ReviewPlayer(path: String, playback: ReviewPlayback, review: VideoRe
             )
             if (review != null && playback.durationMs > 0) {
                 Canvas(Modifier.fillMaxWidth().height(5.dp).align(Alignment.BottomCenter).padding(horizontal = 10.dp)) {
-                    review.issues.forEach { issue ->
+                    review.issues.groupBy { it.repNumber }.values.mapNotNull { issues -> issues.minByOrNull { it.score } }.forEach { issue ->
                         val x = size.width * issue.timestampMs / playback.durationMs
                         drawCircle(issueColor(issue), 2.dp.toPx(), Offset(x, size.height / 2))
                     }
@@ -287,7 +295,7 @@ private fun ReviewPlayer(path: String, playback: ReviewPlayback, review: VideoRe
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = playback::toggle, enabled = playback.prepared && !playback.seeking) {
+            OutlinedButton(onClick = { playback.cancelReel(); playback.toggle() }, enabled = playback.prepared && !playback.seeking) {
                 Text(stringResource(if (playback.playing) R.string.review_pause else R.string.review_play))
             }
             Text("${reviewTime(playback.positionMs)} / ${reviewTime(playback.durationMs)}", style = MaterialTheme.typography.labelMedium)
@@ -302,7 +310,7 @@ private fun ReviewPlayer(path: String, playback: ReviewPlayback, review: VideoRe
 private fun issueColor(issue: ReviewIssue) = if (issue.score < 0.35f) Color(0xFFFF6B5E) else Color(0xFFFFC857)
 
 @Composable
-private fun ReviewSkeleton(pose: ReviewPose, width: Int, height: Int, issues: List<ReviewIssue>, label: String?, modifier: Modifier) {
+internal fun ReviewSkeleton(pose: ReviewPose, width: Int, height: Int, issues: List<ReviewIssue>, label: String?, modifier: Modifier) {
     val description = stringResource(R.string.review_overlay_description)
     Canvas(modifier.semantics { contentDescription = if (label == null) description else "$description: $label" }) {
         val fit = ReviewFit.inside(size.width, size.height, width, height)
@@ -349,23 +357,30 @@ private fun ReviewSkeleton(pose: ReviewPose, width: Int, height: Int, issues: Li
 }
 
 @Composable
-private fun ReviewIssueCard(issue: ReviewIssue, onJump: () -> Unit) {
+private fun ReviewIssueCard(issue: ReviewIssue, showMeasurements: Boolean, onJump: () -> Unit) {
     val cue = FormCueCatalog.byId(issue.cueId) ?: return
     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.review_issue_at, issue.repNumber, reviewTime(issue.timestampMs)), style = MaterialTheme.typography.labelMedium)
             Text(stringResource(cue.label), style = MaterialTheme.typography.titleSmall)
             Text(stringResource(cue.coachingTip), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.result_measured_vs_target, reviewValue(issue.measured, cue.unit),
-                "${reviewValue(cue.target.start, cue.unit)} – ${reviewValue(cue.target.endInclusive, cue.unit)}"),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (showMeasurements) {
+                Text(stringResource(R.string.result_measured_vs_target, reviewValue(issue.measured, cue.unit),
+                    "${reviewValue(cue.target.start, cue.unit)} – ${reviewValue(cue.target.endInclusive, cue.unit)}"),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                val reading = CuePlainWords.read(cue, issue.measured)
+                Text(reading.verdict.replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CueGauge(reading)
+            }
             TextButton(onClick = onJump) { Text(stringResource(R.string.review_show_moment)) }
         }
     }
 }
 
-private fun reviewTime(timeMs: Long): String = String.format(Locale.US, "%d:%02d.%01d", timeMs / 60_000, timeMs / 1_000 % 60, timeMs / 100 % 10)
-private fun reviewValue(value: Float, unit: CueUnit): String = when (unit) {
+internal fun reviewTime(timeMs: Long): String = String.format(Locale.US, "%d:%02d.%01d", timeMs / 60_000, timeMs / 1_000 % 60, timeMs / 100 % 10)
+internal fun reviewValue(value: Float, unit: CueUnit): String = when (unit) {
     CueUnit.Degrees -> String.format(Locale.US, "%.0f°", value)
     CueUnit.Metres -> String.format(Locale.US, "%.2f m", value)
     CueUnit.Ratio -> String.format(Locale.US, "%.0f%%", value * 100)

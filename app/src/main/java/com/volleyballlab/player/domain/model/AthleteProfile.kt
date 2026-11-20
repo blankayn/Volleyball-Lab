@@ -18,35 +18,27 @@ enum class CourtPosition(@param:StringRes val displayName: Int) {
     Libero(R.string.position_libero),
 }
 
-/** Same wire-format caution as [CourtPosition]. */
-enum class DominantHand(@param:StringRes val displayName: Int) {
-    Left(R.string.hand_left),
-    Right(R.string.hand_right),
-}
-
 /**
  * Who the athlete is, as far as the app is concerned.
  *
  * ## Everything here is optional
  *
  * Every field can be absent, and the app is fully usable with all of them empty.
- * This is deliberate: nothing in the capture or scoring pipeline reads any of it.
- * A profile that gated training behind a form would be collecting data to no end,
- * on a device whose whole privacy claim is that it keeps to itself.
+ * Capture uses the name and confirmed training preferences for local coaching
+ * wording and cue priorities. Scoring does not depend on these preferences, and
+ * training remains usable without a profile.
  *
- * ## Why position and hand are stored at all
+ * ## Why position is stored at all
  *
- * They are the two facts a coach asks first, and both are due to become real
- * inputs rather than labels. Dominant hand decides which arm the spike and serve
- * analyzers should be reading - currently they infer it per rep - and position
- * decides which skills are worth recommending, since asking a libero to drill
- * blocking is wasted training. Neither is wired to that yet, and this file is
- * where it will attach when it is.
+ * It is the first fact a coach asks, and it decides which skills are worth
+ * recommending, since asking a libero to drill blocking is wasted training.
+ *
+ * Dominant hand was removed on 19 Nov 2026: the serve and spike analyzers find
+ * the hitting arm from each rep, so a stored hand only ever acted as a fallback.
  */
 data class AthleteProfile(
     val name: String = "",
     val position: CourtPosition? = null,
-    val dominantHand: DominantHand? = null,
     val goalSkill: Skill? = null,
     val weeklySessionGoal: Int = 3,
     val goalText: String = "",
@@ -54,6 +46,7 @@ data class AthleteProfile(
     val firstName: String = "",
     val lastName: String = "",
     val address: ProfileAddress? = null,
+    val trainingSetup: SavedTrainingSetup? = null,
 ) {
     val hasName: Boolean get() = name.isNotBlank()
 

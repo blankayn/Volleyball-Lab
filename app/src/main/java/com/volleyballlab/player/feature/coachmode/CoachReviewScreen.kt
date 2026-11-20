@@ -349,12 +349,6 @@ fun CoachReviewScreen(
             }
         }
 
-        if (tab == 0) item {
-            CoachFootnote(
-                text = stringResource(R.string.coach_review_analysis_source),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-        }
     }
 }
 
@@ -390,7 +384,7 @@ private fun Scorecard(review: SessionReview, modifier: Modifier = Modifier) {
                         review.repCount,
                     ),
                     style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(4.dp))
@@ -507,7 +501,7 @@ private fun PointRow(point: ReviewPoint) {
             Text(
                 text = point.scoreOutOfHundred.toString(),
                 style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
-                fontWeight = FontWeight.ExtraBold,
+                fontWeight = FontWeight.SemiBold,
                 color = scoreColor(point.scoreOutOfHundred),
             )
         }

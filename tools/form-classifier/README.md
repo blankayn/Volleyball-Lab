@@ -24,6 +24,14 @@ Keep every cut from the same original video or athlete session in the same
 `source_group`. Record the actual reviewer. Independent athlete/session review
 is still necessary; a filled CSV field alone does not establish coaching validity.
 
+For related coaching episodes or possible reused footage, an optional
+`source_family` conservatively links the collection into one split group while
+preserving each original video ID and hash. It identifies a publication family,
+not a verified athlete or recording session. Online selections can embed it in
+the sequence bundle; a split registry cannot replace an embedded value. It can
+also be supplied for legacy rows through the registry. The grouping is additional
+leakage protection and does not replace athlete verification for locked tests.
+
 ```powershell
 & tools/pose-pipeline/.venv/Scripts/python.exe tools/form-classifier/all_skills.py --manifest path/to/reviewed.csv --train
 ```
@@ -101,6 +109,17 @@ Run all training-data regression checks with:
 ```powershell
 & tools/pose-pipeline/.venv/Scripts/python.exe -m unittest discover -s tools/form-classifier -p 'test_*.py'
 ```
+
+Prepare existing development examples for coach review with
+`prepare_coach_review.py --corpus <corpus> --extracted <extraction-directories>
+--skills serve pass set spike block --out <new-local-directory>`. Original
+legacy samples can be resolved using paired `--legacy-data <segment-csv-directory>`
+and `--legacy-videos <original-video-directory>` options. Their original segment
+timings are preserved for review; a short badge-labelled segment is not assumed
+to be a complete action. The worksheet leaves labels, athlete identities,
+qualifications, corrections and drills blank. It cannot turn previously exposed
+development examples into an untouched test set. Missing media fail before
+output creation, and existing review directories are never overwritten.
 
 Trains the small classifier that reads BlazePose landmarks and judges a rep.
 

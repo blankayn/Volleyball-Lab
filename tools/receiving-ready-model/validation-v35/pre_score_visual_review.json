@@ -1,0 +1,151 @@
+{
+  "created_at_utc": "2026-09-23T17:20:57.186033+00:00",
+  "performed_before_classifier_scoring": true,
+  "manifest_sha256": "d64a0b08ecb564036b34930552b75d54651271cf18a843084d98e8e3cf8a704b",
+  "overlay_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\v35-overlay-audit-sheet.jpg",
+  "overlay_sheet_sha256": "cd3b56e01bf8c644c32ee729c2fcfdfa94afe0b98966583599ba537f5ba48bbf",
+  "overlay_index": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\v35-overlay-audit-sheet.json",
+  "overlay_index_sha256": "387b72cef0de9595be6b3b989fb24afbe7d922be91e969f69ab2e3a2ddd1b5a8",
+  "rows": [
+    {
+      "name": "goldmedal_fault_rises_from_legs_01",
+      "source_id": "unjx6NArCag",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "goldmedal_fault_rises_from_back_02",
+      "source_id": "unjx6NArCag",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "mollyking_fault_before_upright",
+      "source_id": "SfUAjdk3yjo",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "fritz_fault_straight_legged",
+      "source_id": "Zhrrqa-n3_Y",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Foreground coach is consistently tracked; background players are ignored."
+    },
+    {
+      "name": "popelka_fault_stretched_legs_01",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "popelka_fault_stretched_legs_02",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "popelka_fault_stretched_legs_03",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "popelka_fault_vertical_body_01",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "popelka_fault_vertical_body_02",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "popelka_fault_vertical_body_03",
+      "source_id": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "mollyking_ok_after_lower",
+      "source_id": "SfUAjdk3yjo",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    },
+    {
+      "name": "fritz_ok_athletic_posture",
+      "source_id": "Zhrrqa-n3_Y",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Foreground coach is consistently tracked; background players are ignored."
+    },
+    {
+      "name": "olympian_ok_dig_stance_01",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "olympian_ok_dig_stance_02",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "olympian_ok_dig_stance_03",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "olympian_ok_dig_stance_04",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "olympian_ok_dig_stance_05",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "olympian_ok_dig_stance_06",
+      "source_id": "HtTuI_iDifA",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single athlete is consistently tracked; numeric quality gating decides any crop-limited frames."
+    },
+    {
+      "name": "aoc_ok_live_receive_sequence",
+      "source_id": "RRplCSfQjtg",
+      "label": "ok",
+      "visual_tracks_intended_subject": false,
+      "note": "Rejected before scoring: the one-person pose tracker switches between the purple and blue athletes, so a terminal result would not represent one intended subject."
+    },
+    {
+      "name": "pavan_ok_move_then_platform",
+      "source_id": "dormU35WHLc",
+      "label": "ok",
+      "visual_tracks_intended_subject": true,
+      "note": "Single intended athlete/coach is consistently tracked throughout the sealed interval."
+    }
+  ]
+}

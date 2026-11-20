@@ -1,5 +1,10 @@
 package com.volleyballlab.player.feature.profile
 
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.Icons
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -30,16 +35,26 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
     val scope = rememberCoroutineScope()
     var busy by remember(account?.uid) { mutableStateOf(false) }
     var message by remember(account?.uid) { mutableStateOf<String?>(null) }
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = AccountMenuSurface) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (plan.isPro) "Pro account" else "Free account", style = MaterialTheme.typography.titleMedium)
-            if (account?.uid == ProEntitlement.OWNER_UID) Text("Owner Pro access", style = MaterialTheme.typography.bodySmall)
-            Text("Pro includes all 15 drills and coach connection. Free includes five starter drills.", style = MaterialTheme.typography.bodySmall)
-            Text(if (plan.isPro) "Unlimited detailed AI reports."
-                else "${ReportAllowance.FREE_WEEKLY_LIMIT} detailed AI reports per week. The allowance resets every Monday.",
-                style = MaterialTheme.typography.bodySmall)
-            Text("Automatic session summaries are included with both plans after each live session.",
-                style = MaterialTheme.typography.bodySmall)
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = AccountMenuSurface) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (plan.isPro) "Pro account" else "Free account", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Surface(shape = RoundedCornerShape(50), color = if (plan.isPro) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHighest) {
+                    Text(if (plan.isPro) "PRO" else "FREE", Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+                        color = if (plan.isPro) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (ProEntitlement.isGranted(account?.uid)) Text(if (account?.uid == ProEntitlement.OWNER_UID) "Owner Pro access" else "Pro access granted by the owner", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                PlanLine("Pro includes all 15 drills and coach connection. Free includes five starter drills.")
+                PlanLine(if (plan.isPro) "Unlimited detailed AI reports."
+                    else "${ReportAllowance.FREE_WEEKLY_LIMIT} detailed AI reports per week. The allowance resets every Monday.")
+                PlanLine("Automatic session summaries are included with both plans after each live session.")
+            }
             val offer = checkout
             if (!plan.isPro && offer?.enabled == true) {
                 val price = BigDecimal.valueOf(offer.priceCentavos, 2).toPlainString()
@@ -79,7 +94,7 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                             busy = false
                         }
                     }
-                }) { Text(if (busy) "Opening checkout…" else "Pay with GCash") }
+                }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Pay with GCash") }
             } else if (!plan.isPro && offer != null) {
                 Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
             }
@@ -106,5 +121,13 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                 message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
+    }
+}
+
+@Composable
+private fun PlanLine(text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(Icons.Rounded.CheckCircle, null, Modifier.size(18.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }

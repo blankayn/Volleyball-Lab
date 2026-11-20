@@ -71,13 +71,16 @@ def load_skill(directory: Path, skill: str, registry: dict, quality_field: str, 
             hashes = np.asarray(bundle["source_sha256"]).astype(str) if "source_sha256" in bundle else np.repeat("", count)
             if hashes.ndim == 0:
                 hashes = np.repeat(hashes, count)
+            families = np.asarray(bundle['source_family']).astype(str) if 'source_family' in bundle else np.repeat('', count)
+            if families.ndim == 0:
+                families = np.repeat(families, count)
             scopes = np.asarray(bundle["task_scope"]).astype(str) if "task_scope" in bundle else np.repeat("unspecified_form", count)
             if scopes.ndim == 0:
                 scopes = np.repeat(scopes, count)
             arms = np.asarray(bundle["observed_arm"]).astype(str) if "observed_arm" in bundle else np.repeat("not_specified", count)
             if arms.ndim == 0:
                 arms = np.repeat(arms, count)
-            if any(np.asarray(value).shape != (count,) for value in (labels, tags, quality, short, ids, sources, hashes, scopes, arms)):
+            if any(np.asarray(value).shape != (count,) for value in (labels, tags, quality, short, ids, sources, hashes, families, scopes, arms)):
                 raise ValueError(f"{path.name}: segment metadata dimensions disagree")
             for index in np.flatnonzero(tags == skill):
                 if labels[index] == "unlabelled" or short[index] or not np.isfinite(quality[index]) or quality[index] < minimum:
@@ -98,6 +101,12 @@ def load_skill(directory: Path, skill: str, registry: dict, quality_field: str, 
                 if extracted_hash and registry_hash and extracted_hash != registry_hash:
                     raise ValueError(f"{identifier}: registry changes the original source hash")
                 source_hash = extracted_hash or registry_hash
+                family = str(families[index])
+                if family and recorded.get('source_family') and recorded['source_family'] != family:
+                    raise ValueError(f'{identifier}: registry changes the original source family')
+                family = family or recorded.get('source_family', '')
+                if family and not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', family):
+                    raise ValueError(f'{identifier}: invalid source family')
                 if source_hash and not re.fullmatch(r"[a-f0-9]{64}", source_hash):
                     raise ValueError(f"{identifier}: invalid original-source SHA-256")
                 scope = str(scopes[index])
@@ -125,6 +134,7 @@ def load_skill(directory: Path, skill: str, registry: dict, quality_field: str, 
                        "pose_configuration": str(bundle["pose_configuration"]) if "pose_configuration" in bundle else "{}",
                        "observed_arm": arm,
                        "source_sha256": source_hash,
+                       "source_family": family,
                        "task_scope": scope,
                        "skill": skill, "label": str(labels[index]), "quality": float(quality[index]),
                        "sequence_sha256": hashlib.sha256(sequence.tobytes()).hexdigest()}

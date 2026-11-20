@@ -1,0 +1,20 @@
+{
+  "scope": "insufficient knee bend / too-upright forearm-pass ready posture",
+  "features_in_order": [
+    "knee_mean_median",
+    "knee_mean_q10",
+    "knee_mean_q90",
+    "trunk_forward_lean_median",
+    "trunk_forward_lean_q10",
+    "trunk_forward_lean_q90"
+  ],
+  "single_cutoff": 0.40000000000000013,
+  "recommended_selective_policy": {
+    "ok_if_probability_below": 0.4,
+    "fault_if_probability_at_or_above": 0.6,
+    "otherwise": "uncertain_request_another_clean_stance"
+  },
+  "threshold_status": "development-selected; external validation required",
+  "tflite": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\receiving_ready_posture.tflite",
+  "tflite_sha256": "ab47e1c2e7c0fbb634dec4d8424524cdf3a7eb56a4e7f77ff006eb765acba251"
+}

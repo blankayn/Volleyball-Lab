@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -17,6 +18,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
+import com.volleyballlab.player.pose.analysis.GuideFigure
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.analysis.PoseGuideLimb
 import com.volleyballlab.player.pose.model.Landmark
@@ -57,6 +59,8 @@ fun PoseOverlay(
     posture: LivePostureUi? = null,
     modifier: Modifier = Modifier,
     guide: List<PoseGuideLimb> = emptyList(),
+    /** The start or finish position to stand in, drawn under the tracked skeleton. */
+    reference: GuideFigure? = null,
 ) {
     val extended = MaterialTheme.vbColors
     val measuredStatuses = posture?.takeUnless {
@@ -91,6 +95,31 @@ fun PoseOverlay(
             imageWidth = frame.imageWidth.toFloat(),
             imageHeight = frame.imageHeight.toFloat(),
         )
+
+        // The reference figure goes down first, so the athlete's own skeleton is
+        // read on top of it. Dashed and translucent: a place to move into, not a
+        // second measurement. It uses the same crop and mirror as tracking.
+        reference?.let { figure ->
+            val color = Color(0xFFFFD87A).copy(alpha = alpha * REFERENCE_ALPHA)
+            val width = REFERENCE_WIDTH_DP.dp.toPx()
+            val dashes = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))
+            GuideFigure.Bones.forEach { (from, to) ->
+                val a = figure.points[from] ?: return@forEach
+                val b = figure.points[to] ?: return@forEach
+                drawLine(color, transform.map(a, frame.mirrored), transform.map(b, frame.mirrored),
+                    strokeWidth = width, cap = StrokeCap.Round, pathEffect = dashes)
+            }
+            figure.points[BodyPoint.NOSE]?.let { nose ->
+                drawCircle(color, radius = figure.headRadius * transform.scaledHeight,
+                    center = transform.map(nose, frame.mirrored), style = Stroke(width = width, pathEffect = dashes))
+            }
+            // The hands are what the athlete steers by, so they are the solid part.
+            listOf(BodyPoint.LEFT_WRIST, BodyPoint.RIGHT_WRIST).forEach { wrist ->
+                figure.points[wrist]?.let {
+                    drawCircle(color, radius = REFERENCE_HAND_RADIUS_DP.dp.toPx(), center = transform.map(it, frame.mirrored))
+                }
+            }
+        }
 
         // The guide uses the exact camera crop and mirror transform as tracking.
         guide.forEach { limb ->
@@ -220,3 +249,6 @@ private const val BONE_WIDTH_DP = 2
 private const val BONE_ALPHA = 0.9f
 private const val JOINT_RADIUS_DP = 3
 private const val JOINT_STROKE_DP = 1.5f
+private const val REFERENCE_ALPHA = 0.7f
+private const val REFERENCE_WIDTH_DP = 2.5f
+private const val REFERENCE_HAND_RADIUS_DP = 4

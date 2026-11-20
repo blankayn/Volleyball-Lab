@@ -1,7 +1,10 @@
 # Live coaching
 
 Profile → Live coaching has independent Pose Guide and Detailed AI Coaching
-switches, both initially off. Voice and haptics retain their existing defaults.
+switches. Detailed AI Coaching starts off. Pose Guide starts on since
+17 November 2026, when it gained the reference figure described below; an
+account that had already switched it off stays off. Voice and haptics retain
+their existing defaults.
 Preferences belong to the signed-in account on that phone.
 
 Pose Guide draws a translucent gold reference limb with the athlete's observed
@@ -89,3 +92,415 @@ the connected Groq account initially returned `model_terms_required` for actual
 Orpheus speech. Voice quality and court-distance audibility require a real phone.
 The final preview lint check passed with zero errors (214 warnings and eight
 hints across the current workspace).
+
+
+## Coaching flow update (15 November 2026)
+
+Capture speaks a local setup instruction before the countdown. Every completed
+rep receives a count and a measured verdict, including the first two reps used
+to establish repeated correction evidence. CoachDirector owns spoken
+corrections at completed-rep boundaries; frame-level geometry remains available
+for the overlay. It prioritizes the athlete's confirmed focus among eligible
+measured faults, then weighted deficit, leaves a retry without another instruction,
+limits corrections to four in ten reps, waits fifteen seconds before
+revisiting the same cue, and uses a sentence ledger. Improvement acknowledgments
+name the previously corrected cue. The evidence and acknowledgment rules below
+extend this flow. Provisional scoring ranges are unchanged.
+
+Angle breaks speak the local outcome and turn instruction immediately. Optional
+AI advice updates only the card and never reopens the speech gate. Guided capture
+is Front then Side, both required; the Rear view was removed on 19 Nov 2026
+(saved sessions with a rear stage still display it). Finish from Front requests
+Side, and Finish before the Side target explains the remaining reps. An explicit
+confirmed early exit and the recording limit retain incomplete sessions. Both
+the five- and ten-rep options have a five-minute limit. Review metadata records stage targets and
+completeness without changing saved scoring fields.
+
+The live view label and rep counters refer to the same angle. During a turn and
+its countdown, the upcoming view shows zero completed and good reps; the previous
+view's reps remain in the session totals and saved stage summary. After the
+countdown, the new view's counters advance independently. Free practice continues
+to show the session totals.
+
+Phone speech uses a platform adapter and a testable recovery controller. Language
+selection precedes optional offline voice selection; an empty voice list does not
+reject a working default. Two initialization attempts are bounded to six seconds.
+Utterance errors retry once, then expose degraded voice while visual feedback
+continues. Callbacks and watchdogs are scoped to generations and utterance attempts.
+Audio focus is requested before dequeueing a cue. Countdown uses spoken words,
+visual numbers and haptics. Muting drops stale speech. Started angle guidance is
+consumed on resume; Retry explicitly creates a new turn. New rep feedback starts
+in the rep counter's rest/recovery window, not while a movement is in progress.
+The audio gate reads the counter directly instead of the slower visual posture state.
+
+Validation is recorded in docs/coaching-implementation-status.md. Physical voice
+quality, Bluetooth interruption behavior and full-session timing remain device
+acceptance checks. The changes do not establish validated five-skill ML accuracy.
+
+## Persistent coaching focus (16 November 2026)
+
+The director retains the latest three completed reps, including observation and
+quiet-retry reps. A spoken correction needs three consecutive measurable samples
+of the same cue, phase, observed side and capture view. At least two must miss in
+the same direction, and the latest must still need that correction. Missing,
+non-finite or invalid scores and unknown views never become form evidence.
+
+The selected cue stays the focus even when another cue becomes worse. Follow-ups
+progress through a direct action, a slower rehearsal, and a reset sequence for
+that same action. A repeated miss on the opposite side of the range starts the
+appropriate direction's instructions. The existing quiet retry, speech timing,
+fifteen-second cooldown, four-corrections-per-ten-reps budget and sentence ledger
+remain in force. Exhausted instructions do not block a different eligible focus
+when a new stage starts.
+
+Two consecutive measurable retries after the correction are required for praise.
+Both must actually be inside the catalog target and pass the existing 0.92
+confirmation score before the director says they matched the reference and
+releases the focus. Partial progress is acknowledged once per focus: both retries
+must reduce distance from the target by at least the larger of 20% of the cue's
+warning tolerance or 25% of its initial median distance. This says "closer to the
+reference" and retains the focus; it does not label the rep correct or change
+scores. These are provisional feedback policies requiring coach review, not
+calibrated accuracy claims.
+
+A missing focus measurement cannot earn praise. Paced guidance names the cue
+that is not clear enough to assess and confirms that repetitions still record.
+It does not invent which joint is hidden. Three consecutive unavailable focus
+measurements release that focus. Tracking interruption, backgrounding and camera
+view/stage changes clear comparison evidence and focus; sentence history and
+session-wide pacing remain. A wrong-view prompt asks for the required view rather
+than giving a generic step-back instruction.
+
+## Personalized rep coaching (16 November 2026)
+
+The live session reads the athlete's first name, confirmed training-focus choice,
+and experience from their existing profile. The opening and coaching card use
+that context locally. Closed focus choices map only to observable cues for the
+current skill; timing, ball accuracy, unknown choices and other-skill preferences
+never become invented measurements. The plan is frozen at the countdown, and an
+empty profile gets a complete generic session. Names, free-text goals and coach
+notes are never added to the cloud evidence request. Since the 16 November
+realism update, two closed profile-derived values are: the `experience` enum and
+an `isAthleteFocus` flag (see "Coach realism" below).
+
+Each completed movement publishes one combined count and feedback event. Guided
+speech uses the current view's count and target; free practice uses the session
+total. The card retains the latest completed-rep verdict: Form target met, Needs
+work, Partly assessed, or Not assessed. Missing joints, unknown views and invalid
+measurements cannot earn a positive judgment. A correction or measured improvement
+replaces the short verdict in that turn, so the voice gives only one instruction.
+The next retry still gets a count without another correction.
+
+Counts bypass the four-second correction cooldown but share the same single voice
+lane. New counts replace unspoken older counts at very fast movement rates rather
+than building an outdated backlog. Mute and backgrounding clear pending speech.
+The target rep is included in the angle-change turn so the last count is not cut
+off. At the final view, capture stops accepting reps while the final count plays;
+completion has a bounded fallback if audio is unavailable or its callback is lost.
+Tracking interruptions clear the last verdict without adding repetitions.
+
+Coverage includes local personalization and verdict policy tests, camera-feed
+integration for counting and final-turn completion, speech pacing tests, and phone
+layout/audio tests. These verify behavior, not athletic scoring accuracy.
+
+### Coach and phone acceptance
+
+Review recordings from different players separately from any threshold-tuning
+clips. Have coaches label the visible cue, phase, side, correction direction and
+whether it was assessable before viewing the app's advice. Then match each spoken
+event to its completed rep, recording the proposed/actual speech time, coaching
+focus, coach agreement, missed recurring issues, incorrect corrections, false
+praise and unavailable-view behavior. Report results per skill and view; do not
+turn synthetic test pass rates into a coaching accuracy percentage.
+
+On a phone, include isolated poor reps, a recurring fault, a worse competing cue,
+partial progress, sustained in-range retries, opposite-direction overshoot,
+occlusion, view rotation and background/resume. Listen for intelligible speech
+between attempts and check that old cues do not play after interruption. Use a
+separate test installation or preserve the personal app's data. Coach-labeled
+accuracy and physical speaker/camera acceptance remain external validation work.
+
+## Coach realism (16 November 2026)
+
+This update changes what the coach says, when, and how it sounds. It does not
+change scoring, cue geometry, catalog ranges, `LivePostureCoach` thresholds, rep
+counting, stage gating or the saved session contract. Plan:
+`docs/live-coach-realism-plan.md`.
+
+### Spoken count and reactions
+
+The card keeps `Rep N of T` and the verdict label. Speech uses a short form:
+
+| Rep in a guided view | Spoken |
+|---|---|
+| first | "One." |
+| half of an even target | "Halfway." |
+| one before the target | "One to go." |
+| any other | the number word |
+
+Free practice speaks the session total as a number word, falling back to digits
+above thirty. After the count comes one rotating reaction for the verdict
+(`CoachPhrasebook.repAck`), chosen by rep index and never repeated back to back.
+Good-rep reactions never say "better" or imply improvement. Partial and unrated
+reps keep "Only part" and "couldn't judge". The rep after a director turn is a
+quiet retry: the count alone.
+
+### Corrections, praise and missing evidence
+
+The correction ladder for a focus has five rungs: what was seen plus the direct
+action, a slow rehearsal, a reset sequence, a struggle line, and a feel cue. The
+first rung states the direction only, with no number, and names the left or right
+arm for side-resolved cues. `ExperienceLevel.New` starts at the slow rehearsal.
+A sentence may return after eight reps and forty-five seconds, so a stubborn
+fault no longer silences the coach after three sentences. The evidence rules are
+unchanged: three consecutive comparable reps, two misses in one direction and the
+latest still missing for a correction; two retries inside `cue.target` with score
+at least 0.92 for "in range" praise, otherwise only "closer".
+
+### Turn types
+
+All of these are `RepMilestone` turns, below corrections and improvements, and
+share the one-turn-then-quiet-rep rule.
+
+| Turn | Fires when |
+|---|---|
+| Watch window | first rep of a view with no measured fault; makes no claim |
+| Earned streak | assessable good reps at a run of three, five or eight, no open focus; names a cue only if it was inside target with score at least 0.92 on every rep of the run |
+| Regroup | the last three assessable scores are at least fifteen points below the view's first three after a good rep, or a cue confirmed in range has missed twice in one direction; once per view |
+| Budget spent | the four-in-ten correction budget is exhausted and a fault persists; once per view |
+| Carried focus | the open cue from the last view independently meets the repeated-fault rule in the new view; prefixed "Same thing from this side:" |
+| Tracking restored | once, within twenty seconds of a spoken tracking prompt |
+| Start, resume, idle | after each countdown, and once per idle spell of twelve seconds |
+
+View changes, tracking gaps, backgrounding and `beginStage()` still never bridge
+evidence. Only the name of the open cue crosses a view change.
+
+### Opening, debrief and closing
+
+The opening is spoken as separate sentences with pauses: greeting, last
+session's weakest cue when one is stored on this device for the same skill and
+drill, the linked coach's drill title, today's focus, the setup cue, the guided
+plan, and "I'll watch the first couple before I say anything." A coach's
+free-text note is never read aloud.
+
+At a view change the break is a debrief: the final rep's turn, one line with the
+view's counted reps and one direction-correct local takeaway (shown and spoken
+whether or not Detailed AI Coaching is on), then the turn instruction.
+
+Every ordinary finish (guided completion, Finish, Skip Rear, confirmed End
+Early) ends on a closing turn built by `SessionWrapUp.closing`: the rep count, the
+in-range count and best run, a win only for a cue a view recorded as resolved,
+the open cue to carry forward, and a hand-off to the review. An early end states
+that the session is saved as incomplete and gives no praise. The recording limit
+and forced stops stay immediate. The closing has a bounded fallback so the
+session is saved even when speech never completes.
+
+### How it sounds
+
+`SpeechStyle` sets rate and pitch per utterance: Count 1.08/1.00, Praise
+1.02/1.06, Correction 0.92/0.97, Guidance 0.96/1.00, Urgent 1.05/1.00. These are
+starting values to tune by ear. A rep turn carrying a correction or improvement
+uses `SpeechPriority.Coaching`, which a plain count cannot replace and which
+expires after six seconds. A line that is never spoken is reported back so the
+director can offer its sentence again. Speech watchdogs scale with the text
+(`max(6 s, 90 ms per character + 3 s)`; the engine-level retry watchdog keeps an
+eight-second floor). Audio focus is held for two seconds after an utterance, and
+the phone voice is chosen by US locale, then quality, then name. "Say again"
+repeats the last correction or guidance turn by touch. There is no microphone
+input.
+
+### Cloud `context` contract
+
+`coachLiveStage` accepts exactly two shapes: the legacy four keys, or five keys
+with:
+
+```
+context: { v: 1, turn: "break" | "closing", breakIndex: 0..2,
+           experience: "New" | "Developing" | "Experienced" | null,
+           isAthleteFocus: boolean, corrected: CueId[] }
+```
+
+`corrected` holds at most four unique cue ids for the request's skill. Unknown
+keys are rejected. The worker derives `missShare`, `trend`, a strength noun and
+`lateDrop` from the reps it validates; raw measurements, names and free text never
+reach the provider. Tips are direction-aware (`LIVE_DIRECTION`), a clean view can
+return `kind: "praise"` to a client that sent context, and "closer" wording is
+allowed only when the server-derived trend is closer. AI advice is spoken only
+if it arrives while its turn is still speaking, with the turn instruction held for
+at most 1.5 seconds; otherwise it stays on the card. A session makes at most four
+text calls. Per-user spacing is eight seconds and organisation spacing 250 ms,
+within the unchanged 500-per-day organisation cap. Voice quotas are unchanged.
+
+### Verification (16 November 2026)
+
+- `.\gradlew.bat :app:testDebugUnitTest`: 513 tests, 0 failures, 0 skipped.
+- `.\gradlew.bat :app:compileDebugAndroidTestKotlin`: compiled. Instrumented
+  tests were updated to compile and were not run.
+- `cd ai-worker; npm test`: 65 tests, 65 passed.
+
+Not verified, and needing the owner's phone: voice rate and pitch by ear, speech
+timing at real rep tempo, audibility on court, audio-focus behaviour with music
+playing, and the new on-screen "Say again" and closing card layouts. Coach-labelled
+validation above is still outstanding and unaffected.
+
+## Movement check and facing (17 November 2026)
+
+Reported from a live session: reps and good reps were awarded while standing
+still and for plain knee bends.
+
+Cause. Both counters looked only at the shape of one curve, rescaled to whatever
+range it had covered, with a floor of 0.001. A still athlete's range decayed to
+the tracker's jitter and the jitter then crossed the thresholds. A knee bend was
+the whole definition of a pass, and was also what moved the hip-height signal the
+spike was segmented on. The cue scores agreed with the count: arms hanging at the
+sides are straight, so they earned full marks for a straight platform or arm.
+
+A finished movement is now a rep only if it passes the movement check, applied
+identically by `LiveRepCounter` and `RepSegmenter` through
+`SkillAnalyzer.verdict`:
+
+| Skill | Signal | Must also be true at contact |
+| --- | --- | --- |
+| Serving, Spiking | higher wrist above the shoulder line | hitting hand itself rose at least 0.35 torso lengths and finished 0.55 or more above the shoulders, with that arm in view |
+| Setting | mean wrist height | both hands at least 0.30 above the shoulders and within 0.35 of each other; the elbows closed past 150 degrees on the way up |
+| Blocking | mean wrist height | both hands at least 0.60 above the shoulders; elbows at least 120 degrees |
+| Receiving | knee flexion | knees at least 15 degrees deeper than the start; wrists no further apart than 0.60 of shoulder width, below the shoulders, and ahead of the hips in a side view |
+
+Heights are in torso lengths (shoulder line to hip line in the image), so they do
+not change with distance from the camera. Neither counter scales its thresholds
+below the skill's minimum travel. A movement smaller than that is dropped
+silently, as is a hand that never rose above the shoulder line in a one-armed
+skill. The one-armed travel was 0.60 at first and was lowered the same day: a
+server who starts as taught, hitting hand already beside the head with the
+guiding arm held up, has about half a torso length left to travel and was being
+refused without a word. A larger one that fails is Not counted: it adds nothing to reps, good
+reps, streak or score, the card shows "Not counted" with the one change needed,
+and the coach says it (the same reason at most once in eight seconds). Only
+observed joints are judged: a hidden far arm in a side view is skipped, a pass
+seen from behind accepts a platform hidden by the body, and a hitting arm that
+leaves the picture is reported as not visible rather than as a fault.
+
+Spiking is now segmented on the hitting hand, like the serve, so the standing
+arm-swing drill counts and a knee bend does not. The Loading phase for Setting,
+Spiking and Blocking is the deepest observed knee bend before contact, not the
+lowest point of the hand signal. Every saved-session window now opens up to
+half a second before the first rise, as the live counter's always did, so both
+measure a rep's travel from the same stance; the Preparation frame of a saved
+rep is that much earlier than before. Cue targets, weights and tolerances are
+unchanged.
+
+Facing. `FacingGuide` gives each skill and view a stance in the athlete's own
+left and right. Front is "Face forward". Side is "Turn to your left, so your
+right shoulder points at the camera" or its mirror: for Serving and Spiking the
+hitting arm observed in the front view must be nearest the camera and the other
+profile is refused (before an arm has been observed the turn is only suggested;
+the profile no longer stores a dominant hand); Receiving, Setting and Blocking are told a direction but accept either
+profile. The opening brief, the turn instruction, the view chip and the
+wrong-way prompt all use it. Facing the wrong way at rest suspends counting with
+the direction to turn. Free practice accepts any readable view and suspends on a
+body turned part-way between two.
+
+After twelve idle seconds the coach says what a rep of the selected skill is.
+
+## Reference figure (17 November 2026)
+
+Pose Guide now also draws a whole-body reference figure: the athlete's own body
+in the skill's start or finish position, in dashed translucent gold under the
+tracked skeleton, with a label that reads "Reference: start position" or
+"Reference: finish position".
+
+When it is drawn:
+
+- Opening brief and countdown: start and finish alternate every 1.4 seconds, so
+  the athlete sees what one rep is before recording begins.
+- A turn to a new view: the start position in the facing being asked for, then
+  start and finish alternating during the turn's countdown.
+- Facing the wrong way during a view: the start position, facing the right way.
+- A movement that was Not counted: the finish position, for as long as the
+  reason is on the card. Not for a fault of visibility, where the body's
+  position was not the problem.
+- The twelve-second idle prompt: start and finish alternating.
+
+It is never drawn while a movement is under way, during setup framing, or once
+the closing begins, and it replaces the single correction limb rather than
+sharing the picture with it.
+
+Where the positions come from. `ReferencePoses` reads each scored joint angle out
+of that cue's target in `FormCueCatalog`: the finish position is the pose the
+Contact-phase cues give full marks, and the start position satisfies the
+Preparation and Loading cues. Retuning a target moves the figure with it. Angles
+no cue scores (the idle arm, the knees at the finish) are plain choices and are
+marked as such in the code. For Setting this means the finish position has the
+hands above the forehead with bent elbows, because that is what scoring reads at
+the highest point of the hands today; see "Known and left as found" below.
+
+How it is placed. `ReferenceFigure` builds the pose from the athlete's own
+segment lengths, stands it on their feet, and sizes it by their whole standing
+chain (shin, thigh and trunk) so an error in any one tracked length cancels. A
+limb the camera did not see takes a typical length for that trunk. Size and
+position are averaged over recent frames so the figure does not shiver with the
+tracker. It faces the way the stance asks; where either side profile is accepted
+it follows the one the athlete took, and in free practice it follows their view.
+
+What it is not. It is a flat drawing of a three-dimensional pose: facing the
+camera, a knee bend shows only as lower hips and a forward lean only as a shorter
+trunk, so it reads properly only side-on. It draws the current first-pass
+targets exactly as they stand and makes no claim about ideal technique.
+
+## Progressive instruction (17 November 2026)
+
+Live lines are taught in full once, then spoken as a short cue: "Turn to your
+left, so your right shoulder points at the camera" becomes "Turn left", and
+"Not counted. Join your forearms out in front of you as you bend your knees"
+becomes "Not counted. Forearms together." This applies to Not counted reasons,
+wrong-facing prompts and the idle prompt. A new athlete (experience "New") hears
+the full version twice; anyone who has not heard a line for two minutes hears it
+in full again. Only speech is shortened: the card always shows the full
+sentence and "Say again" repeats it. A line that was dropped before it was
+heard, or any line in a muted session, does not count as taught.
+`ProgressiveInstructions` keeps this per session.
+
+### Verification (17 November 2026)
+
+- `.\gradlew.bat :app:testDebugUnitTest`: 559 tests, 0 failures, 0 skipped.
+  New: `MovementVerdictTest` (still athlete with tracker noise, knee bends, wrong
+  and correct movements for all five skills, a cocked serve start, side and rear
+  views, live and saved counts agreeing), `FacingGuideTest`, `ReferencePoseTest`
+  (every start and finish position scored by the real analyzers and scorer and
+  given full marks on the cues read there; start-to-finish counted as a rep by
+  both counters from the front and the side; placement, facing and steadiness),
+  and eight capture integration cases.
+- `.\gradlew.bat :app:compileDebugAndroidTestKotlin`: compiled; not run.
+- The ten positions were rendered from the app's geometry and looked at by eye
+  as stick figures, front and side. That checks the shapes, not the app screen.
+
+Not verified, and needing the owner's phone: every threshold in the table. They
+are first-pass values from body proportions, tested on a posed figure with
+synthetic noise, not on recorded athletes. Expect to retune them. Watch in
+particular for correct reps reported as Not counted, the Receiving knee-dip
+minimum for athletes who stay low, and free practice suspending on a view the
+orientation detector cannot name. For the reference figure: how it looks and
+reads on a real screen at three metres, whether its size and position sit on a
+real athlete, how steady it is, whether the dashed gold is visible against a
+bright court, and whether the label overlaps other controls on a small phone.
+Lint was not run.
+
+Known and left as found: for Setting, Contact is still the highest point of the
+hands, where a full set has straight arms, yet `SetElbowFlexion` expects bent
+elbows there and `SetExtensionFollowThrough` is read after the hands come down.
+The debug-only demo detector's figure does not form a platform, so it no longer
+counts in Receiving.
+
+## Side-view detection (19 Nov 2026)
+
+`CameraOrientationDetector` also accepts Side when shoulders and hips overlap on
+screen (width at most 0.25 / 0.20 of torso height, measured in pixels) and the
+depth estimate does not flatly say square-on. Side confidence is graded by how
+far inside the side rules a frame sits. `OrientationStabilityGate` accepts a
+view after a second of continuous tracking in which at least 90% of frames were
+accepted, instead of requiring every frame. Replayed on 213 labelled side-view
+clips this raised side frames passing the live check from 27% to 40%, and clips
+where the gate opens from 21% to 39%, with 2 of 84 front-view clips wrongly
+opened. The opt-in replays are `OrientationReplay` and `RepCountReplay`
+(`VL_ORIENTATION_DIR=<dir with landmarks/>`); see
+`outputs/orientation-eval-20261119/README.md` for the data.

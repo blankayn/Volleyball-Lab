@@ -40,12 +40,11 @@ class CoachWorkspaceDeviceTest {
                     CoachFeatureCard("Review queue", "1 session waiting for you",
                         "Open a session to review your player’s training.", actionLabel = "Review session",
                         onAction = {}, backgroundPhoto = R.drawable.coach_dashboard_court)
-                    CoachDashboardWorkspace({}, {}, {}, {})
                 }
             }
         }
-        compose.onNodeWithText("Keep your team moving").assertIsDisplayed()
-        compose.onNodeWithText("Player questions").assertIsDisplayed()
+        compose.onNodeWithText("1 session waiting for you").assertIsDisplayed()
+        compose.onNodeWithText("Review session").assertIsDisplayed()
         screenshot("dashboard-proof", "coach-dashboard-workspace.png")
     }
 
@@ -60,16 +59,14 @@ class CoachWorkspaceDeviceTest {
                         CoachFeatureCard("Review queue", "1 session waiting for you",
                             "Open a session to review your player’s training.", actionLabel = "Review session",
                             onAction = { opened += "review" }, backgroundPhoto = R.drawable.coach_dashboard_court)
-                        CoachDashboardWorkspace({ opened += "players" }, { opened += "assignments" },
-                            { opened += "questions" }, { opened += "account" })
                     }
                 }
             }
         }
-        listOf("Review session", "Players", "Assignments", "Player questions", "Manage coach profile").forEach {
+        listOf("Review session").forEach {
             compose.onNodeWithText(it).performScrollTo().assertHasClickAction().performClick()
         }
-        compose.runOnIdle { assertEquals(listOf("review", "players", "assignments", "questions", "account"), opened) }
+        compose.runOnIdle { assertEquals(listOf("review"), opened) }
         compose.onNodeWithText("Review session").performScrollTo()
         screenshot("workspace-proof", "coach-dashboard-workspace-large-text.png")
     }

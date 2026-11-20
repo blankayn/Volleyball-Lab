@@ -7,11 +7,11 @@ export function topbar(signedIn: boolean, active: string): string {
   const links = signedIn
     ? `<a class="btn btn-ghost btn-sm" href="#/app">Open dashboard</a>`
     : `<a class="btn btn-ghost btn-sm" href="#/login">Sign in</a>
-       <a class="btn btn-primary btn-sm" href="#/register">Become a coach</a>`;
+       <a class="btn btn-primary btn-sm" href="#/register">Create an account</a>`;
   return `<header class="topbar"><div class="topbar-inner">
-    <a class="brand" href="#/"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab logo" /><span>Volleyball Lab <small>Coach${active === "portal" ? " portal" : ""}</small></span></a>
+    <a class="brand" href="#/"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab logo" /><span>Volleyball Lab <small>Team portal</small></span></a>
     ${!signedIn && active === "portal" ? `<nav class="site-nav" aria-label="Primary"><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#about">About</a></nav>` : ""}
-    <nav aria-label="Coach account">${links}</nav>
+    <nav aria-label="Account">${links}</nav>
   </div></header>`;
 }
 

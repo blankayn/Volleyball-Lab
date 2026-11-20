@@ -1,0 +1,13 @@
+{
+  "created_at_utc": "2026-09-23T17:15:41.700273+00:00",
+  "manifest": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\sealed_manifest.json",
+  "manifest_sha256": "d64a0b08ecb564036b34930552b75d54651271cf18a843084d98e8e3cf8a704b",
+  "training_data": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\pass-ready-v29-development-descriptors.csv",
+  "training_data_sha256": "a100c867857b2881971353457d72dd1c93077d5af3323742f38a85d6a46f9f1c",
+  "selective_policy": {
+    "ok_if_probability_below": 0.4,
+    "fault_if_probability_at_or_above": 0.6,
+    "otherwise": "uncertain"
+  },
+  "rule": "Do not change v35 sources, labels, intervals, contact sheets, development data, or thresholds after this lock."
+}

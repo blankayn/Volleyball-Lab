@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="session_report_title">Your session report</string>
+    <string name="session_report_strength">What went well</string>
+    <string name="session_report_in_range">%1$s was within the practice range in %2$d of %3$d measured reps.</string>
+    <string name="session_report_next">What to practice next</string>
+    <string name="session_report_below">%1$s was below the practice range in %2$d of %3$d measured reps.</string>
+    <string name="session_report_above">%1$s was above the practice range in %2$d of %3$d measured reps.</string>
+    <string name="session_report_no_reps">Try another recording with your whole body in view. Pause briefly between reps so the camera can separate each movement.</string>
+    <string name="session_report_not_enough">Record at least three clear reps with your arms and legs in view so the app can look for a repeated technique pattern.</string>
+    <string name="session_report_repeat">Repeat the drill at a controlled pace and aim to keep the same position across your reps.</string>
+    <string name="session_report_mixed">The measured reps did not show a clear pattern to correct. Repeat the drill slowly and aim for a consistent setup each time.</string>
+    <string name="session_report_progress">Progress since a comparable session</string>
+    <string name="session_report_closer">%1$s moved closer to the practice range, from %2$s to %3$s.</string>
+    <string name="session_report_closer_still">%1$s moved closer to the practice range, though it is still %2$s.</string>
+    <string name="session_report_basis">This report uses the body positions the camera could measure.</string>
+    <string name="result_stat_completed">Completed</string>
+    <string name="result_stat_best_run">Best run</string>
+    <string name="result_score_unavailable">Not enough measured reps for a score.</string>
+    <string name="result_view_reps">%1$d of %2$d good reps · best run %3$d</string>
+    <plurals name="result_view_final">
+        <item quantity="one">final · %1$d rep</item>
+        <item quantity="other">final · %1$d reps</item>
+    </plurals>
+</resources>

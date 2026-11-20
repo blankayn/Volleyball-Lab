@@ -30,7 +30,7 @@ class DataStoreCoachingPreferencesRepository(
         if (scope == null) CoachingPreferences() else CoachingPreferences(
             voiceEnabled = stored[scope.boolean("voice_enabled")] ?: true,
             hapticsEnabled = stored[scope.boolean("haptics_enabled")] ?: true,
-            poseGuideEnabled = stored[scope.boolean("pose_guide_enabled")] ?: false,
+            poseGuideEnabled = stored[scope.boolean("pose_guide_enabled")] ?: true,
             detailedAiCoachingEnabled = stored[scope.boolean("detailed_ai_enabled")] ?: false,
         )
     }

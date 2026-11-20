@@ -54,7 +54,6 @@ import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.ui.component.EntranceAnimation
 import com.volleyballlab.player.ui.component.StudentCard
 import com.volleyballlab.player.ui.component.StudentPageHeading
-import com.volleyballlab.player.ui.component.CourtCardArtwork
 import com.volleyballlab.player.ui.component.studentBackground
 import com.volleyballlab.player.ui.component.pressScale
 import java.util.Locale
@@ -105,7 +104,7 @@ fun SkillSelectScreen(
                     Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("Drill library", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Step-by-step guides and practice", style = MaterialTheme.typography.bodySmall,
+                        Text("Every drill's guide, steps and equipment", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
@@ -205,8 +204,7 @@ private fun IllustratedSkillCard(
         border = BorderStroke(1.dp, palette.accent.copy(alpha = .18f)),
         shadowElevation = 2.dp,
     ) {
-        Box(Modifier.fillMaxWidth()) {
-            CourtCardArtwork(Modifier.matchParentSize().testTag("skill-card-background"), ink = palette.accent)
+        Box(Modifier.fillMaxSize().testTag("skill-card-background")) {
             Image(
                 painter = painterResource(palette.illustration),
                 contentDescription = null,

@@ -49,15 +49,33 @@ class CameraOrientationDetector {
             (reliable(frame, BodyPoint.LEFT_EYE, 0.55f) || reliable(frame, BodyPoint.RIGHT_EYE, 0.55f))
         val faceHidden = frame.image(BodyPoint.NOSE).visibility < 0.45f &&
             frame.image(BodyPoint.LEFT_EYE).visibility < 0.45f && frame.image(BodyPoint.RIGHT_EYE).visibility < 0.45f
+        // Side evidence from depth: the model's guess of how far apart the shoulders and hips are front to back.
+        val worldSide = square <= SIDE_SQUARE && hipSquare <= SIDE_HIP_SQUARE && nearSide != null
+        // Side evidence from the picture: side-on, shoulders and hips overlap on screen. 2D landmarks are far
+        // steadier than the single-camera depth guess, which on 213 labelled side-view clips made 46% of true
+        // side frames look square. Widths are in pixels against torso height, so portrait and landscape agree.
+        // The depth may disagree mildly but not flatly, so turned shoulders over square hips still stay Unknown.
+        val torsoPx = torsoHeight * frame.imageHeight
+        val shoulderOverlap = abs(shoulderSign) * frame.imageWidth / torsoPx
+        val hipOverlap = abs(hipSign) * frame.imageWidth / torsoPx
+        val imageSide = shoulderOverlap <= IMAGE_SHOULDER_OVERLAP && hipOverlap <= IMAGE_HIP_OVERLAP &&
+            nearSide != null && square <= IMAGE_MAX_SQUARE && hipSquare <= IMAGE_MAX_SQUARE
         val angle = when {
-            square <= 0.45f && hipSquare <= 0.55f && nearSide != null -> CameraAngle.Side
+            worldSide || imageSide -> CameraAngle.Side
             square >= 0.78f && hipSquare >= 0.65f && broadTorso && shoulderSign > 0 && hipSign > 0 && faceVisible -> CameraAngle.Front
             square >= 0.78f && hipSquare >= 0.65f && broadTorso && shoulderSign < 0 && hipSign < 0 && faceHidden -> CameraAngle.Rear
             else -> CameraAngle.Unknown
         }
         val confidence = when (angle) {
             CameraAngle.Front, CameraAngle.Rear -> torsoConfidence * minOf(square, hipSquare)
-            CameraAngle.Side -> torsoConfidence * minOf(1f - square, 1f - hipSquare)
+            // Graded by how far inside the side rules the frame sits. The old 1 - squareness only reached the
+            // live gate's 0.70 when the shoulders measured almost perfectly edge-on, so most side frames failed.
+            CameraAngle.Side -> {
+                val worldMargin = if (worldSide) minOf((SIDE_SQUARE - square) / SIDE_SQUARE, (SIDE_HIP_SQUARE - hipSquare) / SIDE_HIP_SQUARE) else 0f
+                val imageMargin = if (imageSide) minOf((IMAGE_SHOULDER_OVERLAP - shoulderOverlap) / IMAGE_SHOULDER_OVERLAP,
+                    (IMAGE_HIP_OVERLAP - hipOverlap) / IMAGE_HIP_OVERLAP) else 0f
+                torsoConfidence * (SIDE_BASE_CONFIDENCE + (1f - SIDE_BASE_CONFIDENCE) * maxOf(worldMargin, imageMargin, 0f))
+            }
             CameraAngle.Unknown -> 0f
         }
         return OrientationEstimate(angle, confidence, fullBody, nearSide)
@@ -84,19 +102,44 @@ class CameraOrientationDetector {
 
     private fun reliable(frame: PoseFrame, point: BodyPoint, threshold: Float): Boolean =
         AngleCuePolicy.isReliable(frame, point, threshold)
+
+    private companion object {
+        const val SIDE_SQUARE = 0.45f
+        const val SIDE_HIP_SQUARE = 0.55f
+        /** Shoulder and hip width on screen, as a fraction of torso height, below which they overlap. */
+        const val IMAGE_SHOULDER_OVERLAP = 0.25f
+        const val IMAGE_HIP_OVERLAP = 0.20f
+        /** Depth may not flatly contradict the picture: beyond this the body is square-on whatever it looks like. */
+        const val IMAGE_MAX_SQUARE = 0.80f
+        /** Side confidence on the decision boundary, before the margin adds to it. */
+        const val SIDE_BASE_CONFIDENCE = 0.62f
+    }
 }
 
 /** A frame gap or a wrong/uncertain view restarts the complete one-second gate. */
+/**
+ * Accepts a view once it has held for [stableMs]: tracking has been continuous
+ * that long, this frame is accepted, and at least [minAcceptedFraction] of the
+ * frames in the last [stableMs] were accepted.
+ *
+ * It used to need every frame of the second. Pose estimates flicker, so one
+ * noisy frame restarted the count; replayed on 213 labelled side-view clips the
+ * gate opened on 21% of them. Allowing the odd frame raised that to 39% while
+ * opening on 2 of 84 front-view clips. A frame gap, a change of requested angle
+ * or a clock that goes backwards still starts again from nothing.
+ */
 class OrientationStabilityGate(
     private val stableMs: Long = 1_000L,
     private val minConfidence: Float = 0.70f,
     private val maxFrameGapMs: Long = 500L,
+    private val minAcceptedFraction: Float = 0.90f,
 ) {
-    private var stableSince: Long? = null
+    private val history = ArrayDeque<Pair<Long, Boolean>>()
+    private var trackingSince: Long? = null
     private var lastTimestamp: Long? = null
     private var lastRequested: CameraAngle? = null
 
-    fun reset() { stableSince = null; lastTimestamp = null; lastRequested = null }
+    fun reset() { history.clear(); trackingSince = null; lastTimestamp = null; lastRequested = null }
 
     fun update(
         estimate: OrientationEstimate,
@@ -106,15 +149,20 @@ class OrientationStabilityGate(
     ): Boolean {
         val previous = lastTimestamp
         if (lastRequested != requestedAngle || previous != null &&
-            (timestampMs <= previous || timestampMs - previous > maxFrameGapMs)) stableSince = null
+            (timestampMs <= previous || timestampMs - previous > maxFrameGapMs)) {
+            history.clear()
+            trackingSince = null
+        }
         lastRequested = requestedAngle
         lastTimestamp = timestampMs
         val accepted = requestedAngle != CameraAngle.Unknown && estimate.angle == requestedAngle &&
             estimate.confidence >= minConfidence && estimate.fullBodyVisible &&
             (requestedAngle != CameraAngle.Side || requiredSide == null || estimate.exposedSide == requiredSide)
-        if (!accepted) { stableSince = null; return false }
-        if (stableSince == null) stableSince = timestampMs
-        return timestampMs - stableSince!! >= stableMs
+        if (trackingSince == null) trackingSince = timestampMs
+        history.addLast(timestampMs to accepted)
+        while (history.first().first < timestampMs - stableMs) history.removeFirst()
+        if (!accepted || timestampMs - trackingSince!! < stableMs) return false
+        return history.count { it.second } >= minAcceptedFraction * history.size
     }
 }
 

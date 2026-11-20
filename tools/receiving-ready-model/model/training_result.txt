@@ -1,0 +1,14 @@
+Volleyball Lab TensorFlow receiving-ready model
+Source-separated accuracy at fixed 0.50: 87.50% (42/48)
+Development-selected operating threshold: 0.40
+Source-separated operating accuracy: 91.67% (44/48)
+Operating balanced accuracy: 94.44%
+Operating fault recall: 100.00%
+Operating OK recall: 88.89%
+Coach-safe selective accuracy: 93.18% (41/44)
+Selective coverage: 91.67% (4 uncertain)
+Historical v26 accuracy: 70.00% (7/10)
+80% target met: True
+Requested 100% unseen-source target met: False
+App-pose MPJPE: 17.76px; per-joint visibility-gated 15.71px
+Fresh external test still required before claiming production accuracy.

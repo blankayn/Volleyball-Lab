@@ -3,38 +3,38 @@ package com.volleyballlab.player.domain.model
 data class TechniqueStep(val title: String, val action: String)
 data class SkillLearning(val overview: String, val steps: List<TechniqueStep>, val mistakes: List<String>)
 
-/** Instructional content complements the app's measurable cues, with no accuracy claims. */
+/** Body-position instruction complements measured posture cues. */
 object SkillLearningCatalog {
     fun forSkill(skill: Skill): SkillLearning = when (skill) {
-        Skill.Serving -> SkillLearning("Practice the serve from one spot with a repeatable toss and a controlled reach through the ball.", listOf(
-            TechniqueStep("Prepare", "Face your target with balanced feet in one spot. Hold the ball in your non-hitting hand."),
-            TechniqueStep("Load", "Lift the ball with a consistent toss. Draw the hitting elbow back as your weight moves forward."),
-            TechniqueStep("Contact", "Reach high and contact the ball with an open, firm hand. Keep the ball in front of the hitting shoulder."),
-            TechniqueStep("Finish", "Let your arm continue toward the target, then regain balance.")),
-            listOf("An inconsistent toss moves contact behind the head.", "A bent hitting elbow shortens the contact reach.", "Excessive backward lean disrupts balance."))
-        Skill.Receiving -> SkillLearning("Practice forearm passing from a balanced stance with a stable platform and feeds delivered within reach.", listOf(
-            TechniqueStep("Prepare", "Set your feet in one spot with knees comfortably bent. Use a controlled feed within reach."),
-            TechniqueStep("Load", "Stay balanced and join your hands to form a flat forearm platform."),
-            TechniqueStep("Contact", "Present straight arms in front of the body. Set the platform angle toward your target."),
-            TechniqueStep("Finish", "Use a small, controlled leg extension. Recover to a balanced ready position.")),
-            listOf("Bent elbows make the platform inconsistent.", "A large arm swing makes ball control harder.", "Uneven shoulders can change the platform direction."))
-        Skill.Setting -> SkillLearning("Practice setting in one spot with a consistent contact position and coordinated leg and arm extension.", listOf(
-            TechniqueStep("Prepare", "Face the intended target from a balanced stance. Use a controlled toss or feed above your forehead."),
+        Skill.Serving -> SkillLearning("Practice the serving posture through a controlled arm raise and reach from a balanced stance.", listOf(
+            TechniqueStep("Prepare", "Set balanced feet in one spot and keep your trunk comfortably upright."),
+            TechniqueStep("Load", "Lift your guiding arm and draw the other elbow back without arching your back."),
+            TechniqueStep("Position", "Reach upward with an open hand and extend your elbow comfortably."),
+            TechniqueStep("Reset", "Lower your arms under control and return to a balanced stance.")),
+            listOf("An uneven stance makes balance harder.", "A bent reaching elbow shortens your reach.", "Excessive backward lean changes trunk alignment."))
+        Skill.Receiving -> SkillLearning("Practice a stable passing platform with balanced feet, bent knees, and level shoulders.", listOf(
+            TechniqueStep("Prepare", "Set your feet in one spot with knees comfortably bent."),
+            TechniqueStep("Load", "Lean slightly from your hips and join your hands to form a forearm platform."),
+            TechniqueStep("Position", "Extend your arms in front of your body and keep your shoulders level."),
+            TechniqueStep("Reset", "Use a small, controlled leg extension, then relax your arms and return to ready.")),
+            listOf("Bent elbows change the platform shape.", "A large arm swing makes the platform harder to steady.", "Uneven shoulders tilt the forearm platform."))
+        Skill.Setting -> SkillLearning("Practice the setting stance with balanced hands above the forehead and controlled extension.", listOf(
+            TechniqueStep("Prepare", "Set balanced feet and keep your trunk upright."),
             TechniqueStep("Load", "Bring open hands above the forehead and soften your knees and elbows."),
-            TechniqueStep("Contact", "Meet the ball with spread fingers above the forehead. Keep the contact balanced."),
-            TechniqueStep("Finish", "Extend legs and arms toward the target together, then recover.")),
-            listOf("Hands too low move contact away from the forehead.", "Stiff knees reduce coordinated extension.", "Uneven hand contact can change the set direction."))
-        Skill.Spiking -> SkillLearning("Practice the hitting arm swing from a fixed starting position. Jump drills use a takeoff and landing in the same spot.", listOf(
-            TechniqueStep("Prepare", "Start with balanced feet in one spot. Use a controlled toss or partner feed in front of your hitting shoulder."),
-            TechniqueStep("Load", "Draw the hitting elbow back. For an in-place jump, bend the knees and prepare to take off from the same spot."),
-            TechniqueStep("Contact", "Reach high with the hitting arm and contact the ball in front of the hitting shoulder."),
-            TechniqueStep("Finish", "Follow through and regain balance. If jumping, land in the same spot with knees flexed.")),
-            listOf("A feed behind the hitting shoulder disrupts contact.", "A bent contact arm lowers the reach.", "Drifting away from the starting spot breaks balance."))
-        Skill.Blocking -> SkillLearning("Practice blocking from one spot with a balanced vertical jump and hands presented above the net.", listOf(
-            TechniqueStep("Prepare", "Start square to the blocking area with balanced feet and both hands ready."),
-            TechniqueStep("Load", "Plant in balance and bend the knees before jumping."),
-            TechniqueStep("Contact", "Reach with both arms and spread the fingers. Keep the hands positioned to close the attacking path."),
-            TechniqueStep("Finish", "Land in the same spot under control and recover without drifting into the net.")),
-            listOf("Bent arms reduce blocking height.", "Hands too far apart leave a gap.", "Drifting during takeoff makes controlled landing harder."))
+            TechniqueStep("Position", "Keep your hands even and extend your arms upward within a comfortable range."),
+            TechniqueStep("Reset", "Return your hands and knees to the starting position under control.")),
+            listOf("Low hands change the overhead starting position.", "Stiff knees limit the preparation movement.", "Uneven arms change the overhead shape."))
+        Skill.Spiking -> SkillLearning("Practice the spiking arm position and body alignment from a fixed starting stance.", listOf(
+            TechniqueStep("Prepare", "Start with balanced feet in one spot and a comfortably upright trunk."),
+            TechniqueStep("Load", "Draw one elbow back and lift the guiding arm. Bend your knees before an in-place jump."),
+            TechniqueStep("Position", "Extend the raised arm above the shoulder while keeping your trunk controlled."),
+            TechniqueStep("Reset", "Lower the arm and regain balance. If jumping, return to the same spot with softened knees.")),
+            listOf("Excessive backward lean changes shoulder alignment.", "A bent reaching elbow shortens your reach.", "Drifting from the starting spot makes balance harder."))
+        Skill.Blocking -> SkillLearning("Practice a balanced blocking stance, overhead arm alignment, and controlled return.", listOf(
+            TechniqueStep("Prepare", "Start with balanced feet, square shoulders, and both hands raised."),
+            TechniqueStep("Load", "Bend your knees before a small vertical jump from the same spot."),
+            TechniqueStep("Position", "Reach upward with both arms and position your hands slightly in front of your shoulders."),
+            TechniqueStep("Reset", "Return to the same spot with softened knees, then reset your arms and stance.")),
+            listOf("Bent elbows shorten the overhead reach.", "Uneven hand spacing changes the blocking shape.", "Drifting during takeoff makes balance harder."))
     }
 }

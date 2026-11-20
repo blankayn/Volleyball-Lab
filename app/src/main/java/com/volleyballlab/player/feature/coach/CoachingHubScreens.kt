@@ -86,12 +86,11 @@ fun MyCoachScreen(
     val link = state.link
     val active = link?.isActive == true
     val assignments = state.assignments.filter { it.coachUid == link?.coachUid }
-    val openAssignments = assignments.filter { it.isOpen }
-    val currentReviewed = state.submissions.count { it.coachUid == link?.coachUid && !it.isPending }
     val summary = if (active) rememberCoachSummary(link.coachUid).value else CoachPublicSummary()
     val coach = link?.let { connection -> state.directory.firstOrNull { it.coachUid == connection.coachUid }
         ?: CoachPreview(connection.coachUid, CoachProfile(name = connection.coachName, teamName = connection.teamName), 0) }
     LaunchedEffect(active, leaving, leaveError) { if (!active && !leaving && leaveError == null) showLeave = false }
+    val unread = questions.filter { it.coachUid == link?.coachUid }.sumOf { it.unread(false) }
 
     LazyColumn(Modifier.fillMaxSize().coachPageBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item(key = "header") { Column { HubHeader(selected?.label ?: "My coach", onBack); HubSync(actions.hub) } }
@@ -100,34 +99,25 @@ fun MyCoachScreen(
             // The coach hero belongs on the hub home; sections stay focused on their own content.
             if (selected == null && active && coach != null) {
                 item(key = "identity") { com.volleyballlab.player.ui.component.EntranceAnimation(index = 0) {
-                    CoachIdentityHero(coach, summary, connected = true, onViewProfile = { onOpenProfile(coach.coachUid) })
+                    MyCoachCard(coach, summary, onViewProfile = { onOpenProfile(coach.coachUid) })
                 } }
-                item(key = "metrics") { CoachMetrics(summary) }
             }
             when (selected) {
-                null -> item(key = "workspace-sections") { MyCoachHubSections(state, onManageConnection = { showLeave = true }) { onOpenSection(it.name) } }
+                null -> item(key = "workspace-sections") {
+                    MyCoachHubSections(state, onManageConnection = { showLeave = true }, unread = unread,
+                        onOpenAssignment = onOpenAssignment, onBrowse = onBrowse) { onOpenSection(it.name) }
+                }
                 CoachWorkspaceTab.Overview -> {
                     if (active) {
-                        item(key = "intro") {
-                            CoachSectionCard(tint = true) {
-                                CoachEyebrow("Your next step")
-                                Text("Get your training direction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                                Text("Ask what to practise first, what to focus on, or how to record your first session.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                CoachingQuestionCard(link.coachUid, null, questions.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null }, true, actions, busy, errors)
-                            }
-                        }
-                        item(key = "overview-counts") {
-                            com.volleyballlab.player.ui.component.ResponsivePair(
-                                first = { CoachShortcut(openAssignments.size.toString(), "Your training plan", "Assignments to work on", { onOpenSection(CoachWorkspaceTab.Training.name) }, it) },
-                                second = { CoachShortcut(currentReviewed.toString(), "Coach feedback", "Reviewed sessions", { onOpenSection(CoachWorkspaceTab.Feedback.name) }, it) })
-                        }
-                        state.notes.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null }?.let { note -> item(key = "general-note") {
+                        // Straight to the conversation: no intro card, no second "ask" button, no shortcuts back out.
+                        item(key = "ask") {
                             CoachSectionCard {
-                                CoachEyebrow("From your coach")
-                                Text(note.text, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                                Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Ask about technique, what to practise next, or how to record a session. Your coach replies here.",
+                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                CoachingQuestionCard(link.coachUid, null, questions.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null },
+                                    true, actions, busy, errors, initiallyExpanded = true, alwaysOpen = true)
                             }
-                        } }
+                        }
                     } else item(key = "no-connection") {
                         CoachSectionCard {
                             CoachEyebrow(if (link?.isPending == true) "Request sent" else "Your next chapter")
@@ -139,51 +129,41 @@ fun MyCoachScreen(
                     }
                 }
                 CoachWorkspaceTab.Training -> {
-                    item(key = "training-heading") { CoachSectionTitle("Your training plan", "Clear next steps from your coach", assignments.size) }
-                    if (active) {
-                        state.latestSession?.let { latest -> item(key = "latest-session") {
-                            CoachSectionCard(tint = true) {
-                                CoachEyebrow(if (state.latestIsSubmitted) "Shared with your coach" else "Ready for feedback")
-                                Text("${latest.skill.name} · ${latest.repCount} reps", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                                Text(dateLabel(latest.startedAtEpochMs), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (state.latestIsSubmitted) Text("Your coach can review this session in their queue.", style = MaterialTheme.typography.bodyMedium)
-                                else {
-                                    Text(if (latest.videoPath == null) "Share this session’s form summary with your coach." else "Share the recording and form feedback from this session.", style = MaterialTheme.typography.bodyMedium)
-                                    submitError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                                    Button(onClick = { model.submit(latest.id) }, enabled = !sending, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                                        if (sending) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
-                                        Text(if (sending) "Sharing session…" else "Send session for review")
-                                    }
-                                }
-                            }
-                        } }
-                    }
+                    // Drills only: what to do now first, finished work below. Sending sessions lives in Feedback.
+                    val toDo = assignments.filter { it.isOpen }.sortedBy { it.dueAtEpochMs ?: Long.MAX_VALUE }
+                    val done = assignments.filterNot { it.isOpen }.sortedByDescending { it.createdAtEpochMs }
                     if (assignments.isEmpty()) item(key = "no-assignments") {
-                        CoachEmptyState("Your plan starts here", if (active) "Your coach’s assigned drills will appear here. You can ask for a starting drill from Overview." else "Connect with a coach to receive a training plan.")
+                        CoachPlainEmpty("No drills yet", if (active) "When your coach assigns drills, they’ll show up here with sets, reps and a due date."
+                            else "Connect with a coach to get a training plan.")
                     }
-                    items(assignments.sortedWith(compareBy<CoachAssignment> { !it.isOpen }.thenBy { it.dueAtEpochMs ?: Long.MAX_VALUE }), key = { "assignment-${it.id}" }) { assignment ->
-                        CoachAssignmentTile(assignment) { onOpenAssignment(assignment.id) }
+                    if (toDo.isNotEmpty()) {
+                        item(key = "todo-label") { HubLabel("To practise · ${toDo.size}") }
+                        items(toDo, key = { "assignment-${it.id}" }) { assignment ->
+                            PlanAssignmentCard(assignment) { onOpenAssignment(assignment.id) }
+                        }
+                    }
+                    if (done.isNotEmpty()) {
+                        item(key = "done-label") { HubLabel("Completed") }
+                        item(key = "done") { CompletedAssignments(done, onOpenAssignment) }
                     }
                 }
                 CoachWorkspaceTab.Feedback -> {
-                    item(key = "feedback-heading") { CoachSectionTitle("Your progress, with context", "Session feedback, coaching questions, and your reviews", state.submissions.size) }
-                    item(key = "feedback-filters") {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf("All sessions", "Reviewed", "Awaiting feedback").forEachIndexed { index, label ->
-                                FilterChip(selected = feedbackFilter == index, onClick = { feedbackFilter = index },
-                                    label = { Text(label, style = MaterialTheme.typography.labelMedium, fontSize = 12.sp) }, shape = RoundedCornerShape(20.dp),
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                                        labelColor = coachCardMuted(),
-                                        selectedContainerColor = MaterialTheme.colorScheme.onSurface,
-                                        selectedLabelColor = MaterialTheme.colorScheme.surface,
-                                    ))
-                            }
+                    if (active) item(key = "send") {
+                        val unsent = state.sessions.filter { session -> state.submissions.none { it.sessionId == session.id && it.coachUid == link.coachUid } }
+                            .sortedByDescending { it.startedAtEpochMs }
+                        SendSessionCard(unsent, state.sessions.isEmpty(), sending, submitError) { model.submit(it) }
+                    }
+                    if (state.submissions.isNotEmpty()) item(key = "feedback-filters") {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HubLabel("Sent sessions")
+                            FeedbackFilter(feedbackFilter, state.submissions.count { it.isPending }) { feedbackFilter = it }
                         }
                     }
                     val filtered = state.submissions.filter { feedbackFilter == 0 || (feedbackFilter == 1 && !it.isPending) || (feedbackFilter == 2 && it.isPending) }.sortedByDescending { it.submittedAtEpochMs }
                     if (filtered.isEmpty()) item(key = "empty-history") {
-                        CoachEmptyState(if (state.submissions.isEmpty()) "Your story is just starting" else "Nothing in this view yet", if (state.submissions.isEmpty()) "Share your first training session to build a history of feedback and progress." else "Try another filter to see your coaching sessions.")
+                        if (state.submissions.isEmpty()) CoachPlainEmpty("No feedback yet",
+                            if (active) "Send a session above and your coach’s feedback will show up here." else "Feedback from your coach will show up here.")
+                        else CoachPlainEmpty("Nothing here", if (feedbackFilter == 2) "Your coach has reviewed everything you sent." else "No reviewed sessions yet.")
                     }
                     items(filtered, key = { "feedback-${it.coachUid}-${it.sessionId}" }) { submission ->
                         val session = state.sessions.firstOrNull { it.id == submission.sessionId }
@@ -199,7 +179,7 @@ fun MyCoachScreen(
                                     if (connected || question != null) {
                                         OutlinedButton(onClick = { questionOpen = !questionOpen },
                                             shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                                            Text(if (questionOpen) "Hide question" else if (question != null) "Conversation" else "Ask question",
+                                            Text(if (questionOpen) "Hide" else if (question != null) "Open conversation" else "Ask about this session",
                                                 style = MaterialTheme.typography.labelMedium)
                                             Spacer(Modifier.width(4.dp))
                                             CoachingUnreadBadge(question?.unread(false) ?: 0)
@@ -212,16 +192,10 @@ fun MyCoachScreen(
                             }
                         }
                     }
-                    items(state.notes.filter { it.sessionId == null }, key = { "general-${it.id}" }) { note ->
-                        CoachSectionCard {
-                            CoachEyebrow("Coaching guidance")
-                            Text(note.text, style = MaterialTheme.typography.bodyLarge, lineHeight = 25.sp)
-                            Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                    items(state.notes.filter { it.sessionId == null }, key = { "general-${it.id}" }) { note -> CoachGeneralNote(note) }
                     items(questions.filter { it.sessionId == null && (!active || it.coachUid != link.coachUid) }, key = { "intro-${it.id}" }) { question ->
                         CoachSectionCard {
-                            CoachEyebrow("Earlier coaching guidance")
+                            Text("Earlier conversation", style = MaterialTheme.typography.labelLarge, color = coachCardMuted())
                             CoachingQuestionCard(question.coachUid, null, question, false, actions, busy, errors)
                         }
                     }
@@ -242,49 +216,11 @@ fun MyCoachScreen(
     )
 }
 
-@Composable
-private fun CoachShortcut(value: String, label: String, hint: String, onClick: () -> Unit, modifier: Modifier) {
-    Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-        Column(Modifier.padding(18.dp).heightIn(min = 112.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(value.padStart(2, '0'), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Medium)
-                Icon(Icons.Rounded.ChevronRight, null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary)
-            }
-            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun CoachAssignmentTile(assignment: CoachAssignment, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                CoachEyebrow(assignment.skill.name)
-                Text(if (assignment.status == AssignmentStatus.Completed) "Completed" else if (assignment.status == AssignmentStatus.InProgress) "In progress" else "To practise", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(assignment.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            if (assignment.summary.isNotBlank()) Text(assignment.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${assignment.targetSets} sets × ${assignment.targetReps} reps", style = MaterialTheme.typography.labelLarge)
-                    assignment.dueAtEpochMs?.let { Text("Due ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(it))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-                Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-}
-
 
 @Composable
 private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question: CoachingQuestion?, connected: Boolean,
     actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>,
-    initiallyExpanded: Boolean = false, visible: Boolean = true) {
+    initiallyExpanded: Boolean = false, visible: Boolean = true, alwaysOpen: Boolean = false) {
     val key = "question-$coachUid-${sessionId ?: "intro"}"
     var open by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
     var answerOpen by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
@@ -302,11 +238,11 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
     }
     if (!visible) return
     if (current != null && !startNew) {
-        TextButton(onClick = { answerOpen = !answerOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        if (!alwaysOpen) TextButton(onClick = { answerOpen = !answerOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(if (answerOpen) "Hide training conversation" else "Open training conversation")
             Spacer(Modifier.width(8.dp)); CoachingUnreadBadge(current.unread(false))
         }
-        if (answerOpen) RestrictedCoachingThread(current, false, connected, current.id in busy, errors[current.id],
+        if (answerOpen || alwaysOpen) RestrictedCoachingThread(current, false, connected, current.id in busy, errors[current.id],
             onSend = { value -> actions.perform(current.id) { actions.hub.followUp(current, value) } },
             onResolve = { actions.perform(current.id) { actions.hub.resolve(current) } },
             onRead = { actions.perform("read-${current.id}") { actions.hub.markRead(current, false) } })
@@ -314,12 +250,12 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
             Text("Start a new training question")
         }
     } else if (connected) {
-        if (!open) OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
+        if (!open && !alwaysOpen) OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
             Text(if (sessionId == null) "Ask about getting started" else "Ask a coaching question", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             Icon(Icons.Rounded.ChevronRight, null, Modifier.size(19.dp))
         } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            CoachEyebrow("Ask your coach")
-            Text("Choose a training topic", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (!alwaysOpen) CoachEyebrow("Ask your coach")
+            Text(if (alwaysOpen) "Topic" else "Choose a training topic", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 topics.forEach { option -> FilterChip(selected = option == topic, onClick = { topic = option }, label = { Text(option.label) }, enabled = key !in busy) }
             }
@@ -334,7 +270,7 @@ private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question:
                 if (key in busy) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
                 Text(if (key in busy) "Sending question…" else "Send coaching question")
             }
-            TextButton(onClick = { open = false }, enabled = key !in busy, modifier = Modifier.fillMaxWidth()) { Text("Keep for later") }
+            if (!alwaysOpen) TextButton(onClick = { open = false }, enabled = key !in busy, modifier = Modifier.fillMaxWidth()) { Text("Keep for later") }
         }
     }
 }
@@ -437,15 +373,10 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val error by hub.error.collectAsStateWithLifecycle(null)
     error?.let { Text(it, color = MaterialTheme.colorScheme.error); TextButton(onClick = hub::retry) { Text("Retry coaching sync") } }
 }
-@Composable private fun HubHeader(title: String, onBack: () -> Unit, eyebrow: String = "Your training space") {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLowest, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", Modifier.size(21.dp)) }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            CoachEyebrow(eyebrow)
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-        }
+@Composable private fun HubHeader(title: String, onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth().offset(x = (-12).dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
+        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
     }
 }
 @Composable private fun HubCard(title: String, content: @Composable ColumnScope.() -> Unit) {

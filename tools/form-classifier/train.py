@@ -195,6 +195,45 @@ def build(timesteps: int, features: int, classes: int, samples: int) -> keras.Mo
     ])
 
 
+# "auto" is build() above. The named ones are the compact candidates that
+# evaluate_architectures.py compares; one definition serves both the
+# comparison and the export, so an exported conv8 is the conv8 that was scored.
+ARCHITECTURES = ("auto", "gap-linear", "gap-dense8", "conv8", "conv12x8", "flat-dense16")
+
+
+def build_named(name: str, timesteps: int, features: int, classes: int) -> keras.Model:
+    regularizer = keras.regularizers.l2(1e-3)
+    inputs = keras.Input((timesteps, features))
+    if name == "gap-linear":
+        x = keras.layers.GlobalAveragePooling1D()(inputs)
+    elif name == "gap-dense8":
+        x = keras.layers.GlobalAveragePooling1D()(inputs)
+        x = keras.layers.Dense(8, activation="relu", kernel_regularizer=regularizer)(x)
+        x = keras.layers.Dropout(0.15)(x)
+    elif name == "conv8":
+        x = keras.layers.Conv1D(8, 5, padding="same", activation="relu", kernel_regularizer=regularizer)(inputs)
+        x = keras.layers.GlobalAveragePooling1D()(x)
+    elif name == "conv12x8":
+        x = keras.layers.Conv1D(12, 5, padding="same", activation="relu", kernel_regularizer=regularizer)(inputs)
+        x = keras.layers.MaxPooling1D(2)(x)
+        x = keras.layers.Conv1D(8, 3, padding="same", activation="relu", kernel_regularizer=regularizer)(x)
+        x = keras.layers.GlobalAveragePooling1D()(x)
+    elif name == "flat-dense16":
+        x = keras.layers.Flatten()(inputs)
+        x = keras.layers.Dense(16, activation="relu", kernel_regularizer=regularizer)(x)
+        x = keras.layers.Dropout(0.3)(x)
+    else:
+        raise ValueError(f"Unknown architecture: {name}")
+    outputs = keras.layers.Dense(classes, activation="softmax", kernel_regularizer=regularizer)(x)
+    return keras.Model(inputs, outputs, name=name)
+
+
+def build_model(architecture: str, timesteps: int, features: int, classes: int, samples: int) -> keras.Model:
+    if architecture == "auto":
+        return build(timesteps, features, classes, samples)
+    return build_named(architecture, timesteps, features, classes)
+
+
 def split_by_clip(groups: np.ndarray, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray] | None:
     """Holds out whole clips, or returns None when there are too few to try."""
     unique = np.unique(groups)
@@ -228,6 +267,9 @@ def main() -> int:
     parser.add_argument("--train-all", action="store_true",
                         help="fit the export model on every eligible sample after a separate "
                              "source-separated evaluation has been completed")
+    parser.add_argument("--architecture", choices=ARCHITECTURES, default="auto",
+                        help="model to fit and export; 'auto' is the sample-size-scaled default, "
+                             "the others are the evaluate_architectures.py candidates")
     args = parser.parse_args()
 
     data_dir = Path(args.data).resolve()
@@ -280,9 +322,10 @@ def main() -> int:
     weights = {i: len(y_train) / (len(classes) * max(1, (y_train == i).sum()))
                for i in range(len(classes))}
 
-    model = build(X.shape[1], X.shape[2], len(classes), len(X_train))
+    model = build_model(args.architecture, X.shape[1], X.shape[2], len(classes), len(X_train))
     model.compile(optimizer=keras.optimizers.Adam(1e-3),
                   loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    print(f"model     : {args.architecture}")
     print(f"params    : {model.count_params():,}\n")
 
     history = model.fit(
@@ -304,6 +347,7 @@ def main() -> int:
         "classes": classes,
         "class_counts": {k: int(v) for k, v in counts.items()},
         "source_clips": clips,
+        "architecture": args.architecture,
         "parameters": int(model.count_params()),
         "final_train_accuracy": round(float(history.history["accuracy"][-1]), 4),
         "training_mode": "all-data-final-fit" if args.train_all else "source-holdout",

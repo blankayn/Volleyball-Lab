@@ -69,7 +69,7 @@ internal fun AccountMenuScreen(
             }
         }
         item {
-            Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            Text("Version ${BuildConfig.VERSION_NAME.substringBefore('-')}", modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -78,21 +78,31 @@ internal fun AccountMenuScreen(
 @Composable
 internal fun AccountMenuGroup(entries: List<AccountMenuEntry>, modifier: Modifier = Modifier,
     expandedLabel: String? = null, expandedContent: (@Composable () -> Unit)? = null) {
-    Surface(modifier.fillMaxWidth().animateContentSize(vbTween()), shape = RoundedCornerShape(24.dp), color = AccountMenuSurface) {
-        Column {
-            entries.forEachIndexed { index, entry ->
-                if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = Color(0xFFD4E0E2))
-                Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = entry.onClick)
-                    .heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Icon(entry.icon, null, Modifier.size(26.dp), tint = AccountMenuInk)
-                    Text(entry.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Normal, color = AccountMenuInk)
-                    Icon(if (entry.label == expandedLabel) Icons.Rounded.ExpandMore else Icons.Rounded.ChevronRight, null, Modifier.size(24.dp), tint = AccountMenuInk)
+    // An opened section is not nested inside the menu card. The menu splits at the
+    // opened row and its content sits between the two halves at full width, so
+    // cards are never boxed inside a band inside another card.
+    val open = if (expandedContent == null) -1 else entries.indexOfFirst { it.label == expandedLabel }
+    val parts = if (open < 0) listOf(entries) else listOf(entries.take(open + 1), entries.drop(open + 1)).filter { it.isNotEmpty() }
+    Column(modifier.fillMaxWidth().animateContentSize(vbTween()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        parts.forEachIndexed { part, rows ->
+            Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = AccountMenuSurface) {
+                Column {
+                    rows.forEachIndexed { index, entry ->
+                        val opened = entry.label == expandedLabel
+                        if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = Color(0xFFD4E0E2))
+                        Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = entry.onClick)
+                            .heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                            Icon(entry.icon, null, Modifier.size(26.dp), tint = AccountMenuInk)
+                            Text(entry.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                                fontWeight = if (opened) FontWeight.SemiBold else FontWeight.Normal, color = AccountMenuInk)
+                            Icon(if (opened) Icons.Rounded.ExpandLess else Icons.Rounded.ChevronRight, null, Modifier.size(24.dp), tint = AccountMenuInk)
+                        }
+                    }
                 }
-                if (entry.label == expandedLabel && expandedContent != null) {
-                    Column(Modifier.fillMaxWidth().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { expandedContent() }
-                }
+            }
+            if (part == 0 && open >= 0 && expandedContent != null) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) { expandedContent() }
             }
         }
     }
@@ -162,7 +172,7 @@ internal fun AccountHelpContent(coach: Boolean) {
     ) else listOf(
         "How do I connect with a coach?" to "Open Find a coach from the Coach tab or Plan & limits. Coach connection requires Pro. After approval, open My coach to see assignments and ask about getting started.",
         "How do I share a session?" to "After recording a training session, open My coach, choose Training, and send the session for review. Your coach’s feedback appears in Feedback.",
-        "Where can I see my plan limits?" to "Open Plan & limits from Profile. It shows your current plan and the detailed reports remaining for the week.",
+        "Where can I see my plan limits?" to "Open Plan & limits from Profile to see your current plan and included features.",
         "Why can’t I hear voice coaching?" to "Check Training preferences in Settings. Voice coaching uses an installed English voice; Speech settings lets you check the voices on your phone.",
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

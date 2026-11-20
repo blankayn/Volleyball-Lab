@@ -18,6 +18,9 @@ import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.QuestionAnswer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -176,6 +179,9 @@ fun CoachDashboardScreen(
                     // hero copy is the fallback, not a replacement for it.
                     body = state.profile.teamName.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.coach_hero_body),
+                    // Player questions live behind the inbox, the one coach destination
+                    // that is not already a bottom tab.
+                    trailing = { QuestionsInboxButton(questions.sumOf { it.unread(true) }, onOpenQuestions) },
                 )
             }
         }
@@ -201,15 +207,8 @@ fun CoachDashboardScreen(
             }
         }
 
-        item(key = "workspace") {
-            EntranceAnimation(index = 3) {
-                CoachDashboardWorkspace(
-                    onOpenRoster, onOpenAssign, onOpenQuestions, onOpenAccount,
-                    Modifier.padding(horizontal = CoachGutter),
-                    unread = questions.sumOf { it.unread(true) },
-                )
-            }
-        }
+        // No shortcut tiles here: Players, Assign and Account are already the bottom tabs,
+        // and a second way to each only made the page longer and harder to scan.
 
         // The queue is a heading over free-standing rows rather than a
         // CoachSectionCard wrapping them, which is the one place this screen
@@ -223,7 +222,10 @@ fun CoachDashboardScreen(
             EntranceAnimation(index = 3) {
                 // Preview the first few reviews; the control below expands the
                 // same keyed list without leaving the dashboard.
-                CoachSectionTitle(text = stringResource(R.string.coach_dash_queue))
+                CoachSectionTitle(text = stringResource(R.string.coach_dash_queue), trailing = {
+                    if (state.pendingQueue.isNotEmpty()) Text("${state.pendingQueue.size}", style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                })
             }
         }
 
@@ -537,6 +539,19 @@ private fun QueueRow(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** The inbox for player questions, with a count of unread messages. */
+@Composable
+private fun QuestionsInboxButton(unread: Int, onClick: () -> Unit) {
+    androidx.compose.material3.IconButton(onClick = onClick,
+        modifier = Modifier.semantics { contentDescription = if (unread > 0) "Player questions, $unread unread" else "Player questions" }) {
+        androidx.compose.material3.BadgedBox(badge = {
+            if (unread > 0) androidx.compose.material3.Badge { Text(if (unread > 99) "99+" else "$unread") }
+        }) {
+            Icon(Icons.Rounded.QuestionAnswer, contentDescription = null)
         }
     }
 }

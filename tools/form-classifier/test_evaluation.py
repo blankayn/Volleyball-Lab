@@ -40,6 +40,16 @@ class EvaluationTests(unittest.TestCase):
         groups = connected_groups([dict(source_group="a", athlete_id="unknown"), dict(source_group="b", athlete_id="unknown")])
         self.assertEqual(len(set(groups)), 2)
 
+    def test_conservative_source_family_blocks_reused_collection_leakage(self):
+        rows = [dict(source_group='episode-1', source_family='same-coaching-collection'),
+                dict(source_group='episode-2', source_family='same-coaching-collection'),
+                dict(source_group='episode-3', source_family='different-collection')]
+        groups = connected_groups(rows)
+        self.assertEqual(groups[0], groups[1])
+        self.assertNotEqual(groups[0], groups[2])
+        with self.assertRaisesRegex(ValueError, 'leakage'):
+            assert_disjoint(groups, [0], [1])
+
     def test_class_deficient_training_fold_is_skipped(self):
         folds = list(grouped_folds([0, 0, 1], ["fault-video", "fault-video", "ok-video"], 2))
         self.assertTrue(all(f["reason"] for f in folds))

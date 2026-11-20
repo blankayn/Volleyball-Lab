@@ -2,7 +2,12 @@ package com.volleyballlab.player.pose.analysis
 
 import com.volleyballlab.player.domain.model.CueId
 
-enum class CoachingEventType { Correction, Improvement, RepMilestone, Tracking, Rotation }
+enum class CoachingEventType {
+    Correction, Improvement, RepMilestone, Tracking, Rotation,
+
+    /** A movement that finished but was not the skill. Never carries a rep number. */
+    NotCounted,
+}
 
 data class CoachingEvent(
     val id: Long,
@@ -10,7 +15,19 @@ data class CoachingEvent(
     val text: String,
     val timestampMs: Long,
     val priority: Int,
-)
+    /** Present only for completed-rep speech; counts use the athlete's rep rhythm. */
+    val repNumber: Int? = null,
+    /** The reference position to draw while these words are current, if a picture helps them. */
+    val reference: ReferenceShow? = null,
+    /**
+     * What is actually said, when it is shorter than [text]. The card always
+     * shows [text]; see [ProgressiveInstructions].
+     */
+    val spokenText: String? = null,
+) {
+    /** The words the coach says aloud. */
+    val speech: String get() = spokenText ?: text
+}
 
 /** One-shot measured-event templates. Speech playback is owned by the screen. */
 class ReactiveCoachingEngine(
@@ -134,7 +151,7 @@ class ReactiveCoachingEngine(
         return CoachingEvent(++sequence, type, text, nowMs, when (type) {
             CoachingEventType.Rotation -> 3
             CoachingEventType.Tracking -> 2
-            CoachingEventType.Correction -> 1
+            CoachingEventType.Correction, CoachingEventType.NotCounted -> 1
             CoachingEventType.Improvement, CoachingEventType.RepMilestone -> 0
         })
     }
@@ -142,24 +159,24 @@ class ReactiveCoachingEngine(
     fun shortCueText(id: CueId, side: Side? = null, measured: Float? = null): String {
         val arm = when (side) { Side.Left -> "left arm"; Side.Right -> "right arm"; null -> "arms" }
         val tip = when (id) {
-            CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Reach through contact with your $arm straighter."
-            CueId.ServeReachHeight -> "Lift your hitting elbow and reach higher at contact."
-            CueId.ServeTrunkLean -> "Keep your trunk tall through the serve."
-            CueId.ServeTossArmLift -> "Raise your tossing arm steadily before the swing."
+            CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Reach upward with your $arm straighter."
+            CueId.ServeReachHeight -> "Lift your raised elbow and reach upward."
+            CueId.ServeTrunkLean -> "Keep your trunk tall as you raise your arm."
+            CueId.ServeTossArmLift -> "Raise your guiding arm steadily before the swing."
             CueId.PassPlatformStraight -> "Straighten both elbows and keep your platform together."
-            CueId.PassKneeFlexion -> if (measured != null && measured < 110f) "Rise a little from your crouch as you receive the ball." else "Bend your knees more as you receive the ball."
-            CueId.PassTrunkAngle -> "Lean from your hips and keep your chest over the ball."
-            CueId.PassShouldersLevel -> "Keep your shoulders level as you pass."
-            CueId.SetHandsAboveForehead -> "Meet the ball with your hands above your forehead."
-            CueId.SetElbowFlexion -> "Keep your elbows comfortably bent before you release the set."
-            CueId.SetKneeFlexion -> "Load your knees before driving up into the set."
-            CueId.SetExtensionFollowThrough -> "Extend your arms through the finish of the set."
+            CueId.PassKneeFlexion -> if (measured != null && measured < 110f) "Rise a little from your crouch in your passing stance." else "Bend your knees more in your passing stance."
+            CueId.PassTrunkAngle -> "Lean slightly from your hips while keeping a balanced stance."
+            CueId.PassShouldersLevel -> "Keep your shoulders level above your forearm platform."
+            CueId.SetHandsAboveForehead -> "Position your hands above your forehead."
+            CueId.SetElbowFlexion -> "Keep your elbows comfortably bent before extending your arms."
+            CueId.SetKneeFlexion -> "Soften your knees before extending upward."
+            CueId.SetExtensionFollowThrough -> "Extend your arms upward through the finish."
             CueId.SpikeApproachLoad -> "Load your knees before taking off."
-            CueId.SpikeJumpHeight -> "Drive up from your loaded legs before the hit."
-            CueId.SpikeTrunkDrive -> "Keep your trunk controlled as you drive into contact."
+            CueId.SpikeJumpHeight -> "Extend upward from a balanced knee bend."
+            CueId.SpikeTrunkDrive -> "Keep your trunk controlled during the overhead reach."
             CueId.BlockArmExtension -> "Reach with straighter arms at the top of your block."
             CueId.BlockHandSeparation -> "Keep your hands about shoulder width apart."
-            CueId.BlockPenetration -> "Reach your hands forward over the net."
+            CueId.BlockPenetration -> "Reach your hands slightly in front of your shoulders."
             CueId.BlockKneeLoad -> "Bend your knees before pushing up for the block."
         }
         return if (correctionVariant % 2 == 0) tip else "Next rep: ${tip.replaceFirstChar { it.lowercase() }}"
@@ -170,9 +187,9 @@ class ReactiveCoachingEngine(
         CueId.PassShouldersLevel -> "Better. Your shoulders look level."
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad -> "Better. Your knee loading improved."
         CueId.ServeTrunkLean, CueId.PassTrunkAngle, CueId.SpikeTrunkDrive -> "Better. Your trunk position improved."
-        CueId.ServeReachHeight -> "Better. You reached higher through contact."
-        CueId.ServeTossArmLift -> "Better. Your tossing arm is lifting steadily."
-        CueId.SetHandsAboveForehead -> "Better. Your hands met the ball above your forehead."
+        CueId.ServeReachHeight -> "Better. You reached higher above your shoulder."
+        CueId.ServeTossArmLift -> "Better. Your guiding arm is lifting steadily."
+        CueId.SetHandsAboveForehead -> "Better. Your hands were positioned above your forehead."
         CueId.BlockHandSeparation -> "Better. Your hand spacing improved."
         CueId.BlockPenetration -> "Better. Your hands reached farther forward."
         CueId.SpikeJumpHeight -> "Better. Your jump drive improved."

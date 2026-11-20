@@ -165,9 +165,9 @@ fun PlayerAssignmentScreen(
                     TaskCard {
                         Text("Record and review", style = MaterialTheme.typography.titleMedium)
                         Text("Record the task with your full body in frame. Review your form score and feedback, then send the result to your coach.")
-                        state.sessions.firstOrNull()?.let { saved ->
+                        state.sessions.forEach { saved ->
                             OutlinedButton(onClick = { onOpenResult(saved.id) }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (state.submissions.any { it.sessionId == saved.id }) "View submitted result" else "Review saved result")
+                                Text((if (state.submissions.any { it.sessionId == saved.id }) "View submitted result" else "Review saved result") + " · " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(saved.startedAtEpochMs)))
                             }
                         }
                         if (task.isOpen) {

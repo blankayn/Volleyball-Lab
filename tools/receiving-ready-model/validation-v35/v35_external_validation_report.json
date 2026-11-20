@@ -1,0 +1,454 @@
+{
+  "created_at_utc": "2026-09-23T17:26:17.197917+00:00",
+  "status": "fresh_source_disjoint_prediction_blind_external_validation_complete",
+  "scope": "insufficient knee bend / too-upright forearm-pass ready posture",
+  "manifest_sha256": "d64a0b08ecb564036b34930552b75d54651271cf18a843084d98e8e3cf8a704b",
+  "label_interval_lock_sha256": "15d1bfe43db447f5af5c04967adf5f1aae535c6171603fa5b0a42a99f8fa86be",
+  "pre_inference_lock_sha256": "29ac5e028f169aa27ce562bfc4f3af565e81ced9ecfce046fdfac1f2ca660d1e",
+  "scoring_protocol_lock_sha256": "3c22fc63eba178cac4e6b936becefa229e282438352573b0da387442f7acd406",
+  "extraction_log_sha256": "b0cd1d406e4b5949205f17dc12379e36a075d8938213a7b7a63766fdb038c171",
+  "pre_score_quality_audit_sha256": "cf2e1ff6ce69c077d8ab1fba341311d5f332f84bc915928bbbadb6a84b9ee139",
+  "pre_score_visual_review_sha256": "91af094ad8090683177cb71082f9ab5663bcdd676c2db918db1b37f928e34c57",
+  "model": {
+    "name": "deployed_v29",
+    "path": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\receiving_ready_posture.tflite",
+    "sha256": "ab47e1c2e7c0fbb634dec4d8424524cdf3a7eb56a4e7f77ff006eb765acba251",
+    "training_report": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\training_report.json",
+    "training_report_sha256": "c38ca3ce7f2db5159912271f1b89605c66b45cac23251b06b5516743a4e5d505"
+  },
+  "pose_model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "training_data_sha256": "a100c867857b2881971353457d72dd1c93077d5af3323742f38a85d6a46f9f1c",
+  "validation_training_source_overlap": [],
+  "policy": {
+    "ok_if_probability_below": 0.4,
+    "fault_if_probability_at_or_above": 0.6,
+    "otherwise": "uncertain"
+  },
+  "primary_unit": "one actual-final live-equivalent 32-pose window per sealed clip",
+  "metrics": {
+    "manifest_clips": 20,
+    "quality_retained_clips": 14,
+    "quality_coverage": 0.7,
+    "decided_clips": 14,
+    "decision_coverage_all_manifest": 0.7,
+    "decision_coverage_quality_retained": 1.0,
+    "correct": 13,
+    "conditional_accuracy": 0.9285714285714286,
+    "conditional_accuracy_wilson_95": [
+      0.6853129557584889,
+      0.9872777847521093
+    ],
+    "balanced_accuracy_decided": 0.9,
+    "fault_recall_decided": 1.0,
+    "ok_recall_decided": 0.8,
+    "effective_fault_recall_all_manifest": 0.9,
+    "effective_ok_recall_all_manifest": 0.4,
+    "confusion_matrix_ok_fault_decided": [
+      [
+        4,
+        1
+      ],
+      [
+        0,
+        9
+      ]
+    ],
+    "quality_abstentions": 6,
+    "uncertain_after_quality": 0
+  },
+  "clips": [
+    {
+      "sample_id": "goldmedal_fault_rises_from_legs_01",
+      "source_group": "unjx6NArCag",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 19,
+      "quality_windows": 19,
+      "terminal_start_s": 1.8,
+      "terminal_end_s": 4.9,
+      "terminal_fault_probability": 0.9694839715957642,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "goldmedal_fault_rises_from_back_02",
+      "source_group": "unjx6NArCag",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 44,
+      "quality_windows": 44,
+      "terminal_start_s": 4.3,
+      "terminal_end_s": 7.4,
+      "terminal_fault_probability": 0.9832876920700073,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "mollyking_fault_before_upright",
+      "source_group": "SfUAjdk3yjo",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 9,
+      "quality_windows": 9,
+      "terminal_start_s": 0.8,
+      "terminal_end_s": 3.9,
+      "terminal_fault_probability": 0.8350332975387573,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "fritz_fault_straight_legged",
+      "source_group": "Zhrrqa-n3_Y",
+      "label": "fault",
+      "status": "quality_abstention",
+      "abstention_reason": "actual final candidate window failed the app-equivalent quality gate",
+      "candidate_windows": 12,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "popelka_fault_stretched_legs_01",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 6,
+      "quality_windows": 6,
+      "terminal_start_s": 0.5,
+      "terminal_end_s": 4.0,
+      "terminal_fault_probability": 0.9972352385520935,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "popelka_fault_stretched_legs_02",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 10,
+      "quality_windows": 10,
+      "terminal_start_s": 1.0,
+      "terminal_end_s": 4.1,
+      "terminal_fault_probability": 0.9130971431732178,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "popelka_fault_stretched_legs_03",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 9,
+      "quality_windows": 9,
+      "terminal_start_s": 0.8,
+      "terminal_end_s": 4.0,
+      "terminal_fault_probability": 0.9807308912277222,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "popelka_fault_vertical_body_01",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 10,
+      "quality_windows": 10,
+      "terminal_start_s": 0.9,
+      "terminal_end_s": 4.1,
+      "terminal_fault_probability": 0.9235917925834656,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "popelka_fault_vertical_body_02",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 10,
+      "quality_windows": 10,
+      "terminal_start_s": 0.9,
+      "terminal_end_s": 4.1,
+      "terminal_fault_probability": 0.9843257069587708,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "popelka_fault_vertical_body_03",
+      "source_group": "Nfy5Wbdjp1E",
+      "label": "fault",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 10,
+      "quality_windows": 10,
+      "terminal_start_s": 0.9,
+      "terminal_end_s": 4.1,
+      "terminal_fault_probability": 0.980903685092926,
+      "terminal_decision": "fault",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "mollyking_ok_after_lower",
+      "source_group": "SfUAjdk3yjo",
+      "label": "ok",
+      "status": "quality_abstention",
+      "abstention_reason": "no contiguous 32-pose terminal candidate window",
+      "candidate_windows": 0,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "fritz_ok_athletic_posture",
+      "source_group": "Zhrrqa-n3_Y",
+      "label": "ok",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 9,
+      "quality_windows": 9,
+      "terminal_start_s": 0.8,
+      "terminal_end_s": 3.9,
+      "terminal_fault_probability": 0.00252582598477602,
+      "terminal_decision": "ok",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_01",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "quality_abstention",
+      "abstention_reason": "actual final candidate window failed the app-equivalent quality gate",
+      "candidate_windows": 12,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_02",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "quality_abstention",
+      "abstention_reason": "no contiguous 32-pose terminal candidate window",
+      "candidate_windows": 0,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_03",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 37,
+      "quality_windows": 37,
+      "terminal_start_s": 3.6,
+      "terminal_end_s": 6.7,
+      "terminal_fault_probability": 1.0062890396511648e-05,
+      "terminal_decision": "ok",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_04",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "quality_abstention",
+      "abstention_reason": "actual final candidate window failed the app-equivalent quality gate",
+      "candidate_windows": 21,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_05",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 19,
+      "quality_windows": 19,
+      "terminal_start_s": 1.8,
+      "terminal_end_s": 4.9,
+      "terminal_fault_probability": 0.03475405275821686,
+      "terminal_decision": "ok",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "olympian_ok_dig_stance_06",
+      "source_group": "HtTuI_iDifA",
+      "label": "ok",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 109,
+      "quality_windows": 59,
+      "terminal_start_s": 10.8,
+      "terminal_end_s": 13.9,
+      "terminal_fault_probability": 0.12002456188201904,
+      "terminal_decision": "ok",
+      "terminal_correct": true
+    },
+    {
+      "sample_id": "aoc_ok_live_receive_sequence",
+      "source_group": "RRplCSfQjtg",
+      "label": "ok",
+      "status": "quality_abstention",
+      "abstention_reason": "wrong-person/subject-switch visual tracking",
+      "candidate_windows": 0,
+      "quality_windows": 0,
+      "terminal_start_s": null,
+      "terminal_end_s": null,
+      "terminal_fault_probability": null,
+      "terminal_decision": null,
+      "terminal_correct": null
+    },
+    {
+      "sample_id": "pavan_ok_move_then_platform",
+      "source_group": "dormU35WHLc",
+      "label": "ok",
+      "status": "scored",
+      "abstention_reason": null,
+      "candidate_windows": 54,
+      "quality_windows": 54,
+      "terminal_start_s": 5.3,
+      "terminal_end_s": 8.4,
+      "terminal_fault_probability": 0.6134881377220154,
+      "terminal_decision": "fault",
+      "terminal_correct": false
+    }
+  ],
+  "source_group_analysis": {
+    "unique_source_groups": 7,
+    "fault_source_groups": 4,
+    "ok_source_groups": 5,
+    "rows": [
+      {
+        "source_group": "HtTuI_iDifA",
+        "manifest_clips": 6,
+        "quality_retained": 3,
+        "decided": 3,
+        "correct": 3,
+        "conditional_accuracy": 1.0,
+        "labels": [
+          "ok"
+        ]
+      },
+      {
+        "source_group": "Nfy5Wbdjp1E",
+        "manifest_clips": 6,
+        "quality_retained": 6,
+        "decided": 6,
+        "correct": 6,
+        "conditional_accuracy": 1.0,
+        "labels": [
+          "fault"
+        ]
+      },
+      {
+        "source_group": "RRplCSfQjtg",
+        "manifest_clips": 1,
+        "quality_retained": 0,
+        "decided": 0,
+        "correct": 0,
+        "conditional_accuracy": null,
+        "labels": [
+          "ok"
+        ]
+      },
+      {
+        "source_group": "SfUAjdk3yjo",
+        "manifest_clips": 2,
+        "quality_retained": 1,
+        "decided": 1,
+        "correct": 1,
+        "conditional_accuracy": 1.0,
+        "labels": [
+          "fault",
+          "ok"
+        ]
+      },
+      {
+        "source_group": "Zhrrqa-n3_Y",
+        "manifest_clips": 2,
+        "quality_retained": 1,
+        "decided": 1,
+        "correct": 1,
+        "conditional_accuracy": 1.0,
+        "labels": [
+          "fault",
+          "ok"
+        ]
+      },
+      {
+        "source_group": "dormU35WHLc",
+        "manifest_clips": 1,
+        "quality_retained": 1,
+        "decided": 1,
+        "correct": 0,
+        "conditional_accuracy": 0.0,
+        "labels": [
+          "ok"
+        ]
+      },
+      {
+        "source_group": "unjx6NArCag",
+        "manifest_clips": 2,
+        "quality_retained": 2,
+        "decided": 2,
+        "correct": 2,
+        "conditional_accuracy": 1.0,
+        "labels": [
+          "fault"
+        ]
+      }
+    ],
+    "note": "Multiple clips from one source are correlated; clip counts do not equal independent source counts."
+  },
+  "descriptive_rolling_windows": {
+    "quality_passing_windows_scored": 305,
+    "correct": 230,
+    "wrong": 59,
+    "uncertain": 16,
+    "correct_fraction": 0.7540983606557377,
+    "note": "Overlapping rolling windows are correlated and are not independent samples."
+  },
+  "artifacts": {
+    "terminal_clip_predictions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\terminal_clip_predictions.csv",
+    "terminal_clip_predictions_sha256": "051f8f852a8c2082b33206305be81a528adb6d55f9ed02ffa099d80971b55a2b",
+    "rolling_window_predictions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\rolling_window_predictions.csv",
+    "rolling_window_predictions_sha256": "df77efdc764a0346d4b94c1dfa0ce1230d80342f4fa4ec7757d542c0bb705308",
+    "overlay_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\v35-overlay-audit-sheet.jpg",
+    "overlay_sheet_sha256": "cd3b56e01bf8c644c32ee729c2fcfdfa94afe0b98966583599ba537f5ba48bbf"
+  },
+  "limitations": [
+    "Only 14 of 20 manifest clips passed the actual-final app-equivalent pose/visual quality gate.",
+    "The retained class balance is uneven because quality filtering kept more fault than OK clips.",
+    "The 20 clips come from seven source videos; repeated clips from a source are correlated.",
+    "Fault evidence is concentrated in four source groups, including six retained clips from one Popelka video.",
+    "Labels use explicit coaching narration/on-screen before-after material plus visual review rather than independent multi-rater annotation.",
+    "This validates only too-upright/insufficient-knee-bend forearm-pass posture, not all volleyball skills.",
+    "MPJPE is a separate pose-landmark placement metric and is not inferred from classifier accuracy.",
+    "v35 is spent after this one frozen evaluation and must not be reused to tune thresholds or retrain a candidate claimed against it."
+  ]
+}

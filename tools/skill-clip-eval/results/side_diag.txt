@@ -1,0 +1,12 @@
+set_posture_drill_NdNe5eam9mg      rest n= 812 {Front=159, Side<.7=58, Side>=.7=398, Unknown=197} torsoVis<.6=0
+set_posture_drill_NdNe5eam9mg      rep  n= 796 {Front=22, Side<.7=74, Side>=.7=640, Unknown=60} torsoVis<.6=0
+serve_no_shot_put_LxCE7z_RdmA      rest n=  34 {Side<.7=8, Side>=.7=26} torsoVis<.6=0
+serve_no_shot_put_LxCE7z_RdmA      rep  n= 133 {Side<.7=16, Side>=.7=104, Unknown=13} torsoVis<.6=0
+spike_drill_OTie-mYhSeI            rest n=  35 {Side<.7=1, Side>=.7=34} torsoVis<.6=0
+spike_drill_OTie-mYhSeI            rep  n= 231 {Front=55, Side<.7=22, Side>=.7=122, Unknown=32} torsoVis<.6=0
+serve_beginner_tips                rest n=  23 {Front=10, Side>=.7=2, Unknown=11} torsoVis<.6=0
+serve_beginner_tips                rep  n=  36 {Front=13, Side>=.7=13, Unknown=10} torsoVis<.6=0
+set_do_this_instead_NJPJXUjqM6o    rest n=  74 {Front=44, Side<.7=1, Side>=.7=1, Unknown=28} torsoVis<.6=0
+set_do_this_instead_NJPJXUjqM6o    rep  n= 204 {Front=17, Side<.7=9, Side>=.7=87, Unknown=91} torsoVis<.6=0
+spike_low_elbow_fix_ezjyU7qE2d4    rest n= 419 {Front=35, Side<.7=41, Side>=.7=52, Unknown=291} torsoVis<.6=0
+spike_low_elbow_fix_ezjyU7qE2d4    rep  n= 137 {Front=10, Side<.7=7, Side>=.7=43, Unknown=77} torsoVis<.6=0

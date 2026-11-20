@@ -23,13 +23,26 @@ import com.volleyballlab.player.pose.model.PoseFrame
  * adaptive range here has settled. That is a known and accepted difference, not
  * a defect. The results screen always reports the segmenter's count.
  *
- * ## The adaptive range
+ * ## The adaptive range, and its floor
  *
- * Thresholds cannot be fixed constants: the signal's scale depends on the skill,
- * the athlete and their distance from the camera. So the observed extremes are
- * tracked with a slow decay back toward the current value. The decay matters -
- * without it, one outlier frame would stretch the range permanently and every
- * later rep would fall below the activation threshold and go uncounted.
+ * Thresholds follow the athlete: the observed extremes are tracked with a slow
+ * decay back toward the current value, so the counter settles on however big
+ * this person's reps are. The decay matters - without it, one outlier frame
+ * would stretch the range permanently and every later rep would fall below the
+ * activation threshold and go uncounted.
+ *
+ * What the range may not do is shrink to nothing. Left purely relative, a
+ * motionless athlete's range decays to the width of the tracker's jitter, the
+ * thresholds follow it down, and the jitter then crosses them: reps counted
+ * while standing still. So the range is never taken to be smaller than
+ * [SkillAnalyzer.minExcursion], the real-world size of the skill's action.
+ *
+ * ## Shape is not enough
+ *
+ * A curve of the right size still only says that *something* moved. Every
+ * candidate is therefore put to [SkillAnalyzer.verdict] before it is counted,
+ * which is where a knee bend stops being a forearm pass. A candidate that is
+ * turned away leaves its reason in [lastRejection] so the coach can say it.
  *
  * Not thread-safe. It is driven from a single collector on the main dispatcher.
  */
@@ -58,6 +71,13 @@ class LiveRepCounter(
         private set
 
     var lastCompletedWindow: RepWindow? = null
+        private set
+
+    /**
+     * Why the movement that ended on the latest frame was not counted, or null.
+     * Set for that one frame only, like [lastCompletedWindow].
+     */
+    var lastRejection: MovementFault? = null
         private set
 
     /** Contact is confirmed only after the signal returns to rest. */
@@ -90,6 +110,7 @@ class LiveRepCounter(
         framesSeen = 0
         lastTimestampMs = null
         lastCompletedWindow = null
+        lastRejection = null
         preparationFrames.clear()
         activeFrames.clear()
     }
@@ -107,6 +128,7 @@ class LiveRepCounter(
         if (previous != null && (frame.timestampMs <= previous || frame.timestampMs - previous > config.maxFrameGapMs)) resetSegment()
         lastTimestampMs = frame.timestampMs
         lastCompletedWindow = null
+        lastRejection = null
         val signal = analyzer.segmentationSignal(frame)?.takeIf { it.isFinite() }
         if (signal == null) { resetSegment(); return false }
         if (isInRep) activeFrames.add(frame) else {
@@ -132,7 +154,8 @@ class LiveRepCounter(
 
         if (framesSeen < config.warmUpFrames) return false
 
-        val range = observedHigh - observedLow
+        // Never scale the thresholds below the size of the skill's own action.
+        val range = maxOf(observedHigh - observedLow, analyzer.minExcursion)
         if (range < config.minSignalRange) return false
 
         val activate = observedLow + config.activationFraction * range
@@ -158,12 +181,22 @@ class LiveRepCounter(
             isInRep = false
             val duration = frame.timestampMs - repStartMs
             if (duration >= config.minRepDurationMs) {
-                lastCompletedWindow = buildWindow()
+                val window = buildWindow()
                 activeFrames.clear()
                 preparationFrames.addLast(frame)
-                if (lastCompletedWindow == null) return false
-                count++
-                return true
+                if (window == null) return false
+                return when (val verdict = analyzer.verdict(window)) {
+                    MovementVerdict.Counted -> {
+                        lastCompletedWindow = window
+                        count++
+                        true
+                    }
+                    is MovementVerdict.NotCounted -> {
+                        lastRejection = verdict.fault
+                        false
+                    }
+                    MovementVerdict.TooSmall -> false
+                }
             }
             activeFrames.clear()
             preparationFrames.addLast(frame)
@@ -177,13 +210,15 @@ class LiveRepCounter(
         val contactIndex = signals.indices.maxByOrNull { signals[it] } ?: return null
         if (contactIndex == 0 || contactIndex == activeFrames.lastIndex) return null
         val loadingIndex = (0..contactIndex).minByOrNull { signals[it] } ?: 0
+        val loading = analyzer.loadingFrame(activeFrames.subList(0, contactIndex + 1))
+            ?: activeFrames[loadingIndex]
         val first = activeFrames.first()
         return RepWindow(
             index = count,
             frames = activeFrames.toList(),
             phaseFrames = mapOf(
                 RepPhase.Preparation to first,
-                RepPhase.Loading to activeFrames[loadingIndex],
+                RepPhase.Loading to loading,
                 RepPhase.Contact to activeFrames[contactIndex],
                 RepPhase.FollowThrough to activeFrames.last(),
             ),

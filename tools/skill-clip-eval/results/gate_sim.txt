@@ -1,0 +1,36 @@
+set_posture_drill_NdNe5eam9mg    Side  offline=11 | old reps= 6 refused= 0 turnFrames= 283 interrupts= 624 | new reps=15 refused= 0 turnFrames=  75 interrupts= 369
+serve_no_shot_put_LxCE7z_RdmA    Side  offline= 1 | old reps= 0 refused= 0 turnFrames=  37 interrupts=  37 | new reps= 1 refused= 3 turnFrames=   0 interrupts=   0
+spike_drill_OTie-mYhSeI          Side  offline= 3 | old reps= 0 refused= 0 turnFrames= 110 interrupts= 110 | new reps= 3 refused= 4 turnFrames=   0 interrupts=   0
+set_do_this_instead_NJPJXUjqM6o  Side  offline= 3 | old reps= 0 refused= 0 turnFrames= 144 interrupts= 190 | new reps= 0 refused= 0 turnFrames=  71 interrupts= 103
+serve_beginner_tips              Side  offline= 1 | old reps= 0 refused= 0 turnFrames=  44 interrupts=  44 | new reps= 0 refused= 0 turnFrames=  20 interrupts=  20
+spike_low_elbow_fix_ezjyU7qE2d4  Side  offline= 3 | old reps= 0 refused= 0 turnFrames= 378 interrupts= 461 | new reps= 1 refused= 3 turnFrames= 176 interrupts= 207
+spike_drill                      Front offline=13 | old reps= 0 refused= 0 turnFrames= 358 interrupts= 663 | new reps= 5 refused= 0 turnFrames=  54 interrupts= 263
+serve_master_d9jvFhp40xU         Front offline= 5 | old reps= 0 refused= 1 turnFrames= 121 interrupts= 286 | new reps= 1 refused= 1 turnFrames=  51 interrupts= 191
+serve_mistake_jzTkgrKTy44        Front offline= 1 | old reps= 0 refused= 1 turnFrames=  91 interrupts= 145 | new reps= 1 refused= 2 turnFrames=  53 interrupts=  89
+block_hits_progress_wcQEnd_RKh0  Side  offline= 0 | old reps= 0 refused= 0 turnFrames= 300 interrupts= 318 | new reps= 1 refused= 6 turnFrames=  38 interrupts=  39
+live 12733-14567 contact 14233
+live 16433-17233 contact 16833
+live 18033-18767 contact 18733
+live 23500-24867 contact 24533
+live 27000-29400 contact 27833
+live 29733-30600 contact 30367
+live 30600-32467 contact 31433
+live 32500-33733 contact 33433
+live 34100-36100 contact 34633
+live 40633-42100 contact 41833
+live 42500-43433 contact 42933
+live 43900-45467 contact 45167
+live 45467-46800 contact 46367
+live 47000-48067 contact 47767
+live 48067-49633 contact 49000
+offline 9600-12867 contact 10267
+offline 12900-18967 contact 14233
+offline 21167-23067 contact 22700
+offline 23267-25000 contact 24500
+offline 25333-27267 contact 26733
+offline 27300-30767 contact 27867
+offline 30800-32633 contact 31467
+offline 43767-45600 contact 45167
+offline 45633-47100 contact 46433
+offline 47133-48167 contact 47767
+offline 48200-49933 contact 48933

@@ -797,7 +797,7 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     <div class="stat"><b>${sessions.length}</b><span>Sets shared</span></div>
     <div class="stat"><b>${form ?? "—"}</b><span>Mean form</span></div>
     <div class="stat"><b>${assignments.filter((a) => a.status !== "Completed").length}</b><span>Open drills</span></div>
-    <div class="stat"><b>${notes.length}</b><span>Notes sent</span></div>
+    <div class="stat"><b>${notes.length}</b><span>Feedback sent</span></div>
   </div>
 
   ${weak ? `<div class="card-dark" style="margin-top:14px">
@@ -821,8 +821,8 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
   <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("session", "green")}<h3 class="section-title">Shared sessions</h3></div>
     ${sessionCards}</div>
 
-  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("note", "violet")}<h3>Your notes</h3></div>
-    ${notes.length === 0 ? `<p class="muted">No notes yet. Open a session above to write the first one.</p>` : notes.slice(0, 5).map((n) => `
+  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("note", "violet")}<h3>Coach Feedback</h3></div>
+    ${notes.length === 0 ? `<p class="muted">No coach feedback yet. Open a session above to provide feedback.</p>` : notes.slice(0, 5).map((n) => `
       <div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
   </div>`;
 }
@@ -852,7 +852,7 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
       <span class="session-summary-copy"><strong>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</strong>
         <span class="muted">${s.repCount} reps · ${fullDate(s.startedAt)}</span></span>
       ${s.formScore !== null ? `<span class="score-num">${s.formScore}</span>` : ""}
-      <span class="session-state${answered ? " answered" : ""}">${answered ? "Feedback sent" : "To review"}</span>
+      <span class="session-state${answered ? " answered" : ""}">${answered ? "Feedback Provided" : "Awaiting Coach Feedback"}</span>
       <span class="session-chevron">${icon("chevronDown")}</span>
     </summary>
     <div class="session-detail"><template data-session-template><div class="session-detail-inner">
@@ -860,7 +860,10 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
       ${s.weakestCue ? `<p style="margin:0 0 10px"><span class="pill">${esc(cueLabel(s.weakestCue))} — focus next</span></p>` : ""}
       <div class="cue-table-scroll" role="region" aria-label="Session cue measurements" tabindex="0"><table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table></div>
       ${sessionExplanationPanel(s.id)}
-      <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">Your note to this player</label>
+      <section aria-label="Coach Feedback"><h4>Coach Feedback</h4>
+      ${notes.filter(n => n.sessionId === s.id).sort((a, b) => a.createdAt - b.createdAt).map(n => `<div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}</small></div>`).join("") || `<p class="muted">Awaiting Coach Feedback. Review the session and provide your assessment and next practice focus.</p>`}
+      </section>
+      <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">${answered ? "Add follow-up feedback" : "Coach Feedback"}</label>
         <textarea id="note-${esc(s.id)}" data-note-draft="${esc(s.id)}" maxlength="800" rows="4" placeholder="One thing they did well, then a clear focus for the next set."></textarea></div>
       <div class="note-composer-footer"><span class="muted" data-note-count="${esc(s.id)}">0/800</span><button class="btn btn-primary" disabled data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">${icon("message")} Send feedback</button></div>
     </div></template></div>
@@ -947,7 +950,7 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
       } else if (action === "send-note") {
         const sessionId = el.dataset["session"] ?? "";
         const text = val(root, `note-${CSS.escape(sessionId)}`);
-        if (!text) throw new Error("Write a note before sending.");
+        if (!text) throw new Error("Write coach feedback before sending.");
         el.textContent = "Sending…";
         (el as HTMLButtonElement).disabled = true;
         await postNote({ id: newId(), coachUid, playerUid: player, sessionId, text: text.slice(0, 800), createdAt: Date.now() });

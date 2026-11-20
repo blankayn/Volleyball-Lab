@@ -64,7 +64,7 @@ class MyCoachHubDeviceTest {
         showHub()
         compose.onNodeWithText("Manage coach connection").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, connectionClicks) }
-        compose.onNodeWithText("Overview").performScrollTo().performClick()
+        compose.onNodeWithText(CoachWorkspaceTab.Overview.label).performScrollTo().performClick()
         compose.onNodeWithText("Full Overview").assertIsDisplayed()
         compose.onNodeWithText("Manage coach connection").assertDoesNotExist()
     }

@@ -43,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -650,6 +653,9 @@ private fun VbNavHost(
     val page = VbMotion.tween<Float>(VbMotion.Navigation, reduceMotion = reduceMotion)
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
+    val setupScope = rememberCoroutineScope()
+    val setupGraph = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container
+
     NavHost(
         navController = navController,
         startDestination = when (start) {
@@ -692,7 +698,15 @@ private fun VbNavHost(
                 // whole shell for the coach one. Navigating first would show a
                 // frame of the athlete's dashboard on the way past.
                 onAuthenticated = { role ->
-                    if (role == UserRole.Player) navController.leaveAuth(hasOnboarded())
+                    if (role == UserRole.Player) setupScope.launch {
+                        val uid = setupGraph.authRepository.currentUid ?: return@launch
+                        val onboarded = try { setupGraph.assessmentRepository.currentHasOnboarded() }
+                            catch (failure: CancellationException) { throw failure }
+                            catch (_: Exception) { hasOnboarded() }
+                        if (setupGraph.authRepository.currentUid == uid && setupGraph.roleRepository.current() == UserRole.Player) {
+                            navController.leaveAuth(onboarded)
+                        }
+                    }
                 },
                 onSignUp = { navController.navigate(SignUpRoute) },
             )
@@ -764,6 +778,8 @@ private fun VbNavHost(
                     onDrillSelected = { drill ->
                         navController.navigate(CaptureRoute(drill.skill, drill.id))
                     },
+                    onOpenGuide = { drill -> navController.navigate(DrillDetailRoute(drill.id)) },
+                    onOpenLibrary = { navController.navigate(DrillLibraryRoute) },
                     onBack = { navController.popBackStack() },
                     contentPadding = contentPadding,
                 )
@@ -772,6 +788,7 @@ private fun VbNavHost(
             composable<DrillLibraryRoute> {
                 DrillLibraryScreen(
                     onDrill = { navController.navigate(DrillDetailRoute(it)) },
+                    onCamera = { drill -> navController.navigate(CaptureRoute(drill.skill, drill.id, drill.id)) },
                     onResume = { draft -> navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) },
                     onSummary = { navController.navigate(DrillPracticeSummaryRoute(it)) },
                     onBack = { navController.popBackStack() },
@@ -781,8 +798,6 @@ private fun VbNavHost(
             composable<DrillDetailRoute> { entry ->
                 val route = entry.toRoute<DrillDetailRoute>()
                 DrillDetailScreen(route.drillId,
-                    onPractice = { config -> navController.navigate(DrillPracticeRoute(route.drillId, config.sets, config.reps, config.restSeconds)) },
-                    onResume = { draft -> navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) },
                     onCamera = { drill -> navController.navigate(CaptureRoute(drill.skill, drill.id, route.drillId)) },
                     onBack = { navController.popBackStack() }, contentPadding = contentPadding,
                 )
@@ -821,13 +836,22 @@ private fun VbNavHost(
                     sessionId = route.sessionId,
                     assignmentId = route.assignmentId,
                     onDone = {
+                        // A drill's camera check can start from its guide, its library card
+                        // or its skill path; Done goes back to whichever one opened it.
+                        val fromGuide = route.returnToDrillId != null &&
+                            runCatching { navController.getBackStackEntry<DrillDetailRoute>() }.isSuccess
                         if (route.returnToSummary) {
                             navController.popBackStack(SessionSummaryRoute(route.sessionId, route.summaryFromProgress), inclusive = false)
                         } else if (route.assignmentId != null) {
                             navController.popBackStack(PlayerAssignmentRoute(route.assignmentId), inclusive = false)
-                        } else if (route.returnToDrillId != null) navController.navigate(DrillDetailRoute(route.returnToDrillId)) {
+                        } else if (fromGuide) navController.navigate(DrillDetailRoute(requireNotNull(route.returnToDrillId))) {
                             popUpTo<DrillDetailRoute> { inclusive = true }; launchSingleTop = true
-                        } else navController.navigate(SkillSelectRoute) { popUpTo<SkillSelectRoute> { inclusive = true } }
+                        } else {
+                            // Otherwise the library card or the skill path opened the camera.
+                            val returned = if (route.returnToDrillId != null) navController.popBackStack<DrillLibraryRoute>(inclusive = false)
+                                else navController.popBackStack<DrillSelectRoute>(inclusive = false)
+                            if (!returned) navController.navigate(SkillSelectRoute) { popUpTo<SkillSelectRoute> { inclusive = true } }
+                        }
                     },
                     doneLabel = if (route.returnToSummary) stringResource(R.string.session_summary_back_from_feedback) else null,
                     contentPadding = contentPadding,
@@ -927,6 +951,7 @@ private fun VbNavHost(
         }
         composable<ProfileRoute> {
             ProfileScreen(
+                onRefreshPlan = { navController.navigate(AssessmentRoute) },
                 onBrowseCoaches = { navController.navigate(CoachDirectoryRoute) },
                 // Signing out returns to login and takes the whole tab stack with
                 // it, so back from the login form cannot re-enter a signed-out app.

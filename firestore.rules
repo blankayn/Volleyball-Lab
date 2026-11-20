@@ -80,13 +80,60 @@ service cloud.firestore {
         && (data.city != null || data.barangay == null)
         && (data.barangay == null || data.country.id == 'PH'));
     }
+    function validSetupExperience(value) {
+      return value == null || value in ['New', 'Developing', 'Experienced'];
+    }
+    function validSelfRatings(data) {
+      return data is map && data.keys().hasOnly(['Serving', 'Receiving', 'Setting', 'Spiking', 'Blocking'])
+        && (!('Serving' in data) || data.Serving in ['Struggling', 'Okay', 'Confident'])
+        && (!('Receiving' in data) || data.Receiving in ['Struggling', 'Okay', 'Confident'])
+        && (!('Setting' in data) || data.Setting in ['Struggling', 'Okay', 'Confident'])
+        && (!('Spiking' in data) || data.Spiking in ['Struggling', 'Okay', 'Confident'])
+        && (!('Blocking' in data) || data.Blocking in ['Struggling', 'Okay', 'Confident']);
+    }
+    function validSetupAssessment(data) {
+      return data is map && data.keys().hasOnly(['ratings', 'experience', 'completedAtEpochMs'])
+        && validSelfRatings(data.ratings) && validSetupExperience(data.experience)
+        && validDate(data.completedAtEpochMs);
+    }
+    function starterMatches(skill, drill) {
+      return (skill == 'Serving' && drill == 'serve-standing-float')
+        || (skill == 'Receiving' && drill == 'receive-wall-platform')
+        || (skill == 'Setting' && drill == 'set-wall-reps')
+        || (skill == 'Spiking' && drill == 'spike-standing-swing')
+        || (skill == 'Blocking' && drill == 'block-ready-jumps');
+    }
+    function validStarterPlan(data) {
+      return data == null || (data is map
+        && data.keys().hasOnly(['focusSkill', 'weeklySessionGoal', 'goalText', 'experience', 'concern',
+          'summary', 'source', 'starterDrillId', 'completedAtEpochMs', 'reason', 'questionId', 'optionId'])
+        && validSkill(data.focusSkill) && data.weeklySessionGoal is int
+        && data.weeklySessionGoal >= 1 && data.weeklySessionGoal <= 14
+        && boundedString(data.goalText, 160) && boundedString(data.concern, 160)
+        && boundedString(data.summary, 320) && boundedString(data.reason, 160)
+        && boundedString(data.questionId, 64) && boundedString(data.optionId, 64)
+        && validSetupExperience(data.experience) && data.source in ['groq', 'local']
+        && starterMatches(data.focusSkill, data.starterDrillId) && validDate(data.completedAtEpochMs));
+    }
+    function validTrainingSetup(data) {
+      return data == null || (data is map && data.keys().hasOnly(['version', 'hasOnboarded', 'assessment', 'plan'])
+        && data.version == 1 && data.hasOnboarded == true
+        && validSetupAssessment(data.assessment) && validStarterPlan(data.plan));
+    }
     function isValidPrivateProfile(data) {
       return data.keys().hasAll(['updatedAt'])
-        && data.keys().hasOnly(['name', 'firstName', 'lastName', 'address', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'firstName', 'lastName', 'address', 'updatedAt', 'position',
+          'dominantHand', 'goalSkill', 'weeklySessionGoal', 'goalText', 'trainingSetup'])
         && (!('name' in data) || boundedString(data.name, 81))
         && (!('firstName' in data) || boundedString(data.firstName, 40))
         && (!('lastName' in data) || boundedString(data.lastName, 40))
         && (!('address' in data) || validProfileAddress(data.address))
+        && (!('position' in data) || data.position == null || data.position in ['Setter', 'OutsideHitter', 'MiddleBlocker', 'Opposite', 'Libero'])
+        && (!('dominantHand' in data) || data.dominantHand == null || data.dominantHand in ['Left', 'Right'])
+        && (!('goalSkill' in data) || data.goalSkill == null || validSkill(data.goalSkill))
+        && (!('weeklySessionGoal' in data) || (data.weeklySessionGoal is int && data.weeklySessionGoal >= 1 && data.weeklySessionGoal <= 14))
+        && (!('goalText' in data) || boundedString(data.goalText, 160))
+        && (!('trainingSetup' in data) || validTrainingSetup(data.trainingSetup))
         && data.updatedAt is timestamp && data.updatedAt == request.time;
     }
     function validSpecialisation(value) {

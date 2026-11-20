@@ -15,18 +15,23 @@ import subprocess
 import sys
 
 
-def attach_source_hash(sequence_path: Path, source_sha256: str, task_scope: str | None = None) -> None:
+def attach_source_hash(sequence_path: Path, source_sha256: str, task_scope: str | None = None,
+                       source_family: str | None = None) -> None:
     """Carry original-video identity through copied/renamed feature bundles."""
     import numpy as np
     if not re.fullmatch(r"[a-f0-9]{64}", source_sha256):
         raise ValueError("Expected a lowercase original-source SHA-256")
     if task_scope is not None and not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", task_scope):
         raise ValueError("Expected a machine-readable task scope")
+    if source_family is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", source_family):
+        raise ValueError("Expected a source-family identifier")
     with np.load(sequence_path, allow_pickle=True) as bundle:
         values = {key: bundle[key] for key in bundle.files}
     values["source_sha256"] = np.repeat(source_sha256, len(values["sequences"]))
     if task_scope is not None:
         values["task_scope"] = np.repeat(task_scope, len(values["sequences"]))
+    if source_family is not None:
+        values["source_family"] = np.repeat(source_family, len(values["sequences"]))
     np.savez_compressed(sequence_path, **values)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +52,9 @@ def validate(rows: list[dict], source_dir: Path) -> None:
         if row.get("task_scope") is not None and (not isinstance(row["task_scope"], str) or
                 not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", row["task_scope"])):
             raise ValueError("Invalid task scope")
+        if row.get('source_family') is not None and (not isinstance(row['source_family'], str) or
+                not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', row['source_family'])):
+            raise ValueError('Invalid source family')
         if not all(isinstance(row[k], (int, float)) and not isinstance(row[k], bool)
                    and math.isfinite(row[k]) for k in ("start", "end")):
             raise ValueError("Clip timestamps must be finite")
@@ -116,7 +124,7 @@ def main() -> int:
             print(f"Extracting {row['skill']} {row['label']} {stem}", flush=True)
             record["extraction"] = extract.process(clip, extract.DEFAULT_MODEL, args.out, 32,
                 False, False, row["skill"], row["label"], row["id"])
-            attach_source_hash(args.out / (stem + "_sequences.npz"), hashes[row["id"]], row.get("task_scope"))
+            attach_source_hash(args.out / (stem + "_sequences.npz"), hashes[row["id"]], row.get("task_scope"), row.get('source_family'))
             record["status"] = "extracted"
         except Exception as error:
             failed = True

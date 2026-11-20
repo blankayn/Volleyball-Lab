@@ -86,6 +86,18 @@ services. [`tools/verify-app.ps1`](tools/verify-app.ps1) runs the broader projec
 verification. Dated test results are recorded in the documentation rather than
 presented as a current pass count here.
 
+## Pose models
+
+- [MediaPipe Pose Landmarker](app/src/main/assets/README.md) tracks body joints.
+  The [MADS benchmark](docs/mpjpe-3d-benchmark-status.md) documents the measured
+  3D pose error and the limits of the evaluation.
+- The [receiving-ready posture model](tools/receiving-ready-model/README.md)
+  checks knee bend during front-view forearm passing. Its documentation provides
+  the training data, held-out results, and pose-quality exclusions.
+
+Rep counting and form scoring use measured joint angles and positions against
+the app's coaching rules.
+
 ## Deployment notes
 
 - Development checkout uses simulated payments. Live GCash payments require

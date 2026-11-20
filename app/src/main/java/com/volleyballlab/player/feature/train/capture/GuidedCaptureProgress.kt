@@ -1,6 +1,7 @@
 package com.volleyballlab.player.feature.train.capture
 
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.pose.analysis.Facing
 import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
 
 data class GuidedCaptureOptions(val enabled: Boolean = true, val repsPerAngle: Int = 5) {
@@ -36,6 +37,26 @@ data class LiveCaptureMetrics(
     fun interrupted(): LiveCaptureMetrics = copy(streak = 0)
 }
 
+/** The view label, the way to face for it, and the counters, presented together on the live screen. */
+data class CaptureProgressDisplay(
+    val angle: CameraAngle,
+    val metrics: LiveCaptureMetrics,
+    val facing: Facing = Facing.Forward,
+)
+
+fun CaptureUiState.Recording.displayedProgress(options: GuidedCaptureOptions): CaptureProgressDisplay =
+    CaptureProgressDisplay(
+        facing = rotation?.facing ?: facing,
+        angle = rotation?.requestedAngle ?: angle,
+        metrics = when {
+            !options.enabled -> totalMetrics
+            // During a turn, stageMetrics still belongs to the completed view.
+            // The screen labels the upcoming view, whose counters start at zero.
+            rotation != null -> LiveCaptureMetrics()
+            else -> stageMetrics
+        },
+    )
+
 data class RotationUi(
     val requestedAngle: CameraAngle,
     val stageIndex: Int,
@@ -48,13 +69,42 @@ data class RotationUi(
     val loadingCoaching: Boolean = false,
     val speechPending: Boolean = false,
     val advice: LiveCoachingAdvice? = null,
+    val required: Boolean = false,
+    val blockedReason: String? = null,
+    /** The spoken debrief, one sentence per segment. The instruction follows them. */
+    val segments: List<String> = emptyList(),
+    /** An AI line is still on its way and may join this turn's speech if it arrives in time. */
+    val awaitingAdvice: Boolean = false,
+    /** Which way the athlete faces for the requested view. */
+    val facing: Facing = Facing.Forward,
 ) {
     val timedOut: Boolean get() = elapsedMs >= 10_000
 }
 
 /** Shared by the controller and tests; never advances on a posture score. */
 object GuidedCaptureProgress {
-    val angles = listOf(CameraAngle.Front, CameraAngle.Side, CameraAngle.Rear)
+    /**
+     * Front, then side. The rear view was removed on 19 Nov 2026: a back view hides the
+     * arm cues serve and spike are coached on, and it lengthened every session. Saved
+     * sessions that include a rear stage still display it.
+     */
+    val angles = listOf(CameraAngle.Front, CameraAngle.Side)
+    val requiredAngles = setOf(CameraAngle.Front, CameraAngle.Side)
+    fun isRequired(index: Int) = angles.getOrNull(index) in requiredAngles
+    fun canSkip(index: Int) = angles.getOrNull(index) == CameraAngle.Rear
+    sealed interface StopDecision {
+        data object Finish : StopDecision
+        data class ContinueToSide(val stageIndex: Int = 1) : StopDecision
+        data class Blocked(val repsRemaining: Int) : StopDecision
+    }
+    fun stopDecision(stageIndex: Int, stageReps: Int, options: GuidedCaptureOptions): StopDecision = when {
+        !options.enabled -> StopDecision.Finish
+        stageIndex == 0 -> StopDecision.ContinueToSide()
+        stageIndex == 1 && stageReps < options.repsPerAngle -> StopDecision.Blocked(options.repsPerAngle - stageReps)
+        else -> StopDecision.Finish
+    }
+    fun recordingLimit(options: GuidedCaptureOptions): Long =
+        if (options.enabled) maxOf(300_000L, options.repsPerAngle * angles.size * 12_000L) else 90_000L
     fun reachedTarget(options: GuidedCaptureOptions, metrics: LiveCaptureMetrics): Boolean =
         options.enabled && metrics.reps >= options.repsPerAngle
     fun nextStage(stageIndex: Int): Int? = (stageIndex + 1).takeIf { it < angles.size }

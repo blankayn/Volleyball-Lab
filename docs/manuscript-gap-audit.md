@@ -42,7 +42,7 @@ verified or research-validated.
 | [x] Weekly detailed-report usage | PDF 80 (71), Figure 11; PDF 87 (78), Figure 18 | `domain/model/ReportAllowance.kt`, `TrainingWorkspaceRepository.kt`, `feature/train/result/DetailedReportCard.kt`, `SessionResultScreen.kt`, `feature/profile/ProPlanCard.kt` | **Code implemented.** Configurable default 5 Free reports per Monday–Sunday week; Pro unlimited. Generation succeeds before credit is stored; saved report reuse is free. Usage/reset shown in Home, Profile and Results. Ledger is device-local, not a server API spending limit. |
 | [x] Student-to-coach connection | PDF 89 (80), Figure 20; PDF 135 (126), Table 23.3; latest user instruction | `feature/coach/CoachLinkSection.kt`, `data/coach/FirestoreCoachRepository.kt`, `firestore.rules` | **User-approved workflow.** Student chooses a coach, sends a request, and waits for approval; sharing remains explicit. No invite codes, as requested. Pro entitlement gates new coach requests. |
 | [x] Owner Pro and prepared paid entitlement | PDF 88 (79), Figure 19; PDF 87 (78), Figure 18; user clarification | `domain/model/ProEntitlement.kt`, `data/plan/FirestorePlanRepository.kt`, `AppContainer.kt`, `ProPlanCard.kt`, `functions/index.mjs`, `functions/billing-policy.mjs`, `firestore.rules` | **Owner/entitlement code implemented; merchant activation pending.** Only the confirmed UID for `kirt@gmail.com` has owner Pro. Other accounts require server entitlement from verified GCash payment. Old local demo flags are ignored. APK checkout is prepared but disabled until merchant account, price, access period, secrets and live testing exist. See `docs/gcash-checkout-setup.md`. |
-| [ ] Measured 3D MPJPE benchmark | PDF 13 (4), limitations; PDF 22 (13), literature/evaluation target under 50 mm | `tools/pose-pipeline/evaluate_mpjpe.py` and `test_evaluate_mpjpe.py` enforce metric 3D inputs and reject image-space-only predictions. | **Tooling implemented; data/validation pending.** Obtain independent calibrated 3D joint coordinates for all five skills and run/report the benchmark. Ordinary 2D video annotations cannot establish depth or millimeter scale; additional camera angles alone are not 3D ground truth. Do not report the target as a measured result. |
+| [ ] Measured five-skill 3D MPJPE benchmark | PDF 13 (4), limitations; PDF 22 (13), literature/evaluation target under 50 mm | `tools/pose-pipeline/evaluate_mpjpe.py`, `prepare_mpi3dhp_benchmark.py`, `benchmark_mpi3dhp.py` and their tests. | **Volleyball video measured: 172.716 mm**, 969 valid MADS frames and 11,628 joint pairs, independently recomputed. Individual skill labels are unavailable. General-pose pilot: 143.274 mm. Both exceed 50 mm; five-skill coverage remains incomplete. Obtain paired independent metric 3D references and documented action labels for all five skills. See `docs/mpjpe-3d-benchmark-status.md`. |
 
 ## Existing features confirmed
 
@@ -100,3 +100,15 @@ verified or research-validated.
   the purple waveform animates, and
   no demo account buttons appear. Android reported a 2,794 ms cold launch.
   Camera, TTS and vibration scenarios still need physical athlete testing.
+
+
+## Coaching/review implementation update - 15 November 2026
+
+Front/Side posture comparison now exists in source as a local two-still card with
+retained skeletons, measured cue highlights and the existing phase illustration.
+The stills are explicitly separate repetitions. Missing views and unmeasured cues
+remain labelled. Coach Reel uses clips from the original recording and shared
+playback controls. These changes address the prior missing comparison/reel UI
+implementation; on-device layout, rotation/alignment and playback acceptance are
+still pending. This is not evidence of validated ML accuracy or MP4 export.
+See `coaching-implementation-status.md` for scope and current verification limits.

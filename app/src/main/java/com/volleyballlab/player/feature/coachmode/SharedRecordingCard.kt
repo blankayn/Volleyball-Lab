@@ -31,7 +31,7 @@ internal fun SharedRecordingCard(session: SessionResult, ownerUid: String, modif
             when {
                 loading -> { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening recording…") }
                 error != null -> { Text(requireNotNull(error)); TextButton(onClick = { retry++ }) { Text("Retry") } }
-                path != null -> AnnotatedSessionVideo(session, requireNotNull(path))
+                path != null -> AnnotatedSessionVideo(session, requireNotNull(path), showMeasurements = true)
                 else -> Text("This session includes a form summary. No recording was shared.", style = MaterialTheme.typography.bodyMedium)
             }
         }

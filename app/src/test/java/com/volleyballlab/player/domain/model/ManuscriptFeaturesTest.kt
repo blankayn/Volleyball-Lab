@@ -52,6 +52,8 @@ class ManuscriptFeaturesTest {
     }
     @Test fun `owner and active paid accounts alone have Pro`() {
         assertEquals(UserPlan.Pro, ProEntitlement.plan(ProEntitlement.OWNER_UID, null, null, 1000))
+        assertEquals(UserPlan.Pro, ProEntitlement.plan("nqECw5SDFrQEX5ksP4eGODBq4dV2", null, null, 1000))
+        assertEquals(UserPlan.Free, ProEntitlement.plan("someone-else", null, null, 1000))
         assertEquals(UserPlan.Free, ProEntitlement.plan("other", null, null, 1000))
         assertEquals(UserPlan.Free, ProEntitlement.plan("other", "active", 1000, 1000))
         assertEquals(UserPlan.Pro, ProEntitlement.plan("other", "active", 1001, 1000))

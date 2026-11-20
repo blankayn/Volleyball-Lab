@@ -148,11 +148,11 @@ object CoachAssessmentEngine {
     }
 
     private fun drillFor(skill: Skill): Pair<String, String> = when (skill) {
-        Skill.Serving -> "serve-standing-float" to "Standing float serve"
-        Skill.Receiving -> "receive-wall-platform" to "Wall platform passes"
-        Skill.Setting -> "set-wall-reps" to "Wall setting reps"
-        Skill.Spiking -> "spike-standing-swing" to "Standing arm swing"
-        Skill.Blocking -> "block-ready-jumps" to "Ready-position block jumps"
+        Skill.Serving -> "serve-standing-float" to "Serving Stance"
+        Skill.Receiving -> "receive-wall-platform" to "Passing Platform"
+        Skill.Setting -> "set-wall-reps" to "Setting Stance"
+        Skill.Spiking -> "spike-standing-swing" to "Spiking Arm Position"
+        Skill.Blocking -> "block-ready-jumps" to "Blocking Stance"
     }
 
     private fun instruction(evidence: ObservedCue): String {
@@ -172,20 +172,23 @@ object CoachAssessmentEngine {
             CueId.SetExtensionFollowThrough, CueId.BlockArmExtension ->
                 "Rehearse extending the elbows through the indicated phase, using slow controlled repetitions first."
             CueId.ServeReachHeight -> "Rehearse reaching higher with the hitting arm while keeping your trunk controlled."
-            CueId.ServeTossArmLift -> "Rehearse a repeatable tossing-arm lift from the same ready position."
+            CueId.ServeTossArmLift -> if (low) "Lift the guiding arm a little higher from the same ready position."
+                else "Use a slightly lower guiding-arm lift and repeat it from the same ready position."
             CueId.PassShouldersLevel -> "Reset with level shoulders and keep the forearm platform steady."
-            CueId.SetHandsAboveForehead -> "Rehearse a comfortable hand position above the forehead before extending."
-            CueId.BlockPenetration -> "Rehearse a controlled forward reach with your hands during the block."
+            CueId.SetHandsAboveForehead -> if (low) "Raise your hands just above your forehead before extending."
+                else "Start with your hands a little closer to your forehead before extending."
+            CueId.BlockPenetration -> if (low) "Rehearse a controlled forward reach with your hands during the block."
+                else "Shorten your forward reach slightly and keep the movement controlled."
             CueId.SpikeJumpHeight -> "Repeat the recording with clear full-body framing before interpreting jump height."
         }
     }
 
     private fun why(id: CueId): String = when (id) {
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
-            "An extended elbow supports a longer reach through the observed contact position."
+            "An extended elbow supports a longer reach through the observed overhead position."
         CueId.ServeReachHeight -> "The shoulder angle describes how high the hitting arm reaches relative to the trunk."
         CueId.ServeTrunkLean, CueId.SpikeTrunkDrive -> "Trunk position changes the alignment of the reaching arm and body."
-        CueId.ServeTossArmLift -> "A repeatable tossing-arm preparation gives you a consistent position to rehearse."
+        CueId.ServeTossArmLift -> "A repeatable guiding-arm preparation gives you a consistent position to rehearse."
         CueId.PassPlatformStraight -> "Straighter elbows help form a stable forearm platform."
         CueId.PassKneeFlexion -> "Knee flexion changes the height of your receiving position."
         CueId.PassTrunkAngle -> "Hip and trunk position determine how your upper body sits over your receiving base."

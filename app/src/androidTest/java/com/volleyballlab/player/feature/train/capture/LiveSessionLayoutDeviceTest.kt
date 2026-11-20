@@ -32,6 +32,10 @@ import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
+import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
+import com.volleyballlab.player.pose.analysis.LiveRepFeedback
+import com.volleyballlab.player.pose.analysis.LiveRepVerdict
+import com.volleyballlab.player.pose.analysis.CoachingEventType
 import com.volleyballlab.player.pose.quality.PoseQuality
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VolleyballLabTheme
@@ -51,12 +55,38 @@ class LiveSessionLayoutDeviceTest {
     private var finishes = 0
     private var mutes = 0
     private var switches = 0
-    private var voiceTests = 0
+    private val repFeedback = mutableStateOf<LiveRepFeedback?>(null)
+
+    @Test fun personalizedRepFeedbackStaysBelowTheCamera() {
+        state.value = rotation().copy(rotation = null, angle = CameraAngle.Side, stageIndex = 1)
+        repFeedback.value = LiveRepFeedback(6, 1, 5, LiveRepVerdict.Adjust,
+            "Your forearm platform needs work.", CoachingEventType.RepMilestone)
+        show()
+        compose.onNodeWithText("Maya’s live coach").assertIsDisplayed()
+        compose.onNodeWithText("Rep 1 of 5 · Needs work").assertIsDisplayed()
+        compose.onNodeWithText("Your forearm platform needs work.").assertIsDisplayed()
+        val camera = compose.onNodeWithTag("capture-viewfinder").fetchSemanticsNode().boundsInRoot
+        val feedback = compose.onNodeWithTag("live-rep-feedback").fetchSemanticsNode().boundsInRoot
+        assertTrue(feedback.top >= camera.bottom)
+        compose.onNodeWithText("Finish Session").assertIsDisplayed()
+        screenshot("live-personalized-coaching.png")
+    }
+
+    @Test fun personalizedFeedbackCanScrollWithLargeTextWithoutHidingFinish() {
+        state.value = rotation().copy(rotation = null, angle = CameraAngle.Side, stageIndex = 1)
+        repFeedback.value = LiveRepFeedback(6, 1, 5, LiveRepVerdict.Partial,
+            "I could only check part of your form. Watch your forearm platform.", CoachingEventType.RepMilestone)
+        show(compact = true, fontScale = 1.3f)
+        compose.onNodeWithText("Rep 1 of 5 · Partly assessed").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Finish Session").assertIsDisplayed()
+        assertEquals(1, cameraMounts)
+        screenshot("live-personalized-compact.png", entireWindow = true)
+    }
 
     @Test fun rotationLayoutKeepsCameraUncoveredAndAllActionsVisible() {
         show()
         compose.onNodeWithText("Side View").assertIsDisplayed()
-        compose.onNodeWithText("5 / 5 reps").assertIsDisplayed()
+        compose.onNodeWithText("0 / 5 reps").assertIsDisplayed()
         compose.onNodeWithText("Good reps").assertIsDisplayed()
         val camera = compose.onNodeWithTag("capture-viewfinder").fetchSemanticsNode().boundsInRoot
         val image = compose.onNodeWithTag("capture-camera-content").fetchSemanticsNode().boundsInRoot
@@ -65,13 +95,13 @@ class LiveSessionLayoutDeviceTest {
         val finish = compose.onNodeWithText("Finish Session").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("Guidance must be below the camera", instruction.top >= camera.bottom)
         assertTrue("Finish must be below guidance", finish.top > instruction.bottom)
-        assertTrue("Keep a useful camera viewport", camera.height >= 120 * compose.density.density)
-        compose.onNodeWithText("Retry").assertIsDisplayed().performClick()
+        assertTrue("The turn card must leave the camera most of the screen", camera.height >= 240 * compose.density.density)
+        compose.onNodeWithText("Retry").assertDoesNotExist()
         compose.onNodeWithText("Skip Angle").assertIsDisplayed().performClick()
         compose.onNodeWithText("Finish Session").performClick()
         compose.onNodeWithContentDescription("Mute voice coaching").performClick()
         compose.runOnIdle {
-            assertEquals(1, retries); assertEquals(1, skips)
+            assertEquals(0, retries); assertEquals(1, skips)
             assertEquals(1, finishes); assertEquals(1, mutes)
         }
         screenshot("live-session-rotation.png")
@@ -97,17 +127,9 @@ class LiveSessionLayoutDeviceTest {
         val camera = compose.onNodeWithTag("capture-viewfinder").fetchSemanticsNode().boundsInRoot
         val advice = compose.onNodeWithText(ADVICE).fetchSemanticsNode().boundsInRoot
         assertTrue(advice.top >= camera.bottom)
-        compose.onNodeWithText("Retry").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Skip Angle").assertIsDisplayed()
+        compose.onNodeWithText("Skip Angle").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Finish Session").assertIsDisplayed()
         screenshot("live-session-detailed-coaching.png")
-    }
-
-    @Test fun setupOffersAVoiceTestBeforeSteppingAway() {
-        state.value = CaptureUiState.Framing(PoseQuality.NotYetKnown)
-        show()
-        compose.onNodeWithText("Test coach voice").performScrollTo().assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(1, voiceTests) }
     }
 
     @Test fun stateChangesDoNotRemountCameraAndFramingRetainsLensControl() {
@@ -136,12 +158,13 @@ class LiveSessionLayoutDeviceTest {
                             state = state.value, livePosture = LivePostureUi.Idle,
                             coachContext = LiveCoachContext(), guidedOptions = GuidedCaptureOptions(),
                             coachingText = null, voiceMuted = false, audioUnavailable = false,
+                            coachingPlan = LiveCoachingPlan("Maya", setOf(CueId.PassPlatformStraight), "Your focus: forearm platform"),
+                            repFeedback = repFeedback.value,
                             onToggleMute = { mutes++ }, onSpeechSettings = {},
                             onGuidedChanged = {}, onRepTargetChanged = {},
                             onRetryAngle = { retries++ }, onSkipAngle = { skips++ },
                             onStart = {}, onStop = { finishes++ }, onCancelCountdown = {},
                             onRetry = {}, onUseDemo = {}, onSwitchCamera = { switches++ }, onBack = {},
-                            onTestVoice = { voiceTests++ },
                             modifier = (if (compact) Modifier.size(320.dp, 640.dp) else Modifier.fillMaxSize()).testTag("live-session-root"),
                             cameraContent = {
                                 DisposableEffect(Unit) { cameraMounts++; onDispose { cameraDisposals++ } }

@@ -7,34 +7,34 @@ const cue = (id, label, unit, target, tip) => ({ id, label, unit, target, tip })
 // Mirrors FormCueCatalog and coach-web/src/lib/cues.ts; these are app reference ranges.
 export const SESSION_CUES = {
   Serving: [
-    cue("ServeContactArmExtension", "Extend at contact", "deg", [155, 180], "Meet the ball with a straight hitting arm."),
-    cue("ServeReachHeight", "Reach high", "deg", [140, 180], "Contact the ball at the top of your reach."),
-    cue("ServeTrunkLean", "Stay tall", "deg", [-10, 15], "Keep the trunk close to upright."),
-    cue("ServeTossArmLift", "Lift the toss arm", "deg", [90, 160], "Raise the tossing arm and hold it up through the preparation."),
+    cue("ServeContactArmExtension", "Extend the raised arm", "deg", [155, 180], "Reach upward and extend your elbow comfortably above your shoulder."),
+    cue("ServeReachHeight", "Reach high", "deg", [140, 180], "Raise your arm overhead while keeping your trunk controlled."),
+    cue("ServeTrunkLean", "Stay tall", "deg", [-10, 15], "Keep your trunk comfortably upright and your weight balanced over your feet."),
+    cue("ServeTossArmLift", "Lift the guiding arm", "deg", [90, 160], "Raise your guiding arm steadily while preparing the other elbow."),
   ],
   Receiving: [
-    cue("PassPlatformStraight", "Lock the platform", "deg", [165, 180], "Keep both elbows straight and joined."),
-    cue("PassKneeFlexion", "Bend the knees", "deg", [110, 150], "Load into an athletic stance with bent knees."),
-    cue("PassTrunkAngle", "Lean into the ball", "deg", [15, 40], "Angle the chest forward over the platform."),
-    cue("PassShouldersLevel", "Level the shoulders", "deg", [0, 12], "Keep the shoulders square and level."),
+    cue("PassPlatformStraight", "Steady the platform", "deg", [165, 180], "Join your forearms and extend both elbows comfortably to form a steady platform."),
+    cue("PassKneeFlexion", "Bend the knees", "deg", [110, 150], "Bend your knees comfortably while keeping a balanced stance."),
+    cue("PassTrunkAngle", "Lean from the hips", "deg", [15, 40], "Lean slightly forward from your hips while keeping your base balanced."),
+    cue("PassShouldersLevel", "Level the shoulders", "deg", [0, 12], "Keep your shoulders level to steady your forearm platform."),
   ],
   Setting: [
-    cue("SetHandsAboveForehead", "Hands above the forehead", "m", [0.02, 0.4], "Meet the ball above and slightly in front of the forehead."),
-    cue("SetElbowFlexion", "Load the elbows", "deg", [80, 120], "Keep the elbows bent and out before extending into the set."),
-    cue("SetKneeFlexion", "Set with the legs", "deg", [130, 165], "Bend the knees before the set and extend through the movement."),
-    cue("SetExtensionFollowThrough", "Finish extended", "deg", [155, 180], "Finish with the arms straight and hands toward the target."),
+    cue("SetHandsAboveForehead", "Hands above the forehead", "m", [0.02, 0.4], "Position your hands above and slightly in front of your forehead."),
+    cue("SetElbowFlexion", "Load the elbows", "deg", [80, 120], "Keep your elbows comfortably bent before extending your arms upward."),
+    cue("SetKneeFlexion", "Soften the knees", "deg", [130, 165], "Start with softly bent knees, then extend under control."),
+    cue("SetExtensionFollowThrough", "Finish extended", "deg", [155, 180], "Extend both arms upward evenly, then return to your starting posture."),
   ],
   Spiking: [
     cue("SpikeApproachLoad", "Load the knees", "deg", [80, 115], "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot."),
-    cue("SpikeArmExtension", "Swing through full extension", "deg", [155, 180], "Contact with the hitting arm straight above the shoulder."),
+    cue("SpikeArmExtension", "Swing through full extension", "deg", [155, 180], "Extend the raised arm above your shoulder within a comfortable range."),
     cue("SpikeJumpHeight", "Get off the floor", "m", [0.3, 1], "Drive the hips upward through the jump."),
-    cue("SpikeTrunkDrive", "Drive the trunk", "deg", [-5, 25], "Bring the chest forward through contact."),
+    cue("SpikeTrunkDrive", "Control the trunk", "deg", [-5, 25], "Keep your trunk controlled as your raised arm extends overhead."),
   ],
   Blocking: [
-    cue("BlockArmExtension", "Straight arms", "deg", [160, 180], "Extend both elbows at the top of the block."),
-    cue("BlockHandSeparation", "Hand spacing", "m", [0.15, 0.45], "Keep the hands close enough to cover the seam."),
-    cue("BlockPenetration", "Penetrate the net", "m", [0.05, 0.35], "Reach the hands over and past the net line."),
-    cue("BlockKneeLoad", "Load before the jump", "deg", [90, 125], "Bend the knees before driving into the block."),
+    cue("BlockArmExtension", "Straight arms", "deg", [160, 180], "Extend both elbows comfortably during the overhead reach."),
+    cue("BlockHandSeparation", "Hand spacing", "m", [0.15, 0.45], "Keep your hands evenly spaced above your shoulders."),
+    cue("BlockPenetration", "Reach slightly forward", "m", [0.05, 0.35], "Position your hands slightly in front of your shoulders during the overhead reach."),
+    cue("BlockKneeLoad", "Load before the jump", "deg", [90, 125], "Bend your knees from a balanced stance before the upward movement."),
   ],
 };
 

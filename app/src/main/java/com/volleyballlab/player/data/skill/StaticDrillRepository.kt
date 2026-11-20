@@ -31,9 +31,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "serve-standing-float",
                 skill = Skill.Serving,
-                name = "Standing float serve",
-                description = "Serve from a fixed, grounded stance. " +
-                    "Practice a repeatable toss and firm, flat contact, then reset in place.",
+                name = "Serving Stance",
+                description = "Set balanced feet, lift the guiding arm, and reach upward with the other arm. Reset your posture after each controlled movement.",
                 targetReps = 10,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -41,9 +40,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "serve-jump-float",
                 skill = Skill.Serving,
-                name = "In-place jump float serve",
-                description = "Use a controlled toss and small vertical jump from the same spot. " +
-                    "Keep the contact flat and land back in your starting position.",
+                name = "Serving Reach",
+                description = "Practice a small vertical jump with an overhead reach. Focus on arm alignment and return to a balanced stance in the same spot.",
                 targetReps = 10,
                 estimatedMinutes = 8,
                 level = DrillLevel.Intermediate,
@@ -51,9 +49,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "serve-topspin-jump",
                 skill = Skill.Serving,
-                name = "In-place topspin jump serve",
-                description = "Time a vertical jump to a controlled toss from a fixed stance. " +
-                    "Reach high, contact over the ball, and land in the same spot.",
+                name = "Serving Body Alignment",
+                description = "Practice an overhead arm swing from an in-place jump. Keep the trunk controlled and reset your feet and shoulders between repetitions.",
                 targetReps = 8,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,
@@ -63,9 +60,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "receive-wall-platform",
                 skill = Skill.Receiving,
-                name = "Wall platform passes",
-                description = "Pass gentle wall rebounds from a fixed stance. " +
-                    "Use a stable platform and reset upright between contacts.",
+                name = "Passing Platform",
+                description = "Bend your knees comfortably, join your forearms, and keep your shoulders level. Return upright between posture repetitions.",
                 targetReps = 15,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -73,9 +69,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "receive-short-court",
                 skill = Skill.Receiving,
-                name = "Stationary partner passing",
-                description = "Receive controlled partner feeds delivered within your reach. " +
-                    "Keep your feet in place and direct a still, angled platform toward the target.",
+                name = "Passing Ready Stance",
+                description = "Set balanced feet and lean slightly from your hips. Form a steady forearm platform, then return to your ready stance.",
                 targetReps = 20,
                 estimatedMinutes = 8,
                 level = DrillLevel.Beginner,
@@ -83,9 +78,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "receive-serve-to-target",
                 skill = Skill.Receiving,
-                name = "Fixed-stance serve receive",
-                description = "Receive gentle serves directed into your ready position. " +
-                    "Pass toward a fixed target and pause when a ball is outside your reach.",
+                name = "Passing Body Alignment",
+                description = "Align your shoulders and forearms over a balanced base. Practice a small leg extension while keeping the platform steady.",
                 targetReps = 15,
                 estimatedMinutes = 10,
                 level = DrillLevel.Intermediate,
@@ -95,9 +89,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "set-wall-reps",
                 skill = Skill.Setting,
-                name = "Wall setting reps",
-                description = "Set gentle wall rebounds from the same spot. " +
-                    "Prepare balanced hands above the forehead and extend under control.",
+                name = "Setting Stance",
+                description = "Place balanced hands above your forehead with bent elbows and soft knees. Extend under control, then reset your posture.",
                 targetReps = 20,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -105,9 +98,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "set-toss-to-target",
                 skill = Skill.Setting,
-                name = "Stationary set to target",
-                description = "Use a controlled self-toss or partner feed above your forehead. " +
-                    "Keep a fixed stance and coordinate leg and arm extension toward the target.",
+                name = "Setting Extension",
+                description = "Start with your hands above your forehead. Practice controlled leg and arm extension while keeping both feet grounded.",
                 targetReps = 15,
                 estimatedMinutes = 8,
                 level = DrillLevel.Beginner,
@@ -115,9 +107,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "set-back-set",
                 skill = Skill.Setting,
-                name = "Controlled stationary back set",
-                description = "Set toward a rear target from a balanced, fixed stance. " +
-                    "Use an easy feed above the forehead and finish with coordinated extension.",
+                name = "Setting Overhead Alignment",
+                description = "Keep your hands balanced above your forehead and your trunk upright. Extend both arms evenly, then return to your starting stance.",
                 targetReps = 12,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,
@@ -127,9 +118,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-standing-swing",
                 skill = Skill.Spiking,
-                name = "Standing arm swing",
-                description = "Keep both feet grounded and practice a controlled arm swing. " +
-                    "Use a feed within reach and reset your stance after each hit.",
+                name = "Spiking Arm Position",
+                description = "Keep both feet grounded and prepare your raised elbow. Practice a slow overhead arm swing, then reset your shoulders and stance.",
                 targetReps = 12,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -137,9 +127,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-three-step",
                 skill = Skill.Spiking,
-                name = "In-place spike timing",
-                description = "Time a vertical jump to a controlled partner feed. " +
-                    "Load from the same spot, contact high, and land back in your starting position.",
+                name = "Spiking Reach",
+                description = "Practice a vertical jump and overhead reach from the same spot. Focus on knee bend, arm extension, and a controlled return to your stance.",
                 targetReps = 12,
                 estimatedMinutes = 10,
                 level = DrillLevel.Intermediate,
@@ -147,9 +136,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-four-step-lines",
                 skill = Skill.Spiking,
-                name = "In-place line and cross",
-                description = "Alternate line and cross-court targets with a controlled swing. " +
-                    "Use a vertical jump from the same spot for each attempt.",
+                name = "Spiking Body Alignment",
+                description = "Practice an overhead arm swing with controlled trunk rotation during an in-place jump. Regain balance between repetitions.",
                 targetReps = 10,
                 estimatedMinutes = 12,
                 level = DrillLevel.Advanced,
@@ -159,9 +147,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "block-ready-jumps",
                 skill = Skill.Blocking,
-                name = "Ready-position block jumps",
-                description = "Jump vertically from a fixed ready position and land in the same spot. " +
-                    "Extend both arms and present the hands slightly forward.",
+                name = "Blocking Stance",
+                description = "Begin with balanced feet and both hands raised. Practice an in-place jump, extend both arms, and return with softly bent knees.",
                 targetReps = 15,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -169,9 +156,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "block-lateral-shuffle",
                 skill = Skill.Blocking,
-                name = "In-place block alignment",
-                description = "Keep a square, balanced stance while practicing block alignment. " +
-                    "Jump vertically, reach with both arms, and reset in the same spot.",
+                name = "Blocking Arm Alignment",
+                description = "Keep your shoulders square and reach evenly with both arms during an in-place jump. Reset your hand spacing and stance each time.",
                 targetReps = 12,
                 estimatedMinutes = 8,
                 level = DrillLevel.Intermediate,
@@ -179,9 +165,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "block-read-setter",
                 skill = Skill.Blocking,
-                name = "Stationary read blocking",
-                description = "Watch a partner's controlled feed into your fixed blocking area. " +
-                    "Time a vertical jump and present both hands without changing position.",
+                name = "Blocking Body Alignment",
+                description = "Align your feet, knees, shoulders, and hands during an in-place jump. Reach slightly forward with both hands and reset under control.",
                 targetReps = 10,
                 estimatedMinutes = 10,
                 level = DrillLevel.Advanced,

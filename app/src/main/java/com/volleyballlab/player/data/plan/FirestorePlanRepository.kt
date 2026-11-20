@@ -37,7 +37,7 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
     }
     override val plan: Flow<UserPlan> = auth.currentUser.flatMapLatest { user ->
         if (user == null) flowOf(UserPlan.Free)
-        else if (user.uid == ProEntitlement.OWNER_UID) flowOf(UserPlan.Pro)
+        else if (ProEntitlement.isGranted(user.uid)) flowOf(UserPlan.Pro)
         else combine(db.collection("entitlements").document(user.uid).snapshots(), flow {
             while (true) { emit(System.currentTimeMillis()); delay(60_000) }
         }) { document, now ->

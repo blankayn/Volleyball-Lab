@@ -61,6 +61,14 @@ class CoachAssessmentTest {
         assertTrue(result.corrections.isEmpty())
     }
 
+    @Test fun `too much forward reach suggests a shorter reach`() {
+        val result = CoachAssessmentEngine.assess(session(Skill.Blocking,
+            values = mapOf(CueId.BlockPenetration to .5f)))
+        val correction = result.corrections.single { it.evidence.cue.id == CueId.BlockPenetration }
+        assertEquals(3, correction.evidence.aboveReference)
+        assertTrue(correction.instruction.startsWith("Shorten"))
+    }
+
     @Test fun `duplicate cue records cannot manufacture three observed reps`() {
         val input = session().let { s -> s.copy(reps = s.reps.map { rep ->
             rep.copy(cueScores = List(3) { rep.cueScores.first() })

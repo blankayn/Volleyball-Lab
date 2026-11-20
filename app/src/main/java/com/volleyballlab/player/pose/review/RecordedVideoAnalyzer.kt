@@ -87,8 +87,8 @@ class RecordedVideoAnalyzer(private val context: Context) {
                     }
                     check(width > 0 && height > 0) { "Recording could not be decoded" }
                     currentCoroutineContext().ensureActive()
-                    val (issues, assessed) = VideoReviewFeedback().analyse(poses, skill, interval)
-                    VideoReview(duration, width, height, interval, replay, issues, assessed)
+                    val (issues, assessed, reps) = VideoReviewFeedback().analyse(poses, skill, interval)
+                    VideoReview(duration, width, height, interval, replay, issues, assessed, reps = reps)
                 } finally { landmarker.close() }
             } finally { reader.close() }
         }

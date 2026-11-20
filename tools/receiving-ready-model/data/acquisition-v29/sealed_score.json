@@ -1,0 +1,37 @@
+{
+  "created_at_utc": "2026-09-17T07:54:11.003714+00:00",
+  "manifest_sha256": "1fc88981639b28c576fcbc7b9cecb505d533080abd1aafdd23433a45bf3ecbd4",
+  "pre_score_lock_sha256": "e749dd0c8f0569bb8b41becbc950105b9993c9de41eb2e75d99b10cc2e3dbb69",
+  "visual_audit_sha256": "c4377856a5e22f57ea5905471f0fff0c59c6c890cae942f6566317cc6ffb6ebf",
+  "candidate_model_sha256": "b1447c282b2cff799b2a84fe533b591b117366e7e180a23806773c25f5cbd257",
+  "descriptors": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v29\\sealed_descriptors.csv",
+  "descriptors_sha256": "b471505ec3f1676cf4312275f857f7168f6d6072791084f9ef4792a92160ff07",
+  "samples_scored": 2,
+  "correct": 1,
+  "accuracy": 0.5,
+  "rows": [
+    {
+      "sample_id": "patpowers_fault_lifts_with_legs",
+      "source_group": "5tjrreGwyVk",
+      "label": "fault",
+      "fault_probability": 0.9485350251197815,
+      "prediction": "fault",
+      "correct": true
+    },
+    {
+      "sample_id": "patpowers_ok_forward_down",
+      "source_group": "5tjrreGwyVk",
+      "label": "ok",
+      "fault_probability": 0.5454959869384766,
+      "prediction": "fault",
+      "correct": false
+    }
+  ],
+  "abstentions": [
+    {
+      "name": "stayinglow_ok_good_posture",
+      "reason": "Overlay tracks a standing background player instead of the foreground receiver; posture features describe the wrong person."
+    }
+  ],
+  "limitation": "Only one new video source remained after visual quality gating; this is a paired discrimination check, not a broad accuracy estimate."
+}

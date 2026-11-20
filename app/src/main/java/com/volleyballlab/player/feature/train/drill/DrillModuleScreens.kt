@@ -1,31 +1,67 @@
 package com.volleyballlab.player.feature.train.drill
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Timelapse
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.volleyballlab.player.R
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.drill.DrillEntitlement
 import com.volleyballlab.player.domain.model.*
@@ -33,6 +69,11 @@ import com.volleyballlab.player.feature.profile.ProPlanCard
 import com.volleyballlab.player.feature.train.skill.DrillPostureVisual
 import com.volleyballlab.player.ui.component.GhostLayout
 import com.volleyballlab.player.ui.component.GhostLoadingScreen
+import com.volleyballlab.player.ui.component.StudentCard
+import com.volleyballlab.player.ui.component.StudentPageHeading
+import com.volleyballlab.player.ui.component.DrillArt
+import com.volleyballlab.player.ui.component.skillVisual
+import com.volleyballlab.player.ui.component.studentBackground
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -42,6 +83,7 @@ import kotlinx.coroutines.CancellationException
 @Composable
 fun DrillLibraryScreen(
     onDrill: (String) -> Unit,
+    onCamera: (Drill) -> Unit,
     onResume: (DrillPracticeDraft) -> Unit,
     onSummary: (String) -> Unit,
     onBack: () -> Unit,
@@ -49,77 +91,118 @@ fun DrillLibraryScreen(
 ) {
     val model: DrillLibraryViewModel = viewModel(factory = DrillLibraryViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
+    val picks by model.picks.collectAsStateWithLifecycle()
     var search by rememberSaveable { mutableStateOf("") }
     var skillFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var levelFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var history by rememberSaveable { mutableStateOf(false) }
     var discard by rememberSaveable { mutableStateOf(false) }
+    var upgrade by rememberSaveable { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     if (!state.loaded && state.error == null) {
         GhostLoadingScreen(GhostLayout.List, contentPadding)
         return
     }
+    val query = search.trim()
     val filtered = state.drills.filter {
         (skillFilter == null || it.skill.name == skillFilter) &&
             (levelFilter == null || it.level.name == levelFilter) &&
-            (search.isBlank() || it.name.contains(search.trim(), true) || it.description.contains(search.trim(), true))
+            (query.isEmpty() || it.name.contains(query, true) || it.description.contains(query, true))
     }
-    LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-        item { ModuleHeader("Drill library", onBack) }
+    val filtering = skillFilter != null || levelFilter != null || query.isNotEmpty()
+    // The capture screen re-checks access itself, so an unresolved plan goes
+    // through to its "checking access" state instead of a paywall.
+    val startCamera: (Drill) -> Unit = { drill ->
+        if (!state.entitlement.canStart(drill) && state.entitlement.resolved) upgrade = true else onCamera(drill)
+    }
+    LazyColumn(
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxSize().studentBackground(),
+    ) {
+        item { LibraryHeader(onBack) }
         item {
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text("Learn the steps. Build your routine.", style = MaterialTheme.typography.bodyLarge)
-                Text(if (state.entitlement.plan == UserPlan.Pro) "Pro · All 15 drills" else "Free · Five starter drills, one for each skill",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(!history, { history = false }, label = { Text("Library") })
-                    FilterChip(history, { history = true }, label = { Text("History") })
-                }
-            }
+            PlanStrip(
+                pro = state.entitlement.plan == UserPlan.Pro,
+                starters = state.drills.count { it.id in DrillAccessPolicy.starterIds },
+                total = state.drills.size,
+                onUpgrade = { upgrade = true },
+            )
         }
+        item { LibraryTabs(history, state.history.size) { history = it } }
         state.error?.let { error -> item { ModuleError(error, model::refresh) } }
         state.draft?.let { draft -> item {
-            ModuleCard {
-                Text("Workout in progress", style = MaterialTheme.typography.titleMedium)
-                Text(draft.drillName)
-                Text("${draft.sets.size}/${draft.config.sets} sets confirmed · ${draft.totalReps} manual reps")
-                val drill = state.drills.firstOrNull { it.id == draft.drillId }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = state.entitlement.canStart(drill), onClick = { onResume(draft) }) { Text("Resume") }
-                    TextButton(onClick = { discard = true }) { Text("Discard") }
-                }
-                if (!state.entitlement.canStart(drill)) Text("Premium workouts need current Pro access to resume.", style = MaterialTheme.typography.bodySmall)
-            }
+            val drill = state.drills.firstOrNull { it.id == draft.drillId }
+            DraftCard(draft, state.entitlement.canStart(drill), onResume = { onResume(draft) }, onDiscard = { discard = true })
         } }
         if (history) {
-            item { Text("Manual workouts only. Camera results are in Progress.", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall) }
-            if (state.history.isEmpty()) item { ModuleCard { Text("No drill workouts yet. Complete a set to save your first workout.") } }
-            items(state.history, key = { it.id }) { record ->
-                Surface(onClick = { onSummary(record.id) }, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainer) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(record.drillName, style = MaterialTheme.typography.titleMedium)
-                        Text("${if (record.completed) "Completed" else "Partial"} · ${record.sets.size}/${record.config.sets} sets · ${record.totalReps} manual reps")
-                        Text("${formatDrillTime(record.durationMs)} · ${DateTimeFormatter.ofPattern("MMM d, h:mm a").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(record.startedAtEpochMs))}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+            item { LibraryNote("Workouts you logged by hand. Camera checks are saved in Progress.") }
+            if (state.history.isEmpty()) item {
+                EmptyLibraryCard(Icons.Rounded.FitnessCenter, "No workouts yet", "Finish a set in any drill to save your first workout here.")
             }
+            items(state.history, key = { it.id }) { record -> HistoryCard(record) { onSummary(record.id) } }
         } else {
+            if (!filtering && picks.isNotEmpty()) item {
+                RecommendedSection(picks, onOpen = { onDrill(it.id) }, onCamera = startCamera)
+            }
             item {
-                Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(search, { search = it }, label = { Text("Search drills") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        placeholder = { Text("Search drills") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                        trailingIcon = {
+                            if (search.isNotEmpty()) IconButton({ search = "" }) { Icon(Icons.Rounded.Close, "Clear search") }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(),
+                    )
+                    FilterRow {
                         FilterChip(skillFilter == null, { skillFilter = null }, label = { Text("All skills") })
-                        Skill.All.forEach { skill -> FilterChip(skillFilter == skill.name, { skillFilter = skill.name }, label = { Text(stringResource(skill.displayName)) }) }
+                        Skill.All.forEach { skill ->
+                            FilterChip(
+                                selected = skillFilter == skill.name,
+                                onClick = { skillFilter = if (skillFilter == skill.name) null else skill.name },
+                                label = { Text(stringResource(skill.displayName)) },
+                                leadingIcon = { SkillDot(skill) },
+                            )
+                        }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterRow {
                         FilterChip(levelFilter == null, { levelFilter = null }, label = { Text("All levels") })
-                        DrillLevel.entries.forEach { level -> FilterChip(levelFilter == level.name, { levelFilter = level.name }, label = { Text(stringResource(level.displayName)) }) }
+                        DrillLevel.entries.forEach { level ->
+                            FilterChip(
+                                selected = levelFilter == level.name,
+                                onClick = { levelFilter = if (levelFilter == level.name) null else level.name },
+                                label = { Text(stringResource(level.displayName)) },
+                            )
+                        }
                     }
                 }
             }
-            if (filtered.isEmpty()) item { ModuleCard { Text("No drills match your filters.") } }
+            item {
+                Row(Modifier.padding(start = 20.dp, end = 8.dp).fillMaxWidth().heightIn(min = 40.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(pluralStringResource(R.plurals.drill_library_count, filtered.size, filtered.size),
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (filtering) TextButton({ search = ""; skillFilter = null; levelFilter = null }) { Text("Clear filters") }
+                }
+            }
+            if (filtered.isEmpty()) item {
+                EmptyLibraryCard(Icons.Rounded.Search, "No drills match", "Try another skill or level, or clear the search.")
+            }
             items(filtered, key = { it.id }) { drill ->
-                DrillPreview(drill, state.entitlement, { onDrill(drill.id) })
+                val locked = !state.entitlement.canStart(drill)
+                DrillLibraryCard(drill = drill, locked = locked, onOpen = { onDrill(drill.id) }, onCamera = { startCamera(drill) })
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -128,13 +211,12 @@ fun DrillLibraryScreen(
         text = { Text("This removes the unfinished workout and its confirmed sets.") },
         confirmButton = { TextButton({ model.discardDraft(); discard = false }) { Text("Discard") } },
         dismissButton = { TextButton({ discard = false }) { Text("Keep workout") } })
+    if (upgrade) DrillUpgradeDialog { upgrade = false }
 }
 
 @Composable
 fun DrillDetailScreen(
     drillId: String,
-    onPractice: (DrillWorkoutConfig) -> Unit,
-    onResume: (DrillPracticeDraft) -> Unit,
     onCamera: (Drill) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
@@ -142,11 +224,7 @@ fun DrillDetailScreen(
     val model: DrillLibraryViewModel = viewModel(factory = DrillLibraryViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
     var upgrade by rememberSaveable { mutableStateOf(false) }
-    var sets by rememberSaveable(drillId) { mutableIntStateOf(3) }
-    var reps by rememberSaveable(drillId) { mutableIntStateOf(0) }
-    var rest by rememberSaveable(drillId) { mutableIntStateOf(30) }
     val drill = state.drills.firstOrNull { it.id == drillId }
-    LaunchedEffect(drill?.id) { if (drill != null && reps == 0) reps = drill.targetReps }
     if (!state.loaded && state.error == null) { GhostLoadingScreen(GhostLayout.Detail, contentPadding); return }
     val guide = drill?.let(DrillGuideCatalog::forDrill)
     LazyColumn(contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
@@ -155,9 +233,15 @@ fun DrillDetailScreen(
         if (drill == null || guide == null) {
             item { ModuleCard { Text("Drill not found.") } }
         } else {
+            item { DrillHeroArt(drill) }
             item { ModuleCard {
                 Text("${stringResource(drill.skill.displayName)} · ${stringResource(drill.level.displayName)}", color = MaterialTheme.colorScheme.primary)
                 Text("${drill.targetReps} target reps · About ${drill.estimatedMinutes} min")
+                if (state.entitlement.canStart(drill)) {
+                    CameraPracticeButton { onCamera(drill) }
+                    Text("Your form is checked live as you practise. Results are saved in Progress.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             } }
             if (!state.entitlement.canStart(drill)) {
                 item { ModuleCard {
@@ -177,27 +261,13 @@ fun DrillDetailScreen(
                 item { ModuleCard {
                     Text("Posture sample", style = MaterialTheme.typography.titleMedium)
                     DrillPostureVisual(drill.id)
-                    Text("Posture reference. Camera feedback measures body form, not ball-target success.", style = MaterialTheme.typography.bodySmall)
+                    Text("Posture reference. Camera feedback focuses on your body position and alignment.", style = MaterialTheme.typography.bodySmall)
                 } }
                 item { ModuleCard {
                     Text("Drill instructions", style = MaterialTheme.typography.titleMedium)
                     guide.steps.forEach { step -> Text(step.title, fontWeight = FontWeight.SemiBold); Text(step.action) }
                     Text("Common mistakes", style = MaterialTheme.typography.titleMedium)
                     guide.mistakes.forEach { Text("• $it") }
-                } }
-                item { ModuleCard {
-                    Text("Build your workout", style = MaterialTheme.typography.titleMedium)
-                    WorkoutNumber("Sets", sets, 1, 5, { sets = it })
-                    WorkoutNumber("Reps per set", reps, 1, 100, { reps = it })
-                    WorkoutNumber("Rest seconds", rest, 0, 120, { rest = it })
-                    if (state.draft == null) Button(enabled = reps in 1..100, onClick = { onPractice(DrillWorkoutConfig(sets, reps, rest)) }, modifier = Modifier.fillMaxWidth()) { Text("Start practice") }
-                    else {
-                        val draft = requireNotNull(state.draft)
-                        Text("Finish or discard your unfinished workout before starting another.", style = MaterialTheme.typography.bodySmall)
-                        Button(enabled = state.entitlement.canStart(state.drills.firstOrNull { it.id == draft.drillId }), onClick = { onResume(draft) }) { Text("Resume ${draft.drillName}") }
-                    }
-                    OutlinedButton(onClick = { onCamera(drill) }, modifier = Modifier.fillMaxWidth()) { Text("Camera form check") }
-                    Text("Practice reps are manually reported. Camera checks save separate results in Progress.", style = MaterialTheme.typography.bodySmall)
                 } }
             }
         }
@@ -360,19 +430,295 @@ fun DrillCameraAccessGate(skill: Skill, drillId: String, onBack: () -> Unit, mod
         } }, confirmButton = { TextButton(onDismiss) { Text("Close") } })
 }
 
-@Composable private fun DrillPreview(drill: Drill, entitlement: DrillEntitlement, onClick: () -> Unit) {
-    Surface(onClick, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(drill.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                if (drill.id !in DrillAccessPolicy.starterIds) {
-                    if (!entitlement.canStart(drill)) Icon(Icons.Rounded.Lock, "Pro drill", Modifier.size(18.dp))
-                    Text(" Pro", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                } else Text("Free", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            }
-            Text("${stringResource(drill.skill.displayName)} · ${stringResource(drill.level.displayName)}")
-            Text("${drill.targetReps} target reps · ${drill.estimatedMinutes} min", style = MaterialTheme.typography.bodySmall)
+@Composable private fun LibraryHeader(onBack: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        IconButton(onBack, Modifier.padding(start = 8.dp)) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back))
         }
+        StudentPageHeading(
+            eyebrow = "TRAINING GUIDES",
+            title = "Drill library",
+            subtitle = "Learn each drill step by step, then check your form on camera.",
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
+    }
+}
+
+@Composable private fun PlanStrip(pro: Boolean, starters: Int, total: Int, onUpgrade: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+        color = colors.primary.copy(alpha = .08f), contentColor = colors.onSurface) {
+        Row(Modifier.heightIn(min = 52.dp).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(if (pro) Icons.Rounded.WorkspacePremium else Icons.Rounded.LockOpen, null,
+                tint = colors.primary, modifier = Modifier.size(20.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (pro) "Pro plan" else "Free plan", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(if (pro) "All $total drills unlocked" else "$starters of $total drills unlocked, one for each skill",
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+            if (!pro) TextButton(onUpgrade) { Text("See Pro") }
+        }
+    }
+}
+
+@Composable private fun LibraryTabs(history: Boolean, historyCount: Int, onSelect: (Boolean) -> Unit) {
+    Surface(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(Modifier.padding(4.dp)) {
+            LibraryTab("Drills", Icons.AutoMirrored.Rounded.MenuBook, !history, Modifier.weight(1f)) { onSelect(false) }
+            LibraryTab(if (historyCount > 0) "History · $historyCount" else "History", Icons.Rounded.History, history,
+                Modifier.weight(1f)) { onSelect(true) }
+        }
+    }
+}
+
+@Composable private fun LibraryTab(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        selected = selected,
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 44.dp).semantics { role = Role.Tab },
+        shape = CircleShape,
+        color = if (selected) colors.surfaceContainerLowest else Color.Transparent,
+        contentColor = if (selected) colors.primary else colors.onSurfaceVariant,
+        shadowElevation = if (selected) 1.dp else 0.dp,
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+        }
+    }
+}
+
+@Composable private fun DraftCard(draft: DrillPracticeDraft, canResume: Boolean, onResume: () -> Unit, onDiscard: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = RoundedCornerShape(24.dp),
+        color = colors.primaryContainer, contentColor = colors.onPrimaryContainer) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("WORKOUT IN PROGRESS", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
+            Text(draft.drillName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("${draft.sets.size} of ${draft.config.sets} sets confirmed · ${draft.totalReps} reps logged",
+                style = MaterialTheme.typography.bodyMedium)
+            LinearProgressIndicator(
+                progress = { (draft.sets.size / draft.config.sets.toFloat()).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                color = colors.primary,
+                trackColor = colors.onPrimaryContainer.copy(alpha = .12f),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = canResume, onClick = onResume, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Resume")
+                }
+                TextButton(onDiscard, colors = ButtonDefaults.textButtonColors(contentColor = colors.onPrimaryContainer)) { Text("Discard") }
+            }
+            if (!canResume) Text("Premium workouts need current Pro access to resume.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** One drill with its pose illustration and both ways to train it. */
+@Composable private fun DrillLibraryCard(drill: Drill, locked: Boolean, onOpen: () -> Unit, onCamera: () -> Unit) {
+    val visual = skillVisual(drill.skill)
+    val colors = MaterialTheme.colorScheme
+    StudentCard(onClick = onOpen, accent = visual.accent, modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                DrillTile(drill.id, drill.skill, 64, dimmed = locked)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(drill.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f))
+                        AccessBadge(pro = drill.id !in DrillAccessPolicy.starterIds, locked = locked)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SkillDot(drill.skill)
+                        Text("${stringResource(drill.skill.displayName)} · ${stringResource(drill.level.displayName)}",
+                            style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                    }
+                    Text(if (locked) "Unlock with Pro for the full guide, workout and camera check." else drill.description,
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        MetaItem(Icons.Rounded.Repeat, pluralStringResource(R.plurals.drill_reps, drill.targetReps, drill.targetReps))
+                        MetaItem(Icons.Rounded.Timer, stringResource(R.string.drill_duration, drill.estimatedMinutes))
+                    }
+                }
+            }
+            HorizontalDivider(color = colors.outlineVariant.copy(alpha = .5f))
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onOpen) {
+                    Text("View guide")
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(16.dp))
+                }
+                Button(onCamera, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                    Icon(if (locked) Icons.Rounded.Lock else Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Camera check", maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun CameraPracticeButton(onClick: () -> Unit) {
+    Button(onClick, Modifier.fillMaxWidth(), contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+        Icon(Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Practice with camera")
+    }
+}
+
+@Composable private fun RecommendedSection(picks: List<DrillPick>, onOpen: (Drill) -> Unit, onCamera: (Drill) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Text("Recommended for you", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            Text("Picked from your focus skill, your level and what you have trained so far.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        // Equal-height cards, so every camera button lines up along the bottom.
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).height(IntrinsicSize.Max).padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            picks.forEach { pick ->
+                RecommendedCard(pick, { onOpen(pick.drill) }, { onCamera(pick.drill) }, Modifier.width(264.dp).fillMaxHeight())
+            }
+        }
+    }
+}
+
+@Composable private fun RecommendedCard(pick: DrillPick, onOpen: () -> Unit, onCamera: () -> Unit, modifier: Modifier) {
+    val drill = pick.drill
+    val colors = MaterialTheme.colorScheme
+    StudentCard(onClick = onOpen, accent = skillVisual(drill.skill).accent, modifier = modifier) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                DrillTile(drill.id, drill.skill, 48)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(drill.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("${stringResource(drill.skill.displayName)} · ${stringResource(drill.level.displayName)}",
+                        style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                }
+            }
+            Text(pickReason(pick.reason), style = MaterialTheme.typography.bodySmall, color = colors.onSurface)
+            Spacer(Modifier.weight(1f))
+            FilledTonalButton(onCamera, Modifier.fillMaxWidth(), contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                Icon(Icons.Rounded.CameraAlt, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Camera check", maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable private fun pickReason(reason: DrillPickReason): String = when (reason) {
+    is DrillPickReason.Focus -> {
+        val level = stringResource(reason.level.label)
+        if (reason.measured) "Your focus skill, at the $level level your camera scores show."
+        else "Your focus skill, at the $level level from your answers."
+    }
+    is DrillPickReason.NextStep -> "Your next step once ${reason.after.name} feels easy."
+    is DrillPickReason.Untrained -> "You haven't trained ${stringResource(reason.skill.displayName)} yet."
+    is DrillPickReason.LeastTrained -> "${stringResource(reason.skill.displayName)} is your least-trained skill so far."
+}
+
+@Composable private fun HistoryCard(record: DrillPracticeRecord, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val date = DateTimeFormatter.ofPattern("MMM d, h:mm a").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(record.startedAtEpochMs))
+    StudentCard(onClick = onClick, accent = skillVisual(record.skill).accent,
+        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            DrillTile(record.drillId, record.skill, 52)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(record.drillName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Icon(if (record.completed) Icons.Rounded.CheckCircle else Icons.Rounded.Timelapse, null,
+                        tint = if (record.completed) colors.primary else colors.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                    Text("${if (record.completed) "Completed" else "Partial"} · ${record.sets.size}/${record.config.sets} sets · ${record.totalReps} reps",
+                        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+                Text("${formatDrillTime(record.durationMs)} · $date", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = colors.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable private fun EmptyLibraryCard(icon: ImageVector, title: String, body: String) {
+    StudentCard(Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(icon, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable private fun LibraryNote(text: String) {
+    Text(text, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable private fun FilterRow(content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+}
+
+@Composable private fun DrillTile(drillId: String, skill: Skill, size: Int, dimmed: Boolean = false) {
+    val visual = skillVisual(skill)
+    val poseArtwork = DrillArt.forDrill(drillId) ?: drillPoseIcon(drillId)
+    Box(Modifier.size(size.dp).clip(RoundedCornerShape((size / 3.5f).dp)).background(visual.wash), contentAlignment = Alignment.Center) {
+        Image(
+            painter = painterResource(poseArtwork ?: visual.illustration),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().padding(if (poseArtwork == null) 6.dp else 3.dp),
+            contentScale = ContentScale.Fit,
+            alpha = if (dimmed) .5f else 1f,
+        )
+    }
+}
+
+/** A large picture of the drill's position at the top of its guide, shown even when the guide is locked. */
+@Composable private fun DrillHeroArt(drill: Drill) {
+    val visual = skillVisual(drill.skill)
+    val artwork = DrillArt.forDrill(drill.id) ?: drillPoseIcon(drill.id) ?: visual.illustration
+    Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(220.dp).clip(MaterialTheme.shapes.large).background(visual.wash),
+        contentAlignment = Alignment.Center) {
+        Image(painterResource(artwork), "${drill.name} position", Modifier.fillMaxSize().padding(12.dp), contentScale = ContentScale.Fit)
+    }
+}
+
+@Composable private fun SkillDot(skill: Skill) {
+    Box(Modifier.size(8.dp).clip(CircleShape).background(skillVisual(skill).accent))
+}
+
+@Composable private fun AccessBadge(pro: Boolean, locked: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = CircleShape, color = if (pro) colors.primary.copy(alpha = .12f) else colors.surfaceContainerHighest,
+        contentColor = if (pro) colors.primary else colors.onSurfaceVariant) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (locked) Icon(Icons.Rounded.Lock, "Locked", Modifier.size(12.dp))
+            Text(if (pro) "PRO" else "FREE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+        }
+    }
+}
+
+@Composable private fun MetaItem(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 @Composable private fun ModuleHeader(title: String, onBack: () -> Unit) {
@@ -388,21 +734,5 @@ fun DrillCameraAccessGate(skill: Skill, drillId: String, onBack: () -> Unit, mod
 }
 @Composable private fun ModuleError(message: String, onRetry: () -> Unit, action: String = "Retry") {
     ModuleCard { Text(message, color = MaterialTheme.colorScheme.error); TextButton(onRetry) { Text(action) } }
-}
-@Composable private fun WorkoutNumber(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
-    var editing by rememberSaveable(label) { mutableStateOf(false) }
-    var input by rememberSaveable(label) { mutableStateOf(value.toString()) }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f))
-        TextButton(enabled = value > min, onClick = { onChange((value - 1).coerceAtLeast(min)) }) { Text("−") }
-        TextButton(onClick = { input = value.toString(); editing = true }) { Text(value.toString(), fontWeight = FontWeight.Bold) }
-        TextButton(enabled = value < max, onClick = { onChange((value + 1).coerceAtMost(max)) }) { Text("+") }
-    }
-    if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) },
-        text = { OutlinedTextField(input, { input = it.filter(Char::isDigit).take(3) }, singleLine = true,
-            label = { Text("$min–$max") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) },
-        confirmButton = { TextButton(enabled = input.toIntOrNull()?.let { it in min..max } == true,
-            onClick = { onChange(input.toInt()); editing = false }) { Text("Apply") } },
-        dismissButton = { TextButton({ editing = false }) { Text("Cancel") } })
 }
 private fun formatDrillTime(ms: Long): String = String.format(Locale.ROOT, "%d:%02d", ms.coerceAtLeast(0) / 60_000, (ms.coerceAtLeast(0) / 1000) % 60)

@@ -75,7 +75,6 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CourtPosition
-import com.volleyballlab.player.domain.model.DominantHand
 import com.volleyballlab.player.domain.model.TrainingTotals
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.AuthUser
@@ -151,10 +150,6 @@ class ProfileViewModel(
         it.copy(position = if (it.position == position) null else position)
     }
 
-    fun onHandSelected(hand: DominantHand) = edit {
-        it.copy(dominantHand = if (it.dominantHand == hand) null else hand)
-    }
-
     fun onVoiceChanged(enabled: Boolean) {
         viewModelScope.launch { coachingPreferencesRepository.setVoiceEnabled(enabled) }
     }
@@ -207,6 +202,7 @@ class ProfileViewModel(
 fun ProfileScreen(
     onSignedOut: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier,
     onBrowseCoaches: () -> Unit = {},
+    onRefreshPlan: () -> Unit = {},
 ) {
     val model: ProfileViewModel = viewModel(factory = ProfileViewModel.Factory)
     val state by model.uiState.collectAsStateWithLifecycle()
@@ -229,14 +225,14 @@ fun ProfileScreen(
                 onMediaRequestHandled = { mediaRequest = null }, showControls = false, onMediaBusyChanged = { mediaBusy = it })
             }
         },
-        sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut) },
+        sectionContent = { section -> StudentAccountSectionContent(section, state, model, onBrowseCoaches, onSignedOut, onRefreshPlan) },
     )
 }
 
 @Composable
 private fun StudentAccountSectionContent(
     section: AccountSection, state: ProfileUiState, model: ProfileViewModel,
-    onBrowseCoaches: () -> Unit, onSignedOut: () -> Unit,
+    onBrowseCoaches: () -> Unit, onSignedOut: () -> Unit, onRefreshPlan: () -> Unit,
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -244,19 +240,19 @@ private fun StudentAccountSectionContent(
             AccountSection.Personal -> {
                 PersonalInformationSummary(state.profile.name.ifBlank { state.account?.displayName.orEmpty() }.ifBlank { "Player" }, state.account?.email) { editing = !editing }
                 if (editing) AccountIdentityEditor(onDone = { editing = false })
-                ProfileTrainingTools(section = ProfileToolSection.Photo)
-                PlayerDetailsCard(state.profile, model::onPositionSelected, model::onHandSelected)
+                PlayerDetailsCard(state.profile, model::onPositionSelected)
                 ProfileSyncCard(Modifier.fillMaxWidth())
                 TotalsCard(state.totals)
             }
             AccountSection.Plan -> ProPlanCard(onBrowseCoaches = onBrowseCoaches)
             AccountSection.Settings -> InlineAccountSettings(coach = false) { selected ->
-                StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut)
+                StudentAccountSectionContent(selected, state, model, onBrowseCoaches, onSignedOut, onRefreshPlan)
             }
             AccountSection.Training -> {
                 CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged,
                     model::onPoseGuideChanged, model::onDetailedAiChanged)
                 ProfileTrainingTools(section = ProfileToolSection.Training)
+                TrainingSetupPlanCard(onRefreshPlan)
             }
             AccountSection.Security -> AccountSecurityCard()
             AccountSection.Notifications -> NotificationInboxEntry()
@@ -271,7 +267,7 @@ private fun StudentAccountSectionContent(
 }
 
 @Composable
-private fun PlayerDetailsCard(profile: AthleteProfile, onPosition: (CourtPosition) -> Unit, onHand: (DominantHand) -> Unit) {
+private fun PlayerDetailsCard(profile: AthleteProfile, onPosition: (CourtPosition) -> Unit) {
     Surface(shape = RoundedCornerShape(22.dp), color = AccountMenuSurface, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Player details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -280,13 +276,6 @@ private fun PlayerDetailsCard(profile: AthleteProfile, onPosition: (CourtPositio
                 CourtPosition.entries.forEach { position ->
                     androidx.compose.material3.FilterChip(profile.position == position, { onPosition(position) },
                         label = { Text(stringResource(position.displayName)) }, modifier = Modifier.heightIn(min = 44.dp))
-                }
-            }
-            Text("Dominant hand", style = MaterialTheme.typography.labelMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DominantHand.entries.forEach { hand ->
-                    androidx.compose.material3.FilterChip(profile.dominantHand == hand, { onHand(hand) },
-                        label = { Text(stringResource(hand.displayName)) }, modifier = Modifier.heightIn(min = 44.dp))
                 }
             }
         }

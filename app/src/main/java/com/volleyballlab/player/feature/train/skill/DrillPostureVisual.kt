@@ -43,7 +43,6 @@ fun DrillPostureVisual(drillId: String, modifier: Modifier = Modifier) {
     val sample = DrillPostureSamples.forDrill(drillId) ?: return
     var phase by rememberSaveable(drillId) { mutableIntStateOf(0) }
     var playing by rememberSaveable(drillId) { mutableStateOf(false) }
-    var leftHanded by rememberSaveable(drillId) { mutableStateOf(false) }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, drillId) {
         val observer = LifecycleEventObserver { _, event ->
@@ -60,7 +59,7 @@ fun DrillPostureVisual(drillId: String, modifier: Modifier = Modifier) {
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Crossfade(targetState = phase, animationSpec = tween(180), label = "posture sample") { step ->
-            DrillPostureFrame(drillId, step, Modifier.fillMaxWidth().height(260.dp), leftHanded)
+            DrillPostureFrame(drillId, step, Modifier.fillMaxWidth().height(260.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = { playing = !playing }) {
@@ -77,12 +76,6 @@ fun DrillPostureVisual(drillId: String, modifier: Modifier = Modifier) {
             }
         }
         Text(sample.steps[phase].cue, style = MaterialTheme.typography.bodyMedium)
-        if (sample.supportsHandedness) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!leftHanded, { leftHanded = false }, label = { Text("Right-handed") })
-                FilterChip(leftHanded, { leftHanded = true }, label = { Text("Left-handed") })
-            }
-        }
     }
 }
 

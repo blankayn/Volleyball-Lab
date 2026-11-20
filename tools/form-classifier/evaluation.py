@@ -194,7 +194,7 @@ def connected_groups(rows: list[dict]) -> np.ndarray:
     for index, row in enumerate(rows):
         if not row.get("source_group"):
             raise ValueError("Every sample needs its original source group")
-        for field in ("source_group", "athlete_id", "session_id", "source_sha256", "sequence_sha256"):
+        for field in ("source_group", "source_family", "athlete_id", "session_id", "source_sha256", "sequence_sha256"):
             value = row.get(field)
             if not value or str(value).lower() in {"unknown", "unverified", "none"}:
                 continue
