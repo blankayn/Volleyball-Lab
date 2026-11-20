@@ -5,21 +5,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.SessionSubmission
+import com.volleyballlab.player.ui.component.skillVisual
+import com.volleyballlab.player.ui.theme.VbTabularNumerals
 
+/**
+ * One session sent to the coach: which session, whether it has been reviewed, its
+ * form score, and the coach's comments. [content] holds the rating and question actions.
+ */
 @Composable
 internal fun CoachFeedbackSessionCard(
     submission: SessionSubmission,
@@ -27,50 +30,38 @@ internal fun CoachFeedbackSessionCard(
     feedback: List<CoachNote>,
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
-    CoachSectionCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.padding(top = 10.dp).size(8.dp).background(
-                if (submission.isPending) coachCardOutline() else MaterialTheme.colorScheme.primary, CircleShape))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(session?.skill?.name ?: "Shared session", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    CoachStatusPill(if (submission.isPending) "AWAITING FEEDBACK" else "REVIEWED", accent = !submission.isPending, compact = true)
+    HubSurface {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                session?.let { Box(Modifier.size(10.dp).clip(CircleShape).background(skillVisual(it.skill).accent)) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(session?.let { "${stringResource(it.skill.displayName)} · ${it.repCount} reps" } ?: "Shared session",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(dateLabel(session?.startedAtEpochMs ?: submission.submittedAtEpochMs),
+                        style = MaterialTheme.typography.bodySmall, color = coachCardMuted())
                 }
-                Text(dateLabel(session?.startedAtEpochMs ?: submission.submittedAtEpochMs),
-                    style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
-            }
-            session?.formScore()?.let { score ->
-                Surface(shape = RoundedCornerShape(13.dp), color = coachCardMuted().copy(alpha = .045f)) {
-                    Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(score.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("/100", style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
+                session?.formScore()?.let { score ->
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("$score", style = MaterialTheme.typography.titleLarge.merge(VbTabularNumerals), fontWeight = FontWeight.SemiBold)
+                        Text("form", style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
                     }
                 }
             }
-        }
-        feedback.forEach { note ->
-            val rule = MaterialTheme.colorScheme.primary.copy(alpha = .65f)
-            Column(
-                Modifier.fillMaxWidth().background(coachCardMuted().copy(alpha = .025f))
-                    .drawBehind { drawLine(rule, Offset.Zero, Offset(0f, size.height), 1.dp.toPx()) }
-                    .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text("“${note.text}”", style = MaterialTheme.typography.bodyMedium)
-                Text("Coach feedback · ${dateLabel(note.createdAtEpochMs)}",
-                    style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = coachCardMuted())
+            if (submission.isPending) StatusChip("Waiting for review", FeedbackWaitingColor)
+            else StatusChip("Reviewed", FeedbackDoneColor)
+
+            feedback.forEach { note ->
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .06f)).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(note.text, style = MaterialTheme.typography.bodyMedium)
+                    Text("Your coach · ${dateLabel(note.createdAtEpochMs)}", style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
+                }
             }
+            if (feedback.isEmpty()) Text(
+                if (submission.isPending) "Your coach hasn’t reviewed this yet." else "Reviewed without written comments.",
+                style = MaterialTheme.typography.bodyMedium, color = coachCardMuted())
+            content()
         }
-        if (feedback.isEmpty()) {
-            Row(Modifier.heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(6.dp).background(if (submission.isPending) Color(0xFFF3BA35)
-                    else MaterialTheme.colorScheme.primary, CircleShape))
-                Text(if (submission.isPending) "With coach for review" else "This session has been reviewed.",
-                    style = MaterialTheme.typography.bodySmall, color = coachCardMuted())
-            }
-        }
-        content()
     }
 }

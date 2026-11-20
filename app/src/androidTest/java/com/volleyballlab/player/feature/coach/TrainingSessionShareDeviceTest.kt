@@ -18,12 +18,10 @@ class TrainingSessionShareDeviceTest {
         val selected = mutableListOf<String>()
         compose.setContent {
             Column {
-                listOf(latest, older).forEach { session ->
-                    TrainingSessionShareCard(session, false, false) { selected += session.id }
-                }
+                SendSessionCard(listOf(latest, older), noSessions = false, sending = false, error = null) { selected += it }
             }
         }
-        compose.onAllNodesWithText("Send session for review")[1].performClick()
+        compose.onAllNodesWithText("Send")[1].performClick()
         compose.runOnIdle { assertEquals(listOf("older"), selected) }
     }
 }

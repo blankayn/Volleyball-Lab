@@ -155,7 +155,7 @@ private fun CoachMetricText(value: String, label: String, caption: String, modif
     }
 }
 
-internal enum class CoachWorkspaceTab(val label: String) { Overview("Overview"), Training("Training"), Feedback("Feedback") }
+internal enum class CoachWorkspaceTab(val label: String) { Overview("Ask your coach"), Training("Training plan"), Feedback("Feedback") }
 
 @Composable internal fun CoachSectionTitle(title: String, subtitle: String? = null, count: Int? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
