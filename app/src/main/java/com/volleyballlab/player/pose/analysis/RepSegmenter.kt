@@ -77,6 +77,29 @@ class RepSegmenter(private val config: Config = Config()) {
          * counter's preparation buffer, so both judge the same movement.
          */
         val leadInMs: Long = 500L,
+        /**
+         * How much of a push's own climb the signal must give back before
+         * [peakRelease] ends the rep. A held reach wobbles (a side-on wrist drifts in
+         * and out of view) by a quarter to a third of the climb into it while the
+         * elbows stay straight; hands coming back down between pushes give back
+         * more than half.
+         */
+        val peakReleaseFraction: Float = 0.5f,
+        /**
+         * How far back from a peak the push to it is taken to have begun: its
+         * lowest point in this time. Long enough to reach the start of a full arm
+         * swing (about 0.8 s from hanging to overhead), short enough not to reach
+         * past a ready position held before a push.
+         */
+        val pushClimbMs: Long = 1_000L,
+        /**
+         * The least time between two peaks that [peakRelease] splits into two reps.
+         * Closer peaks are one movement: a serve's toss and hit, a spike's cocked
+         * arm and swing, a wobble at the top of a set (0.3 to 0.7 s apart in public
+         * coaching clips). Repeated pushes from a ready position come 1.5 s apart
+         * or more, since each needs the hands back down, a load and the push.
+         */
+        val minPushSpacingMs: Long = 1_000L,
     )
 
     private data class Sample(val frame: PoseFrame, val signal: Float)
@@ -158,6 +181,12 @@ class RepSegmenter(private val config: Config = Config()) {
         var floorMode = false
         var repFloor = 0f
         var repPeak = 0f
+        // Where the climb to the current peak began. Equal to the floor unless the
+        // peak is a push from a higher rest the rep has not re-anchored on.
+        var peakBase = 0f
+        var peakIndex = -1
+        // The peak the split look-ahead last ran for, so it runs once per peak.
+        var checkedPeak = Float.NaN
 
         fun close(endIndex: Int) {
             buildWindow(samples, smoothed, repStart, endIndex, windows.size, analyzer, earliestStart)
@@ -165,6 +194,34 @@ class RepSegmenter(private val config: Config = Config()) {
                 ?.let(windows::add)
             earliestStart = endIndex + 1
             repStart = -1
+        }
+
+        // The rules that end the open rep where it is.
+        fun closesHere(value: Float) =
+            value <= release || (floorMode && floorRelease(value, repFloor, repPeak, minRise))
+
+        // See [peakRelease]: the valley between the push that has come down at [from]
+        // and the next push, when that next push starts before [closesHere] would end
+        // the rep and peaks at least [Config.minPushSpacingMs] after this one;
+        // otherwise -1, and the rep closes by the rules it always had.
+        fun valleyBeforeNextPush(from: Int): Int {
+            var low = from
+            var k = from + 1
+            while (k < smoothed.size) {
+                val value = smoothed[k]
+                if (closesHere(value)) return -1
+                if (value < smoothed[low]) low = k else if (value - smoothed[low] >= minRise) break
+                k++
+            }
+            if (k >= smoothed.size) return -1
+            // The next push's own peak: its highest point before it comes back down
+            // by the band, or the rep would close.
+            var top = k
+            while (k < smoothed.size && !closesHere(smoothed[k]) && smoothed[top] - smoothed[k] < minRise) {
+                if (smoothed[k] > smoothed[top]) top = k
+                k++
+            }
+            return if (timeMs(top) - timeMs(peakIndex) >= config.minPushSpacingMs) low else -1
         }
 
         var index = 0
@@ -188,29 +245,45 @@ class RepSegmenter(private val config: Config = Config()) {
                         // Measure it from the trough this rise began at instead: the
                         // rest it actually rose from.
                         repStart = floorBefore(index)
-                        repFloor = smoothed[repStart]
-                        repPeak = value
                     }
+                    repFloor = smoothed[repStart]
+                    repPeak = value
+                    peakIndex = index
+                    peakBase = repFloor
+                    checkedPeak = Float.NaN
                 }
             } else if (timeMs(index) - timeMs(repStart) > config.maxRepDurationMs) {
                 repStart = -1
-            } else if (!floorMode) {
-                if (value <= release) close(index)
             } else {
                 if (value > repPeak) {
                     repPeak = value
+                    peakIndex = index
+                    var base = index
+                    while (base > earliestStart && timeMs(index) - timeMs(base - 1) <= config.pushClimbMs) base--
+                    peakBase = (base..index).minOf { smoothed[it] }
+                    val trough = floorBefore(index)
                     // A new peak may belong to a fresh rise from a later, higher
                     // rest (the first jump after setting up, say). Re-anchor on that
                     // rise's trough, but only when it is a real movement: a creep at
                     // the top of the reach would otherwise lift the floor onto the
                     // plateau and the rep could never close.
-                    val trough = floorBefore(index)
-                    if (repPeak - smoothed[trough] >= minRise) {
+                    if (floorMode && repPeak - smoothed[trough] >= minRise) {
                         repStart = trough
                         repFloor = smoothed[trough]
                     }
                 }
-                if (value <= release || floorRelease(value, repFloor, repPeak, minRise)) close(index)
+                if (closesHere(value)) {
+                    close(index)
+                } else if (analyzer.repeatsFromRaisedHands && repPeak != checkedPeak &&
+                    peakRelease(value, repFloor, repPeak, peakBase, minRise)) {
+                    checkedPeak = repPeak
+                    val valley = valleyBeforeNextPush(index)
+                    // The valley opens the next push: it is that push's rest and load.
+                    if (valley > 0 && timeMs(valley - 1) - timeMs(repStart) <= config.maxRepDurationMs) {
+                        close(valley - 1)
+                        index = valley - 1
+                    }
+                }
             }
             index++
         }
@@ -245,6 +318,36 @@ class RepSegmenter(private val config: Config = Config()) {
     private fun floorRelease(value: Float, floor: Float, peak: Float, minRise: Float): Boolean {
         val rise = peak - floor
         return rise >= minRise && value <= floor + config.releaseFraction * rise
+    }
+
+    /**
+     * Whether a rep has come back down from its own peak by [minRise], the band it
+     * had to rise by: the other half of the same hysteresis. When it has, and
+     * another push begins before the rep's usual close rules would end it, the rep
+     * is split at the valley between the two pushes.
+     *
+     * The usual rules wait for the signal to return to the session's release line
+     * or near the level the rep rose from, and some reps rise from a rest the hands
+     * never go back to. An athlete who lifts the hands into a ready position once,
+     * then pushes up from there again and again (a blocker with hands at the head,
+     * a setter with hands at the forehead), rises the first time from arms hanging
+     * and afterwards only from the ready position. Each push comes down to the
+     * ready position, never to the arms-down floor, so the pushes ran together:
+     * into one movement longer than [Config.maxRepDurationMs], which was discarded,
+     * or into one rep scored at only its highest push.
+     *
+     * A rep that comes down and is closed by the usual rules before any next push
+     * keeps exactly the window it had: the split never moves a close later or
+     * earlier, it only separates pushes that used to merge.
+     *
+     * The fall must also give back [Config.peakReleaseFraction] of the climb from
+     * [base], where the push to this peak began. A block held overhead whose wrist
+     * signal sags and recovers (seen side-on, elbows straight throughout) is one
+     * rep, not two.
+     */
+    private fun peakRelease(value: Float, floor: Float, peak: Float, base: Float, minRise: Float): Boolean {
+        val fall = peak - value
+        return peak - floor >= minRise && fall >= minRise && fall >= config.peakReleaseFraction * (peak - base)
     }
 
     private fun buildWindow(

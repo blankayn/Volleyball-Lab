@@ -1,5 +1,6 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.model.Landmark
 import com.volleyballlab.player.pose.model.PoseFrame
@@ -25,6 +26,8 @@ class SessionReplay {
         val dir = System.getenv("VL_SESSION_DIR")?.let(::File)
         assumeTrue(dir != null && File(dir, "landmarks").isDirectory)
         val files = File(dir, "landmarks").listFiles { f -> f.extension == "csv" }.orEmpty().sortedBy { it.name }
+        // One row per saved rep: file, rep, start/contact/end seconds, then id,value,inRange per cue.
+        val rows = mutableListOf<String>()
         for (file in files) {
             val skill = when (file.name.substringBefore('_')) {
                 "serve" -> Skill.Serving; "receive" -> Skill.Receiving; "set" -> Skill.Setting
@@ -33,6 +36,15 @@ class SessionReplay {
             }
             val frames = read(file).ifEmpty { continue }
             val analyzer = SkillAnalyzers.forSkill(skill)
+            if (System.getenv("VL_DUMP_SIGNAL") == "1") {
+                // Per frame: seconds, the segmentation signal, mean observed knee and elbow angle.
+                File(dir, "signals").mkdirs()
+                File(dir, "signals/${file.nameWithoutExtension}.csv").writeText(frames.joinToString("\n") { f ->
+                    val knees = Side.entries.filter { AnalyzerSupport.legObserved(f, it) }.mapNotNull { AnalyzerSupport.kneeAngle(f, it) }
+                    listOf((f.timestampMs - frames.first().timestampMs) / 1000.0, analyzer.segmentationSignal(f) ?: "",
+                        knees.takeIf { it.isNotEmpty() }?.average() ?: "", AnalyzerSupport.observedElbowAngle(f) ?: "").joinToString(",")
+                })
+            }
             val live = LiveRepCounter(analyzer)
             frames.forEach { live.onFrame(it) }
             val saved = RepSegmenter().segment(frames, analyzer)
@@ -47,7 +59,18 @@ class SessionReplay {
             RepSegmenter().segment(frames, everything).forEach { window ->
                 println("    candidate contact ${at(window.contactMs)}s -> ${analyzer.verdict(window)}")
             }
+            // What the app measures on each saved rep, against each cue's practice range.
+            val cues = FormCueCatalog.forSkill(skill)
+            saved.forEachIndexed { i, rep ->
+                val values = cues.map { cue -> cue to analyzer.measure(cue, rep) }
+                println("    rep ${i + 1} @ ${at(rep.contactMs)}s " + values.joinToString(" ") { (cue, v) ->
+                    "${cue.id}=${v?.let { "%.2f".format(it) } ?: "-"}${if (v == null) "" else if (v in cue.target) "(in)" else "(OUT)"}"
+                })
+                rows += listOf(file.nameWithoutExtension, i + 1, at(rep.startMs), at(rep.contactMs), at(rep.endMs)).joinToString(",") +
+                    values.joinToString("") { (cue, v) -> ",${cue.id},${v ?: ""},${v?.let { it in cue.target } ?: ""}" }
+            }
         }
+        File(dir, "session_reps.csv").writeText(rows.joinToString("\n"))
     }
 
     private fun read(file: File): List<PoseFrame> = file.readLines().filter { it.isNotBlank() }.map { line ->

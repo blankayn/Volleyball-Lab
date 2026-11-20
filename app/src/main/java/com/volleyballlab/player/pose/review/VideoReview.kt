@@ -136,7 +136,7 @@ class VideoReviewFeedback {
                 val cue = FormCueCatalog.byId(scored.cueId) ?: return@mapNotNull null
                 val measured = scored.measured ?: return@mapNotNull null
                 val score = scored.score ?: return@mapNotNull null
-                issueFor(window, index + 1, scored.cueId, cue.phase, measured, score)?.copy(angle = angle)
+                issueFor(window, index + 1, scored.cueId, analyzer.cueFrame(cue, window), measured, score)?.copy(angle = angle)
             }
         }
         return Feedback(issues.sortedWith(compareBy<ReviewIssue> { it.timestampMs }.thenBy { it.score }), assessed, reps)
@@ -146,12 +146,13 @@ class VideoReviewFeedback {
         window: RepWindow,
         repNumber: Int,
         cueId: CueId,
-        phase: com.volleyballlab.player.domain.model.RepPhase,
+        /** The frame the measurement was read on: [SkillAnalyzer.cueFrame]. */
+        at: PoseFrame?,
         measured: Float,
         score: Float,
     ): ReviewIssue? {
         if (!measured.isFinite() || !score.isFinite() || score !in 0f..<0.8f) return null
-        val frame = window.frameFor(phase) ?: return null
+        val frame = at ?: return null
         val side = AngleCuePolicy.completedSide(cueId, window)
         val points = AngleCuePolicy.affectedPoints(cueId, frame, side)
         if (points.isEmpty() || points.any {

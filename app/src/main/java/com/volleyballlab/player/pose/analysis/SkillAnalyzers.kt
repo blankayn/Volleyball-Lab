@@ -255,6 +255,9 @@ class SetAnalyzer : SkillAnalyzer {
 
     override val minExcursion: Float get() = MIN_EXCURSION
 
+    /** A setter or blocker keeps the hands up between pushes. */
+    override val repeatsFromRaisedHands: Boolean get() = true
+
     /** The deepest knee bend before the push, not the lowest the hands got. */
     override fun loadingFrame(frames: List<PoseFrame>): PoseFrame? =
         AnalyzerSupport.deepestKneeBend(frames)
@@ -290,15 +293,99 @@ class SetAnalyzer : SkillAnalyzer {
         CueId.SetHandsAboveForehead -> window.frameFor(RepPhase.Contact)
             ?.let { handsAboveNoseMetres(it) }
 
-        CueId.SetElbowFlexion -> window.frameFor(RepPhase.Contact)?.let { meanElbowAngle(it) }
+        CueId.SetElbowFlexion -> cueFrame(cue, window)?.let { setElbowAngle(it) }
+        CueId.SetExtensionFollowThrough -> cueFrame(cue, window)?.let(finishElbowAngle(window))
         // Measured during loading, not contact: the leg drive that powers a set
         // happens before the hands touch the ball, and by contact the athlete is
         // already extending.
         CueId.SetKneeFlexion -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
-        CueId.SetExtensionFollowThrough -> window.frameFor(RepPhase.FollowThrough)
-            ?.let { meanElbowAngle(it) }
 
         else -> null
+    }
+
+    /**
+     * The elbow cues are read where they happen, not on the phase frames.
+     *
+     * The window's contact is the peak of hand height: the end of the push, with
+     * the arms already straight. Read there, the 80-120° elbow bend could never be
+     * met; 0 of 31 correct sets in public coaching clips passed, the same as the
+     * faulty ones. Its follow-through frame is the window's last, when the hands
+     * are already on the way down, and 2 of 31 correct sets passed the arm finish.
+     *
+     * - Elbow bend is read at the catch: the most bent the elbows get while both
+     *   hands are up at the face, before the hands peak. That is where the ball
+     *   meets a setter's hands.
+     * - Arm finish is read at the fullest extension from the catch on, with the
+     *   hands still up: the push's own end, whichever frame it fell on.
+     *
+     * Elbow angles are averaged over three frames before picking, so one jittery
+     * frame cannot become the catch or the finish. Either falls back to its phase
+     * frame when the hands never reach the face in the window.
+     *
+     * Over the 31 correct public sets, elbow bend now passes 24 and arm finish 23,
+     * against 0 and 2 on the phase frames.
+     */
+    override fun cueFrame(cue: FormCue, window: RepWindow): PoseFrame? = when (cue.id) {
+        CueId.SetElbowFlexion -> catchFrame(window) ?: super.cueFrame(cue, window)
+        CueId.SetExtensionFollowThrough -> finishFrame(window) ?: super.cueFrame(cue, window)
+        else -> super.cueFrame(cue, window)
+    }
+
+    private fun catchFrame(window: RepWindow): PoseFrame? {
+        val contact = window.frameFor(RepPhase.Contact) ?: return null
+        return extremeElbow(window.frames.filter { it.timestampMs <= contact.timestampMs }, straightest = false, ::setElbowAngle)
+    }
+
+    private fun finishFrame(window: RepWindow): PoseFrame? {
+        val from = catchFrame(window) ?: return null
+        return extremeElbow(window.frames.filter { it.timestampMs >= from.timestampMs }, straightest = true,
+            finishElbowAngle(window))
+    }
+
+    /**
+     * How the arm finish is read for this rep. Side-on, the arms extend across the
+     * picture, where the image shows their true angle and the tracker's depth
+     * estimate bends them: of 19 correct sets filmed from the side, 4 reached the
+     * 155° finish in world space (median 147°) and 15 read this way (median 165°).
+     * From the front the arms extend toward the camera, the image foreshortens them,
+     * and world space is the right reading. The view is decided once, at contact,
+     * so one rep is never read half one way and half the other.
+     */
+    private fun finishElbowAngle(window: RepWindow): (PoseFrame) -> Float? {
+        val sideOn = window.frameFor(RepPhase.Contact)
+            ?.let { CameraOrientationDetector().detect(it).angle == CameraAngle.Side } == true
+        return if (sideOn) { frame -> imageElbowAngle(frame) ?: setElbowAngle(frame) } else ::setElbowAngle
+    }
+
+    /** Mean elbow angle in the picture, in pixels so the frame's aspect ratio cannot skew it, over observed arms. */
+    private fun imageElbowAngle(frame: PoseFrame): Float? {
+        val w = frame.imageWidth.toFloat()
+        val h = frame.imageHeight.toFloat()
+        fun pixels(point: BodyPoint) = frame.image(point).let { it.copy(x = it.x * w, y = it.y * h, z = 0f) }
+        return AnalyzerSupport.observedArms(frame).mapNotNull { side ->
+            Angles.at(pixels(AnalyzerSupport.shoulder(side)), pixels(AnalyzerSupport.elbow(side)), pixels(AnalyzerSupport.wrist(side)))
+        }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+    }
+
+    /**
+     * Mean elbow angle over the arms the camera saw, or both when it saw neither.
+     * Side-on, the far arm is hidden and its estimated angle reads a straight arm
+     * as bent: correct sets filmed from the side averaged 146° at the finish
+     * against 161° from the front.
+     */
+    private fun setElbowAngle(frame: PoseFrame): Float? =
+        AnalyzerSupport.observedElbowAngle(frame) ?: meanElbowAngle(frame)
+
+    /** The frame of most bent or straightest elbows among [frames] with both hands up at the face. */
+    private fun extremeElbow(frames: List<PoseFrame>, straightest: Boolean, elbow: (PoseFrame) -> Float?): PoseFrame? {
+        val raised = frames.filter { (AnalyzerSupport.meanWristRise(it) ?: return@filter false) >= MIN_HAND_RISE }
+        val angles = raised.map(elbow)
+        val smoothed = angles.indices.mapNotNull { i ->
+            val near = (maxOf(0, i - 1)..minOf(angles.lastIndex, i + 1)).mapNotNull { angles[it] }
+            if (angles[i] == null || near.isEmpty()) null else i to near.average()
+        }
+        val pick = if (straightest) smoothed.maxByOrNull { it.second } else smoothed.minByOrNull { it.second }
+        return pick?.let { raised[it.first] }
     }
 
     /**
@@ -400,6 +487,9 @@ class BlockAnalyzer : SkillAnalyzer {
         AnalyzerSupport.meanWristRise(frame)
 
     override val minExcursion: Float get() = MIN_EXCURSION
+
+    /** A setter or blocker keeps the hands up between pushes. */
+    override val repeatsFromRaisedHands: Boolean get() = true
 
     /** The deepest knee bend before the reach, not the lowest the hands got. */
     override fun loadingFrame(frames: List<PoseFrame>): PoseFrame? =

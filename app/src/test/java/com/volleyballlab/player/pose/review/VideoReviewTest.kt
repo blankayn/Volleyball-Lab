@@ -61,7 +61,7 @@ class VideoReviewTest {
         val loading = TestPoses.wellFramedStanding(100)
         val contact = TestPoses.wellFramedStanding(500)
         val window = RepWindow(0, listOf(loading, contact), mapOf(RepPhase.Loading to loading, RepPhase.Contact to contact), 0.5f)
-        val issue = VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Contact, 180f, 0f)
+        val issue = VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 180f, 0f)
         assertEquals(500L, issue?.timestampMs)
         assertTrue(BodyPoint.LEFT_KNEE.ordinal in issue!!.points)
         assertFalse(BodyPoint.LEFT_ELBOW.ordinal in issue.points)
@@ -71,17 +71,17 @@ class VideoReviewTest {
         val original = TestPoses.wellFramedStanding(500)
         val hidden = original.copy(world = original.world.mapIndexed { i, p -> if (i == BodyPoint.LEFT_KNEE.ordinal) p.copy(presence = 0.1f) else p })
         val window = RepWindow(0, listOf(hidden), mapOf(RepPhase.Contact to hidden), 0.5f)
-        assertNull(VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Contact, 180f, 0f))
+        assertNull(VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 180f, 0f))
     }
 
     @Test fun `good missing or nonfinite measurements do not produce corrections`() {
         val frame = TestPoses.wellFramedStanding(500)
         val window = RepWindow(0, listOf(frame), mapOf(RepPhase.Contact to frame), 0.5f)
         val builder = VideoReviewFeedback()
-        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Contact, 140f, 0.9f))
-        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Contact, Float.NaN, 0f))
-        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Contact, 180f, Float.NaN))
-        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, RepPhase.Loading, 180f, 0f))
+        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 140f, 0.9f))
+        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), Float.NaN, 0f))
+        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 180f, Float.NaN))
+        assertNull(builder.issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Loading), 180f, 0f))
     }
 
     @Test fun `a still or untracked video never invents movements or corrections`() {

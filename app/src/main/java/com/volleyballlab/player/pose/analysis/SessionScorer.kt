@@ -48,7 +48,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
         val issues = windows.zip(reps).flatMap { (window, rep) ->
             rep.cueScores.mapNotNull { scored ->
                 val cue = FormCueCatalog.byId(scored.cueId) ?: return@mapNotNull null
-                feedback.issueFor(window, rep.index + 1, cue.id, cue.phase,
+                feedback.issueFor(window, rep.index + 1, cue.id, analyzer.cueFrame(cue, window),
                     scored.measured ?: return@mapNotNull null, scored.score ?: return@mapNotNull null)?.copy(angle = angle ?: CameraAngle.Unknown)
             }
         }
@@ -75,7 +75,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
     ): RepResult {
         val cues = FormCueCatalog.forSkill(skill)
         val measurements = cues.associate { cue ->
-            val phase = window.frameFor(cue.phase)
+            val phase = analyzer.cueFrame(cue, window)
             val side = AngleCuePolicy.completedSide(cue.id, window)
             val supported = angle == null || phase != null && AngleCuePolicy.isSupported(cue.id, angle, phase, side)
             cue.id to if (supported) analyzer.measure(cue, window)?.takeIf { it.isFinite() } else null

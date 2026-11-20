@@ -80,6 +80,118 @@ class RepSegmenterTest {
         reps.zipWithNext().forEach { (a, b) -> assertTrue(a.endMs < b.startMs) }
     }
 
+    private fun ramp(from: Float, to: Float, frames: Int) = (1..frames).map { from + (to - from) * it / frames }
+
+    /** Segments [signal] at 30 fps with a test analyzer for [skill]. */
+    private fun segmentSignal(signal: List<Float>, skill: Skill, raisedHands: Boolean): List<RepWindow> {
+        val frames = signal.indices.map { TestPoses.wellFramedStanding(it * 33L) }
+        val analyzer = object : SkillAnalyzer {
+            override val skill = skill
+            override val repeatsFromRaisedHands = raisedHands
+            override fun segmentationSignal(frame: PoseFrame) = signal[(frame.timestampMs / 33L).toInt()]
+            override fun measure(cue: FormCue, window: RepWindow): Float? = null
+        }
+        return segmenter.segment(frames, analyzer)
+    }
+
+    @Test
+    fun `pushes repeated from a raised ready position are each saved`() {
+        // The hands go up once from hanging, then push from head height and come back to it.
+        val armsDown = -0.9f
+        val ready = 0.6f
+        val top = 1.0f
+        val signal = buildList {
+            repeat(45) { add(armsDown) }
+            addAll(ramp(armsDown, ready, 10))
+            repeat(4) {
+                repeat(30) { add(ready) }
+                addAll(ramp(ready, top, 9)); repeat(6) { add(top) }
+                addAll(ramp(top, ready, 12))
+            }
+            repeat(30) { add(ready) }
+            addAll(ramp(ready, armsDown, 10))
+            repeat(60) { add(armsDown) }
+        }
+
+        val reps = segmentSignal(signal, Skill.Blocking, raisedHands = true)
+
+        assertEquals(4, reps.size)
+        reps.forEach { assertEquals(top, signal[(it.contactMs / 33L).toInt()], 0.05f) }
+        reps.zipWithNext().forEach { (a, b) -> assertTrue(a.endMs < b.startMs) }
+    }
+
+    @Test
+    fun `a held reach whose signal sags and recovers stays one rep`() {
+        // A side-on block held overhead: the wrist reading dips by a third of the
+        // climb and comes back, more than a second apart, while the arms stay up.
+        val armsDown = -0.9f
+        val chest = -0.2f
+        val top = 0.62f
+        val sag = 0.30f
+        val signal = buildList {
+            repeat(45) { add(armsDown) }
+            addAll(ramp(armsDown, chest, 10))
+            repeat(4) {
+                repeat(24) { add(chest) }
+                addAll(ramp(chest, top, 12)); repeat(6) { add(top) }
+                addAll(ramp(top, sag, 18)); addAll(ramp(sag, top, 18)); repeat(6) { add(top) }
+                addAll(ramp(top, chest, 15))
+            }
+            addAll(ramp(chest, armsDown, 10))
+            repeat(60) { add(armsDown) }
+        }
+
+        val reps = segmentSignal(signal, Skill.Blocking, raisedHands = true)
+
+        assertEquals(4, reps.size)
+    }
+
+    @Test
+    fun `a dip between peaks under a second apart does not split the rep`() {
+        val armsDown = -0.9f
+        val chest = -0.2f
+        val top = 0.9f
+        val dip = 0.15f
+        val signal = buildList {
+            repeat(45) { add(armsDown) }
+            addAll(ramp(armsDown, chest, 10))
+            repeat(4) {
+                repeat(24) { add(chest) }
+                addAll(ramp(chest, top, 10)); addAll(ramp(top, dip, 4)); addAll(ramp(dip, top, 4))
+                addAll(ramp(top, chest, 12))
+            }
+            addAll(ramp(chest, armsDown, 10))
+            repeat(60) { add(armsDown) }
+        }
+
+        val reps = segmentSignal(signal, Skill.Blocking, raisedHands = true)
+
+        assertEquals(4, reps.size)
+    }
+
+    @Test
+    fun `a one-armed skill keeps the toss and the hit as one rep`() {
+        // The higher hand is the toss arm, then the hitting arm, with a dip between.
+        val armsDown = -0.9f
+        val signal = buildList {
+            repeat(30) { add(armsDown) }
+            repeat(3) {
+                addAll(ramp(armsDown, 1.0f, 10)); repeat(6) { add(1.0f) }
+                addAll(ramp(1.0f, -0.1f, 10)); repeat(12) { add(-0.1f) }
+                addAll(ramp(-0.1f, 1.1f, 8)); repeat(4) { add(1.1f) }
+                addAll(ramp(1.1f, armsDown, 12))
+                repeat(30) { add(armsDown) }
+            }
+        }
+
+        val reps = segmentSignal(signal, Skill.Serving, raisedHands = false)
+
+        assertEquals(3, reps.size)
+        reps.forEach { assertEquals(1.1f, signal[(it.contactMs / 33L).toInt()], 0.05f) }
+        // The same curve from a two-handed skill is two pushes each time.
+        assertEquals(6, segmentSignal(signal, Skill.Blocking, raisedHands = true).size)
+    }
+
     @Test
     fun `tracking gaps do not stitch two partial actions into one repetition`() {
         val original = syntheticFrames(cycles = 4)

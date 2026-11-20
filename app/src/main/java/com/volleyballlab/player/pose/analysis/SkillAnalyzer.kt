@@ -135,6 +135,17 @@ interface SkillAnalyzer {
     val minExcursion: Float get() = 0f
 
     /**
+     * Whether a dip between two peaks of [segmentationSignal] means two reps, so
+     * [RepSegmenter] may split pushes repeated from a raised ready position.
+     *
+     * True only for two-handed skills segmented on both wrists together, where
+     * the hands rise and fall as one. A one-armed swing's signal follows whichever
+     * hand is higher and dips between the toss or cocking arm and the hitting arm
+     * inside a single serve or spike.
+     */
+    val repeatsFromRaisedHands: Boolean get() = false
+
+    /**
      * The frame of deepest load among [frames], which run from the start of a
      * movement to its contact. Null uses the lowest point of the segmentation
      * signal, which is right only when that signal is the thing being loaded.
@@ -144,6 +155,16 @@ interface SkillAnalyzer {
      * off the wrong frame corrects an athlete who loaded properly.
      */
     fun loadingFrame(frames: List<PoseFrame>): PoseFrame? = null
+
+    /**
+     * The frame [measure] reads [cue] on, so a review can show and mark the
+     * moment the number came from. Usually the frame of the cue's phase.
+     *
+     * A skill overrides it when its phase frames miss the moment a cue is about:
+     * a set's contact is where the hands peak, after the push, when the elbows
+     * the elbow-bend cue asks about have already straightened.
+     */
+    fun cueFrame(cue: FormCue, window: RepWindow): PoseFrame? = window.frameFor(cue.phase)
 
     /**
      * Whether [window] is one complete repetition of this skill.

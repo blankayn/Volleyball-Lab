@@ -157,7 +157,7 @@ class LivePostureCoach(
         val result = SessionScorer().scoreRep(window, skill, analyzer, receivingEvaluator, angle)
         val statuses = cues.map { cue ->
             val scored = result.cueScores.first { it.cueId == cue.id }
-            val frame = window.frameFor(cue.phase)
+            val frame = analyzer.cueFrame(cue, window)
             val side = AngleCuePolicy.completedSide(cue.id, window)
             CueLiveStatus(cue, scored.measured, scored.score, AngleCuePolicy.affectedPoints(cue.id, frame, side), side)
         }
