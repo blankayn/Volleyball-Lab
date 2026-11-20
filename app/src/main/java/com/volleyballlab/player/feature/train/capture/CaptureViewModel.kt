@@ -21,8 +21,10 @@ import com.volleyballlab.player.domain.repository.CoachingPreferences
 import com.volleyballlab.player.domain.repository.ProfileRepository
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
+import com.volleyballlab.player.pose.analysis.LiveTrackingGate
 import com.volleyballlab.player.pose.analysis.LiveRepFeedback
 import com.volleyballlab.player.pose.analysis.PersonalizedLiveCoaching
+import com.volleyballlab.player.pose.analysis.PersonalElbowBaseline
 import com.volleyballlab.player.pose.PoseDetector
 import com.volleyballlab.player.pose.PoseDetectorUnavailableException
 import com.volleyballlab.player.pose.analysis.LivePostureCoach
@@ -41,7 +43,19 @@ import com.volleyballlab.player.ui.coaching.SpeechTiming
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
 import com.volleyballlab.player.pose.analysis.CoachingEvent
+import com.volleyballlab.player.pose.analysis.Facing
+import com.volleyballlab.player.pose.analysis.FacingGuide
+import com.volleyballlab.player.pose.analysis.GuideFigure
+import com.volleyballlab.player.pose.analysis.MovementFault
+import com.volleyballlab.player.pose.analysis.ProgressiveInstructions
+import com.volleyballlab.player.pose.analysis.SpokenCue
+import com.volleyballlab.player.pose.analysis.ReferenceFigure
+import com.volleyballlab.player.pose.analysis.ReferenceFigureTracker
+import com.volleyballlab.player.pose.analysis.ReferenceMoment
+import com.volleyballlab.player.pose.analysis.ReferencePoses
+import com.volleyballlab.player.pose.analysis.ReferenceShow
 import com.volleyballlab.player.pose.analysis.Side
+import com.volleyballlab.player.pose.analysis.Stance
 import com.volleyballlab.player.pose.analysis.LiveCoachingAdvice
 import com.volleyballlab.player.pose.analysis.LiveCoachingEvidenceBuffer
 import com.volleyballlab.player.pose.analysis.LiveCoachingTurnContext
@@ -145,6 +159,8 @@ sealed interface CaptureUiState {
         val closing: List<String> = emptyList(),
         /** Optional AI carry-forward for the closing card. Never spoken, never awaited. */
         val closingAdvice: LiveCoachingAdvice? = null,
+        /** Which way the athlete faces for the current view, in their own left and right. */
+        val facing: Facing = Facing.Forward,
     ) : CaptureUiState
 
     /** Post-hoc scoring, after recording stops. */
@@ -271,6 +287,20 @@ class CaptureViewModel(
     private val _poseFrame = MutableStateFlow<PoseFrame?>(null)
     val poseFrame: StateFlow<PoseFrame?> = _poseFrame.asStateFlow()
 
+    /**
+     * The reference figure to draw over the camera, or null for none.
+     *
+     * Like [poseFrame], this updates at camera frame rate and feeds one Canvas,
+     * so it is kept out of [uiState].
+     */
+    private val _referenceFigure = MutableStateFlow<GuideFigure?>(null)
+    val referenceFigure: StateFlow<GuideFigure?> = _referenceFigure.asStateFlow()
+    private val figureTracker = ReferenceFigureTracker()
+    /** What this athlete has already been taught this session; see [publish]. */
+    private val instructions = ProgressiveInstructions()
+    private var shownReference: Pair<ReferenceShow, Facing>? = null
+    private var referenceSinceMs = 0L
+
     private val _guidedOptions = MutableStateFlow(GuidedCaptureOptions())
     val guidedOptions: StateFlow<GuidedCaptureOptions> = _guidedOptions.asStateFlow()
     private val _coachingMessage = MutableStateFlow<CoachingEvent?>(null)
@@ -280,6 +310,7 @@ class CaptureViewModel(
     private val hapticChannel = Channel<Unit>(Channel.CONFLATED)
     val validRepEvents = hapticChannel.receiveAsFlow()
     private val orientationDetector = CameraOrientationDetector()
+    private val trackingGate = LiveTrackingGate()
     private val orientationGate = OrientationStabilityGate()
     private var latestOrientation: OrientationEstimate? = null
     private var setupAngleReady = false
@@ -292,6 +323,14 @@ class CaptureViewModel(
     private var lastFrameMs: Long? = null
     private var requiredSide: Side? = null
     private var preferredSide: Side? = null
+    /**
+     * The stance the current view is performed in. Fixed when the view begins,
+     * so a later rep that reads the other hand as higher cannot flip the
+     * required side under an athlete who is standing exactly where they were told.
+     */
+    private var stageStance: Stance = FacingGuide.stance(skill, CameraAngle.Front)
+    /** The last movement that was turned away, and when: (fault, timestamp). */
+    private var lastNotCounted: Pair<MovementFault, Long>? = null
     private var rotationCountdownJob: Job? = null
     private var rotationElapsedMs = 0L
     private var chunks = mutableListOf<CaptureChunk>()
@@ -320,6 +359,11 @@ class CaptureViewModel(
 
     private val qualityValidator = PoseQualityValidator()
     private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill))
+
+    /** Prototype, debug builds only: see [PersonalElbowBaseline] for the evidence and its limits. */
+    private val elbowBaselineEnabled = com.volleyballlab.player.BuildConfig.DEBUG &&
+        (skill == Skill.Serving || skill == Skill.Spiking)
+    private val elbowBaseline = PersonalElbowBaseline()
     private val postureCoach = LivePostureCoach(
         skill = skill,
         receivingEvaluator = receivingPostureEvaluator,
@@ -404,6 +448,7 @@ class CaptureViewModel(
         detector?.close()
         detector = null
         _poseFrame.value = null
+        _referenceFigure.value = null
         ticksSincePose = POSE_STALE_TICKS
         _uiState.value = CaptureUiState.Initialising
 
@@ -420,6 +465,7 @@ class CaptureViewModel(
 
         detector = created
         repCounter.reset()
+        elbowBaseline.reset()
         postureCoach.reset()
         _livePosture.value = LivePostureUi.Idle
         enterFraming(armAutoStart = true)
@@ -465,6 +511,75 @@ class CaptureViewModel(
 
             else -> Unit
         }
+        // After the frame is processed, so the figure reflects what it just decided.
+        updateReferenceFigure(frame)
+    }
+
+    /**
+     * What the reference figure should show right now, and which way it faces,
+     * or null for nothing.
+     *
+     * It appears at the moments an athlete is being told where to be: the
+     * countdown, a turn to a new view, standing the wrong way, a movement that
+     * was not counted, and a long wait with no rep. It never appears while a
+     * movement is under way - they are not looking at the screen then, and a
+     * target that moves while they do is a distraction, not a guide.
+     */
+    private fun referenceCue(): Pair<ReferenceShow, Facing>? {
+        val observed = latestOrientation ?: return null
+        val guided = _guidedOptions.value.enabled
+        return when (val state = _uiState.value) {
+            // Before the first rep: what one rep is, start to finish.
+            is CaptureUiState.CountingDown -> ReferenceShow.Demonstrate to
+                FacingGuide.shown(FacingGuide.stance(skill, CameraAngle.Front).takeIf { guided }, observed)
+
+            is CaptureUiState.Recording -> when {
+                state.finishingAfterRep -> null
+                // Turning: the stance to turn into, then the rep from that side.
+                state.rotation != null ->
+                    (if (state.rotation.secondsLeft != null) ReferenceShow.Demonstrate else ReferenceShow.Start) to
+                        FacingGuide.shown(stageStance, observed)
+                // Facing the wrong way: the right way, in the figure rather than in words.
+                state.suspensionHint != null ->
+                    ReferenceShow.Start to (if (guided) stageStance.facing else FacingGuide.shown(null, observed))
+                repCounter.currentPhase == null -> null
+                else -> _coachingMessage.value?.reference?.let { show ->
+                    show to FacingGuide.shown(stageStance.takeIf { guided }, observed)
+                }
+            }
+
+            else -> null
+        }
+    }
+
+    private fun updateReferenceFigure(frame: PoseFrame) {
+        val cue = if (coachingPreferences.value.poseGuideEnabled) referenceCue() else null
+        if (cue == null) {
+            shownReference = null
+            figureTracker.reset()
+            _referenceFigure.value = null
+            return
+        }
+        if (cue != shownReference) {
+            shownReference = cue
+            referenceSinceMs = frame.timestampMs
+        }
+        val (body, placement) = figureTracker.update(frame) ?: run { _referenceFigure.value = null; return }
+        val (show, facing) = cue
+        val moment = when (show) {
+            ReferenceShow.Start -> ReferenceMoment.Start
+            ReferenceShow.Finish -> ReferenceMoment.Finish
+            ReferenceShow.Demonstrate ->
+                if ((frame.timestampMs - referenceSinceMs) / DEMONSTRATE_HOLD_MS % 2L == 0L) ReferenceMoment.Start
+                else ReferenceMoment.Finish
+        }
+        // Side-on, the arm nearest the lens is the hitting arm; that is the rule
+        // the side view is set up by. Otherwise, the arm they have been hitting with.
+        val hitting = FacingGuide.nearSide(facing) ?: preferredSide ?: Side.Right
+        _referenceFigure.value = ReferenceFigure.layout(
+            ReferencePoses.pose(skill, moment, hitting, body), moment, body, placement, facing,
+            frame.imageWidth, frame.imageHeight,
+        )
     }
 
     fun setGuidedAngles(enabled: Boolean) {
@@ -496,10 +611,12 @@ class CaptureViewModel(
         }
         liveCoachingJob?.cancel()
         _coachingMessage.value = null
+        _referenceFigure.value = null
         while (speechChannel.tryReceive().isSuccess) { /* discard old prompts */ }
         while (hapticChannel.tryReceive().isSuccess) { /* discard old successes */ }
         reliableSinceMs = null
         orientationGate.reset()
+        trackingGate.reset()
         setupAngleReady = false
         val recording = _uiState.value as? CaptureUiState.Recording
         if (recording != null) {
@@ -529,9 +646,19 @@ class CaptureViewModel(
         orientationGate.reset()
     }
 
-    private fun publish(event: CoachingEvent?, speak: Boolean = true, directorId: Long? = null) {
+    /**
+     * @param cue the full and short wording of [event], when it has both. The
+     *   card always shows the full sentence; what is spoken depends on whether
+     *   the athlete has already heard it. See [ProgressiveInstructions].
+     */
+    private fun publish(event: CoachingEvent?, speak: Boolean = true, directorId: Long? = null, cue: SpokenCue? = null) {
         if (event == null) return
-        val current = event.copy(id = ++coachingSequence)
+        var current = event.copy(id = ++coachingSequence)
+        // Only speech the athlete can actually hear teaches them anything. A
+        // muted session reads the full sentence on the card instead.
+        if (speak && cue != null && voiceGuidanceEnabled) {
+            current = current.copy(spokenText = instructions.speak(cue, current.timestampMs, current.id))
+        }
         _coachingMessage.value = current
         if (directorId != null) {
             if (directorEvents.size > 16) directorEvents.clear()
@@ -542,6 +669,7 @@ class CaptureViewModel(
 
     /** The screen could not speak this event. The director may offer its sentence again. */
     fun onSpeechDropped(eventId: Long) {
+        instructions.dropped(eventId)
         directorEvents.remove(eventId)?.let(director::onSpeechDropped)
     }
 
@@ -563,24 +691,31 @@ class CaptureViewModel(
         }
         // Moving athletes are allowed to move; the setup validator's Unstable
         // verdict does not invalidate a rep. Framing and landmark evidence do.
-        val angleMatches = estimate.angle == state.angle && estimate.confidence >= 0.7f
-        // A serve can briefly rotate during its swing. The requested view must
-        // be established at rest, and each scored phase still has its own mask.
-        val angleAligned = !_guidedOptions.value.enabled || angleMatches || repCounter.currentPhase == null
-        // Side framing already requires an observed torso and complete leg.
-        // Averaging in the hidden far arm/leg rejects a valid side-on athlete.
-        // Per-cue scoring still excludes every unobserved joint.
-        val visibilityReady = if (estimate.angle == CameraAngle.Side && estimate.confidence >= 0.7f) {
-            estimate.fullBodyVisible
-        } else frame.torsoAndLimbVisibility() >= 0.6f
-        val reliable = estimate.fullBodyVisible && visibilityReady && angleAligned
-        val wrongView = estimate.fullBodyVisible && visibilityReady && !angleAligned
-        if (!reliable) {
+        // A view the detector is not sure of is treated as not established.
+        val observedView = if (estimate.confidence >= 0.7f) estimate else estimate.copy(angle = CameraAngle.Unknown)
+        // Guided capture asks for one stance per view. Free practice accepts any
+        // view the cues can be read from, but not a body turned part-way between.
+        val facingCorrection = if (_guidedOptions.value.enabled) FacingGuide.correctionCue(skill, stageStance, observedView)
+            else FacingGuide.freePracticeCue(observedView)
+        // Facing is judged at rest and only once it has lasted; side-on rules are
+        // kept through the swing; a brief unusable frame is skipped rather than
+        // ending the rep. See LiveTrackingGate for why each rule exists.
+        // (repCounter.currentPhase is null while a movement is in progress.)
+        val decision = trackingGate.update(frame.timestampMs, estimate, facingCorrection,
+            inRep = repCounter.currentPhase == null, limbVisibility = frame.torsoAndLimbVisibility())
+        if (decision.outcome == LiveTrackingGate.Outcome.Skip) {
+            _uiState.value = state.copy(quality = quality, orientationConfidence = estimate.confidence)
+            return
+        }
+        val wrongView = decision.outcome == LiveTrackingGate.Outcome.WrongFacing
+        if (decision.outcome != LiveTrackingGate.Outcome.Track) {
             interruptTracking()
+            // Nothing is counted while the athlete faces the wrong way; they are
+            // told which way to turn, on the card and aloud.
+            val turn = facingCorrection.takeIf { wrongView }
             _uiState.value = state.copy(quality = quality, orientationConfidence = estimate.confidence,
-                stageMetrics = stageMetrics, totalMetrics = totalMetrics,
-                suspensionHint = if (wrongView) "Return to the ${state.angle.name.lowercase()} view and hold steady." else null)
-            publish(director.onTracking(frame.timestampMs, state.angle.takeIf { wrongView }))
+                stageMetrics = stageMetrics, totalMetrics = totalMetrics, suspensionHint = turn?.full)
+            publish(director.onTracking(frame.timestampMs, state.angle.takeIf { wrongView }, turn?.full), cue = turn)
             return
         }
         if (reliableSinceMs == null) reliableSinceMs = frame.timestampMs
@@ -597,6 +732,7 @@ class CaptureViewModel(
         if (stageStartMs == null) stageStartMs = frame.timestampMs
         recordedFrames += frame
         val counted = repCounter.onFrame(frame)
+        repCounter.lastRejection?.let { onMovementNotCounted(it, frame.timestampMs) }
         _speechWindowOpen.value = repCounter.currentPhase != null
         val actualAngle = if (estimate.confidence >= 0.65f) estimate.angle else CameraAngle.Unknown
         _livePosture.value = postureCoach.update(frame, repCounter.currentPhase, actualAngle)
@@ -616,13 +752,27 @@ class CaptureViewModel(
                 val direction = director.onRep(assessment, frame.timestampMs, repAngle, _coachingPlan.value.focusCueIds,
                     com.volleyballlab.player.pose.analysis.RepContext(stageMetrics.reps, stageTarget, state.stageIndex,
                         stageMetrics.streak, stageMetrics.bestStreak, stageMetrics.validReps))
+                // Prototype: an elbow clearly below this athlete's own best reps in
+                // this view takes the turn only when the director has nothing to say
+                // and this is not the quiet retry after a directed rep.
+                val elbowTurn = if (elbowBaselineEnabled) {
+                    (elbowBaseline.observe(window, repAngle to state.stageIndex) as? PersonalElbowBaseline.Check.Dropped)
+                        ?.takeIf { it.announce && direction == null && _repFeedback.value?.directed != true }
+                        ?.let {
+                            elbowBaseline.announced()
+                            CoachingEvent(0, CoachingEventType.Correction, CoachPhrasebook.ELBOW_BELOW_BEST,
+                                frame.timestampMs, 1, repNumber = totalMetrics.reps)
+                        }
+                } else null
+                val turn = direction ?: elbowTurn
                 val feedback = PersonalizedLiveCoaching.feedback(
                     assessment, repAngle, _coachingPlan.value, totalMetrics.reps, stageMetrics.reps,
-                    stageTarget, direction, previous = _repFeedback.value,
+                    stageTarget, turn, previous = _repFeedback.value,
                 )
                 _repFeedback.value = feedback
                 publish(CoachingEvent(0, feedback.type, feedback.spokenText, frame.timestampMs,
-                    direction?.priority ?: 0, repNumber = totalMetrics.reps),
+                    turn?.priority ?: 0, repNumber = totalMetrics.reps,
+                    reference = ReferenceShow.Finish.takeIf { elbowTurn != null && direction == null }),
                     speak = !GuidedCaptureProgress.reachedTarget(_guidedOptions.value, stageMetrics),
                     directorId = direction?.id)
                 if (assessment.isAssessable && assessment.isGood) hapticChannel.trySend(Unit)
@@ -644,6 +794,34 @@ class CaptureViewModel(
             if (next == null) finishWithClosing(endedEarly = false, finalRep = _repFeedback.value?.spokenText)
             else requestRotation(next)
         }
+    }
+
+    /**
+     * A movement finished and was not the skill. Nothing is added to any count,
+     * score or streak; the athlete is told the one change that would have made
+     * it a rep.
+     *
+     * The card always shows it, because a movement that silently fails to count
+     * reads as a broken counter. Speech is paced: the same reason is not repeated
+     * within [NOT_COUNTED_REPEAT_MS], and two different ones are kept
+     * [NOT_COUNTED_GAP_MS] apart, so a string of wrong attempts is coached
+     * rather than narrated.
+     */
+    private fun onMovementNotCounted(fault: MovementFault, timestampMs: Long) {
+        // They are moving, so "I'm waiting for a rep" would be the wrong thing to say.
+        idleTicks = 0
+        val last = lastNotCounted
+        val sinceLast = last?.let { timestampMs - it.second }
+        val speak = sinceLast == null || sinceLast >= NOT_COUNTED_REPEAT_MS ||
+            last?.first != fault && sinceLast >= NOT_COUNTED_GAP_MS
+        if (speak) lastNotCounted = fault to timestampMs
+        // The finish position goes up with the words, unless the trouble was the
+        // camera's view of them rather than where their body was.
+        val picture = ReferenceShow.Finish.takeUnless {
+            fault == MovementFault.ArmsNotVisible || fault == MovementFault.LegsNotVisible
+        }
+        publish(CoachingEvent(0, CoachingEventType.NotCounted, CoachPhrasebook.notCounted(fault), timestampMs, 1,
+            reference = picture), speak = speak, cue = CoachPhrasebook.notCountedCue(fault))
     }
 
     /**
@@ -741,20 +919,19 @@ class CaptureViewModel(
         stageEvidence.reset()
         val angle = GuidedCaptureProgress.angles[index]
         orientationGate.reset()
+        trackingGate.reset()
         qualityValidator.reset()
         repCounter.reset()
+        elbowBaseline.reset()
         postureCoach.reset()
         reliableSinceMs = null
         rotationElapsedMs = 0L
-        // Without an observed contact arm, the athlete's own stated hand is the best guide.
-        requiredSide = if (angle == CameraAngle.Side && (skill == Skill.Serving || skill == Skill.Spiking)) {
-            preferredSide ?: _coachingPlan.value.dominantSide
-        } else null
-        val direction = when (angle) {
-            CameraAngle.Side -> if (requiredSide == null) "Turn sideways to the camera." else "Turn sideways with your ${requiredSide!!.name.lowercase()} hitting arm nearest the camera."
-            CameraAngle.Rear -> "Now face away from the camera. Keep your whole body in view."
-            else -> "Face the camera and keep your whole body in view."
-        }
+        // The hitting arm comes from the reps already seen. The one-armed skills need
+        // that arm nearest the lens; until one has been observed the turn is only
+        // suggested, and the other skills are measurable from either profile.
+        stageStance = FacingGuide.stance(skill, angle, preferredSide)
+        requiredSide = stageStance.requiredNearSide
+        val direction = FacingGuide.instruction(skill, stageStance)
         // The target rep shares the turn's audio lane, so its count and verdict
         // cannot be cut off by the camera-angle instruction.
         val finalRep = _repFeedback.value?.takeIf {
@@ -779,7 +956,8 @@ class CaptureViewModel(
         val turnContext = turnContext(LiveCoachingTurnContext.Turn.Break, state.stageIndex, focus?.cueId)
         _uiState.value = state.copy(rotation = RotationUi(angle, index, message = message, instruction = direction,
             guidanceId = id, loadingCoaching = false, speechPending = voiceGuidanceEnabled, advice = localAdvice,
-            required = GuidedCaptureProgress.isRequired(index), segments = segments, awaitingAdvice = load))
+            required = GuidedCaptureProgress.isRequired(index), segments = segments, awaitingAdvice = load,
+            facing = stageStance.facing))
         if (load) liveCoachingJob = viewModelScope.launch {
             val advice = try {
                 kotlinx.coroutines.withTimeoutOrNull(8_000) { liveCoachingRepository.advise(evidence, false, turnContext) }
@@ -819,12 +997,15 @@ class CaptureViewModel(
             idleTicks = 0
             totalMetrics = totalMetrics.interrupted()
             repCounter.reset()
+            elbowBaseline.reset()
             postureCoach.reset()
             _coachingMessage.value = null
             _repFeedback.value = null
             reliableSinceMs = lastFrameMs
+            lastNotCounted = null
             _uiState.value = state.copy(angle = rotation.requestedAngle, stageIndex = rotation.stageIndex,
-                rotation = null, stageMetrics = stageMetrics, totalMetrics = totalMetrics)
+                rotation = null, stageMetrics = stageMetrics, totalMetrics = totalMetrics,
+                facing = rotation.facing)
             // After the screen has dropped the turn's own audio.
             delay(400)
             val resumed = _uiState.value as? CaptureUiState.Recording ?: return@launch
@@ -866,6 +1047,9 @@ class CaptureViewModel(
 
             if (_poseFrame.value != null) {
                 _poseFrame.value = null
+                // No athlete to stand the figure on; an old one must not linger.
+                _referenceFigure.value = null
+                figureTracker.reset()
                 qualityValidator.reset()
             }
             val recording = _uiState.value as? CaptureUiState.Recording ?: continue
@@ -1017,14 +1201,21 @@ class CaptureViewModel(
         currentChunkAngle = CameraAngle.Front
         stageStartMs = null
         reliableSinceMs = null
+        trackingGate.reset()
+        stageStance = FacingGuide.stance(skill, CameraAngle.Front)
+        requiredSide = null
+        preferredSide = null
+        lastNotCounted = null
         director.reset()
         director.experience = _coachingPlan.value.experience
+        instructions.reset(_coachingPlan.value.experience)
         _speechWindowOpen.value = false
         _coachingMessage.value = null
         _repFeedback.value = null
         recordingSessionId = UUID.randomUUID().toString()
         videoFinalization = CompletableDeferred()
         repCounter.reset()
+        elbowBaseline.reset()
         postureCoach.reset()
         _livePosture.value = LivePostureUi.Idle
         recordingStartedAtEpochMs = System.currentTimeMillis()
@@ -1049,7 +1240,9 @@ class CaptureViewModel(
                 idleTicks = if (waiting) idleTicks + 1 else 0
                 if (idleTicks >= IDLE_TICKS && !idleSpoken) {
                     idleSpoken = true
-                    publish(CoachingEvent(0, CoachingEventType.RepMilestone, CoachPhrasebook.IDLE, lastFrameMs ?: 0L, 0))
+                    // Standing still earns nothing; say what a rep of this skill is.
+                    publish(CoachingEvent(0, CoachingEventType.RepMilestone, CoachPhrasebook.idle(skill), lastFrameMs ?: 0L, 0,
+                        reference = ReferenceShow.Demonstrate), cue = CoachPhrasebook.idleCue(skill))
                 }
                 val rotation = state.rotation?.let {
                     rotationElapsedMs += TIMER_TICK_MS
@@ -1201,6 +1394,11 @@ class CaptureViewModel(
         private const val TIMER_TICK_MS = 100L
         private const val IDLE_TICKS = 120
         private const val CLOSING_GRACE_MS = 2_000L
+        private const val NOT_COUNTED_GAP_MS = 3_000L
+        private const val NOT_COUNTED_REPEAT_MS = 8_000L
+
+        /** How long each of the two positions is held when a rep is being demonstrated. */
+        const val DEMONSTRATE_HOLD_MS = 1_400L
 
         /**
          * How long framing must stay acceptable before the countdown starts by

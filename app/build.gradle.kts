@@ -51,6 +51,7 @@ val xenditTestCheckoutUrl = "https://dev.xen.to/QitKomS0"
 // Keep clean checkouts from silently producing an APK without live pose tracking.
 abstract class VerifyPoseModel : DefaultTask() {
     @get:org.gradle.api.tasks.Internal abstract val model: org.gradle.api.file.RegularFileProperty
+    @get:org.gradle.api.tasks.Internal abstract val benchmark: org.gradle.api.file.RegularFileProperty
     @get:org.gradle.api.tasks.Internal abstract val temporaryDirectory: org.gradle.api.file.DirectoryProperty
     @get:org.gradle.api.tasks.Input abstract val offline: org.gradle.api.provider.Property<Boolean>
 
@@ -84,10 +85,19 @@ abstract class VerifyPoseModel : DefaultTask() {
             } finally { Files.deleteIfExists(temporary) }
         }
         check(sha256(target) == expected) { "The pose model checksum did not match. Restore the official full model before building." }
+        val result = groovy.json.JsonSlurper().parse(benchmark.get().asFile) as? Map<*, *>
+            ?: error("The pose benchmark metadata is invalid.")
+        check(result["model_sha256"] == expected && result["dataset"] == "MADS" &&
+            result["metric"] == "3D_MPJPE" && result["running_mode"] == "VIDEO" &&
+            result["scope"] == "dataset_benchmark_not_session_measurement" &&
+            result["five_skill_validated"] == false) {
+            "The MADS benchmark does not match this pose model or its documented scope. Re-evaluate and export the benchmark before building."
+        }
     }
 }
 val verifyPoseModel = tasks.register<VerifyPoseModel>("verifyPoseModel") {
     model.set(layout.projectDirectory.file("src/main/assets/pose_landmarker_full.task"))
+    benchmark.set(layout.projectDirectory.file("src/main/assets/pose_benchmark.json"))
     temporaryDirectory.set(layout.buildDirectory.dir("pose-model-download"))
     offline.set(gradle.startParameter.isOffline)
 }
@@ -109,8 +119,8 @@ android {
         applicationId = "com.volleyballlab.player"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 29
-        versionName = "0.1.28"
+        versionCode = 32
+        versionName = "0.1.31"
         buildConfigField("String", "PASSWORD_RECOVERY_URL", "\"$passwordRecoveryUrl\"")
         buildConfigField("String", "SESSION_AI_URL", "\"${sessionAiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "RECORDING_STORAGE_URL", "\"${recordingStorageUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")

@@ -8,6 +8,7 @@ export type CueUnit = "deg" | "m" | "ratio";
 
 export interface CueDef {
   id: string;
+  weight: number;
   label: string;
   tip: string;
   unit: CueUnit;
@@ -16,34 +17,34 @@ export interface CueDef {
 
 const CUES: Record<string, CueDef[]> = {
   Serving: [
-    { id: "ServeContactArmExtension", label: "Extend at contact", tip: "Meet the ball with a straight hitting arm. A bent elbow at contact costs both power and accuracy.", unit: "deg", target: [155, 180] },
-    { id: "ServeReachHeight", label: "Reach high", tip: "Contact the ball at the top of your reach, not out in front of your chest.", unit: "deg", target: [140, 180] },
-    { id: "ServeTrunkLean", label: "Stay tall", tip: "Keep the trunk close to upright. Leaning back sends the serve long.", unit: "deg", target: [-10, 15] },
-    { id: "ServeTossArmLift", label: "Lift the toss arm", tip: "Raise the tossing arm and hold it up. Dropping it early pulls the hitting shoulder down with it.", unit: "deg", target: [90, 160] },
+    { id: "ServeContactArmExtension", weight: 0.35, label: "Extend the raised arm", tip: "Reach upward and extend your elbow comfortably above your shoulder.", unit: "deg", target: [155, 180] },
+    { id: "ServeReachHeight", weight: 0.30, label: "Reach high", tip: "Raise your arm overhead while keeping your trunk controlled.", unit: "deg", target: [140, 180] },
+    { id: "ServeTrunkLean", weight: 0.20, label: "Stay tall", tip: "Keep your trunk comfortably upright and your weight balanced over your feet.", unit: "deg", target: [-10, 15] },
+    { id: "ServeTossArmLift", weight: 0.15, label: "Lift the guiding arm", tip: "Raise your guiding arm steadily while preparing the other elbow.", unit: "deg", target: [90, 160] },
   ],
   Receiving: [
-    { id: "PassPlatformStraight", label: "Lock the platform", tip: "Keep both elbows straight and joined. Bending them makes the pass unpredictable.", unit: "deg", target: [165, 180] },
-    { id: "PassKneeFlexion", label: "Bend the knees", tip: "Load into an athletic stance. Passing with straight legs takes away your control.", unit: "deg", target: [110, 150] },
-    { id: "PassTrunkAngle", label: "Lean into the ball", tip: "Angle the chest forward over the platform rather than standing upright.", unit: "deg", target: [15, 40] },
-    { id: "PassShouldersLevel", label: "Level the shoulders", tip: "Square, level shoulders keep the platform flat and the pass on target.", unit: "deg", target: [0, 12] },
+    { id: "PassPlatformStraight", weight: 0.35, label: "Steady the platform", tip: "Join your forearms and extend both elbows comfortably to form a steady platform.", unit: "deg", target: [165, 180] },
+    { id: "PassKneeFlexion", weight: 0.30, label: "Bend the knees", tip: "Bend your knees comfortably while keeping a balanced stance.", unit: "deg", target: [110, 150] },
+    { id: "PassTrunkAngle", weight: 0.20, label: "Lean from the hips", tip: "Lean slightly forward from your hips while keeping your base balanced.", unit: "deg", target: [15, 40] },
+    { id: "PassShouldersLevel", weight: 0.15, label: "Level the shoulders", tip: "Keep your shoulders level to steady your forearm platform.", unit: "deg", target: [0, 12] },
   ],
   Setting: [
-    { id: "SetHandsAboveForehead", label: "Hands above the forehead", tip: "Meet the ball above and slightly in front of the forehead, not down at chin height.", unit: "m", target: [0.02, 0.4] },
-    { id: "SetElbowFlexion", label: "Load the elbows", tip: "Elbows bent and out on contact, so you can push through the ball.", unit: "deg", target: [80, 120] },
-    { id: "SetKneeFlexion", label: "Set with the legs", tip: "Bend the knees before the set. The power comes from the legs, not the wrists.", unit: "deg", target: [130, 165] },
-    { id: "SetExtensionFollowThrough", label: "Finish extended", tip: "Follow through until the arms are straight and the hands finish toward the target.", unit: "deg", target: [155, 180] },
+    { id: "SetHandsAboveForehead", weight: 0.35, label: "Hands above the forehead", tip: "Position your hands above and slightly in front of your forehead.", unit: "m", target: [0.02, 0.4] },
+    { id: "SetElbowFlexion", weight: 0.25, label: "Load the elbows", tip: "Keep your elbows comfortably bent before extending your arms upward.", unit: "deg", target: [80, 120] },
+    { id: "SetKneeFlexion", weight: 0.20, label: "Soften the knees", tip: "Start with softly bent knees, then extend under control.", unit: "deg", target: [130, 165] },
+    { id: "SetExtensionFollowThrough", weight: 0.20, label: "Finish extended", tip: "Extend both arms upward evenly, then return to your starting posture.", unit: "deg", target: [155, 180] },
   ],
   Spiking: [
-    { id: "SpikeApproachLoad", label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
-    { id: "SpikeArmExtension", label: "Swing through full extension", tip: "Contact with the hitting arm straight, above the shoulder.", unit: "deg", target: [155, 180] },
-    { id: "SpikeJumpHeight", label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },
-    { id: "SpikeTrunkDrive", label: "Drive the trunk", tip: "Snap the chest forward through contact instead of hanging back.", unit: "deg", target: [-5, 25] },
+    { id: "SpikeApproachLoad", weight: 0.25, label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
+    { id: "SpikeArmExtension", weight: 0.30, label: "Swing through full extension", tip: "Extend the raised arm above your shoulder within a comfortable range.", unit: "deg", target: [155, 180] },
+    { id: "SpikeJumpHeight", weight: 0.25, label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },
+    { id: "SpikeTrunkDrive", weight: 0.20, label: "Control the trunk", tip: "Keep your trunk controlled as your raised arm extends overhead.", unit: "deg", target: [-5, 25] },
   ],
   Blocking: [
-    { id: "BlockArmExtension", label: "Straight arms", tip: "Lock both elbows at the top of the block. Bent arms collapse under a hard hit.", unit: "deg", target: [160, 180] },
-    { id: "BlockHandSeparation", label: "Hand spacing", tip: "Close enough that the ball cannot pass between the hands, wide enough to cover the seam.", unit: "m", target: [0.15, 0.45] },
-    { id: "BlockPenetration", label: "Penetrate the net", tip: "Reach the hands over and past the net line rather than straight up.", unit: "m", target: [0.05, 0.35] },
-    { id: "BlockKneeLoad", label: "Load before the jump", tip: "Bend the knees to load. Blocking flat-footed means late hands.", unit: "deg", target: [90, 125] },
+    { id: "BlockArmExtension", weight: 0.30, label: "Straight arms", tip: "Extend both elbows comfortably during the overhead reach.", unit: "deg", target: [160, 180] },
+    { id: "BlockHandSeparation", weight: 0.25, label: "Hand spacing", tip: "Keep your hands evenly spaced above your shoulders.", unit: "m", target: [0.15, 0.45] },
+    { id: "BlockPenetration", weight: 0.25, label: "Reach slightly forward", tip: "Position your hands slightly in front of your shoulders during the overhead reach.", unit: "m", target: [0.05, 0.35] },
+    { id: "BlockKneeLoad", weight: 0.20, label: "Load before the jump", tip: "Bend your knees from a balanced stance before the upward movement.", unit: "deg", target: [90, 125] },
   ],
 };
 
@@ -78,3 +79,7 @@ export const SKILL_LABEL: Record<string, string> = {
   Spiking: "Spiking",
   Blocking: "Blocking",
 };
+
+export function cueDefinition(id: string): CueDef | undefined {
+  return Object.values(CUES).flat().find(cue => cue.id === id);
+}

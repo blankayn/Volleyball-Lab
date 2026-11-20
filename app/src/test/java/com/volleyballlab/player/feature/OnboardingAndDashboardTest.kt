@@ -152,6 +152,72 @@ class OnboardingAndDashboardTest {
         assertEquals(100, SkillRecommendation.meanScoreFor(Skill.Spiking, sessions))
         assertEquals(20, SkillRecommendation.meanScoreFor(Skill.Serving, sessions))
         assertNull(SkillRecommendation.meanScoreFor(Skill.Blocking, sessions))
+        assertEquals(100, SkillRecommendation.recentScoreFor(Skill.Spiking, sessions))
+        assertNull(SkillRecommendation.recentScoreFor(Skill.Blocking, sessions))
+    }
+
+    /**
+     * Ten weak early sessions then five strong recent ones. The all-time mean (50)
+     * would still call this player a Beginner; the level must follow how they score
+     * now. The skill page's all-time "avg form" is unchanged.
+     */
+    @Test
+    fun `the level follows recent sessions, not the all-time average`() {
+        val assessment = SkillAssessment(ratings = mapOf(Skill.Serving to SelfRating.Struggling))
+        val early = (0 until 10).map { session(id = "early$it", skill = Skill.Serving, startedAt = it.toLong(), score = 0.3f) }
+        val recent = (0 until 5).map { session(id = "recent$it", skill = Skill.Serving, startedAt = 100L + it, score = 0.9f) }
+
+        val recommendation = SkillRecommendation.from(assessment, AthleteProfile.Anonymous, early + recent)!!
+
+        assertEquals(90, recommendation.measuredScore)
+        assertEquals(SkillLevel.Advanced, recommendation.level)
+        assertEquals(50, SkillRecommendation.meanScoreFor(Skill.Serving, early + recent))
+    }
+
+    /** A slump shows too: strong early sessions do not hide five weak recent ones. */
+    @Test
+    fun `a recent slump lowers the level`() {
+        val assessment = SkillAssessment(ratings = mapOf(Skill.Serving to SelfRating.Confident))
+        val early = (0 until 10).map { session(id = "early$it", skill = Skill.Serving, startedAt = it.toLong(), score = 0.9f) }
+        val recent = (0 until 5).map { session(id = "recent$it", skill = Skill.Serving, startedAt = 100L + it, score = 0.4f) }
+
+        val recommendation = SkillRecommendation.from(assessment, AthleteProfile.Anonymous, early + recent)!!
+
+        assertEquals(40, recommendation.measuredScore)
+        assertEquals(SkillLevel.Beginner, recommendation.level)
+    }
+
+    /** "Recent" means latest start time, whatever order the repository returns. */
+    @Test
+    fun `recent is by start time, not list order`() {
+        val newestFirst = (0 until 5).map { session(id = "new$it", skill = Skill.Serving, startedAt = 100L + it, score = 0.9f) } +
+            (0 until 10).map { session(id = "old$it", skill = Skill.Serving, startedAt = it.toLong(), score = 0.3f) }
+
+        assertEquals(90, SkillRecommendation.recentScoreFor(Skill.Serving, newestFirst))
+        assertEquals(90, SkillRecommendation.recentScoreFor(Skill.Serving, newestFirst.reversed()))
+    }
+
+    /**
+     * Only sessions that produced a score count toward the five, so a set filmed
+     * from a bad angle does not push a real result out of the window.
+     */
+    @Test
+    fun `unscored sessions do not use up the recent window`() {
+        val scored = (0 until 5).map { session(id = "s$it", skill = Skill.Serving, startedAt = it.toLong(), score = 0.8f) }
+        val unscored = (0 until 3).map { session(id = "u$it", skill = Skill.Serving, startedAt = 100L + it, score = null) }
+
+        assertEquals(80, SkillRecommendation.recentScoreFor(Skill.Serving, scored + unscored))
+    }
+
+    /** With fewer than five sessions, all of them count. */
+    @Test
+    fun `fewer sessions than the window use them all`() {
+        val sessions = listOf(
+            session(id = "a", skill = Skill.Serving, startedAt = 1L, score = 0.5f),
+            session(id = "b", skill = Skill.Serving, startedAt = 2L, score = 0.7f),
+        )
+
+        assertEquals(60, SkillRecommendation.recentScoreFor(Skill.Serving, sessions))
     }
 
     // ── The Daily progress row ──────────────────────────────────────────────

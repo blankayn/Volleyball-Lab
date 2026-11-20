@@ -19,3 +19,23 @@ Both device tests passed on the Infinix X6833B. The retained-feedback test submi
 Device results: `outputs/automatic-feedback-device-tests.txt`. Screenshot: `outputs/automatic-feedback-device.png`.
 
 Delivered and installed APK: `outputs/VolleyballLab-automatic-feedback-debug.apk`. SHA-256: `22A21F3AB61DAE480B57AD87E89EDC3FE19DEE08C838348D723F8707B5D2A506`. Installation preserved existing accounts and recordings.
+
+
+## Coach Reel implementation (15 November 2026)
+
+Version two sidecars add rep windows, proven view angles and guided stage targets;
+version one remains readable with unknown views and empty windows. Capture maps
+all retained timestamps to the original MP4 clock. Legacy analysis also emits rep
+windows. Coach Reel selects up to six measurable correction clips, reserves
+failures from Front and Side, avoids overlapping selections, and reuses the
+existing private video player and skeleton renderer. Each clip pauses at the
+measured moment and includes what happened, why the posture matters and what to
+practice, with the measured value and provisional range. Full recording playback
+remains available. No video or landmarks are sent to a language model.
+
+Front/Side comparison uses asynchronous local still extraction with a bounded
+bitmap cache. The two panes represent separate recorded repetitions. Missing
+views, missing skeletons and unmeasured cues are explicit. An illustration at the
+cue phase reuses the existing reference renderer. Portrait/landscape alignment,
+seek precision and lifecycle playback still require device acceptance checks.
+MP4 export remains pending the in-app playback checks; no export action is shown.

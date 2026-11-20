@@ -47,7 +47,7 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                         color = if (plan.isPro) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (account?.uid == ProEntitlement.OWNER_UID) Text("Owner Pro access", style = MaterialTheme.typography.bodySmall,
+            if (ProEntitlement.isGranted(account?.uid)) Text(if (account?.uid == ProEntitlement.OWNER_UID) "Owner Pro access" else "Pro access granted by the owner", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlanLine("Pro includes all 15 drills and coach connection. Free includes five starter drills.")

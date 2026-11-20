@@ -73,7 +73,7 @@ export function wireSessionExplanations(root: HTMLElement): () => void {
         status.textContent = code.includes("resource-exhausted") ? "Please wait before trying again, or try tomorrow if your daily limit was reached."
           : code.includes("permission-denied") ? "Your access to this session has changed."
           : code.includes("failed-precondition") ? "This session cannot be explained yet. Try a shorter practice set with measurable reps."
-          : "AI explanation is unavailable right now. Your session measurements and coach notes still work.";
+          : "AI explanation is unavailable right now. Your session measurements and Coach Feedback still work.";
         status.classList.add("is-error");
       } finally { busy = false; if (!disposed && panel.isConnected) button.disabled = false; }
     };

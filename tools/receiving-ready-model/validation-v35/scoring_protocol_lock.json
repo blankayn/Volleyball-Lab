@@ -1,0 +1,29 @@
+{
+  "created_at_utc": "2026-09-23T17:15:41.822194+00:00",
+  "manifest_sha256": "d64a0b08ecb564036b34930552b75d54651271cf18a843084d98e8e3cf8a704b",
+  "label_interval_lock_sha256": "15d1bfe43db447f5af5c04967adf5f1aae535c6171603fa5b0a42a99f8fa86be",
+  "pre_inference_lock_sha256": "29ac5e028f169aa27ce562bfc4f3af565e81ced9ecfce046fdfac1f2ca660d1e",
+  "primary_unit": "one actual-final live-equivalent 32-pose window per sealed clip",
+  "window_protocol": {
+    "sampling_fps": 10.0,
+    "window_pose_frames": 32,
+    "maximum_gap_between_pose_frames_s": 0.5,
+    "required_landmarks": "nose, shoulders, hips, knees, ankles, heels, and foot indices",
+    "minimum_landmark_visibility": 0.4,
+    "minimum_reliable_frame_fraction": 0.5,
+    "minimum_median_ankle_visibility": 0.4,
+    "features": [
+      "knee_mean median/q10/q90",
+      "trunk_forward_lean median/q10/q90"
+    ],
+    "terminal_window": "the last chronological 32-pose candidate window in the sealed interval; if that exact window fails the app-equivalent quality gate, the clip is insufficient-quality and no earlier window substitutes for it"
+  },
+  "decision_policy": {
+    "ok_if_probability_below": 0.4,
+    "fault_if_probability_at_or_above": 0.6,
+    "otherwise": "uncertain"
+  },
+  "primary_metrics": "end-to-end decision coverage, conditional clip accuracy, balanced accuracy, per-class recall, confusion matrix, and Wilson 95% interval",
+  "source_analysis": "Report unique source groups by class and source-group aggregates; repeated/overlapping windows are descriptive only.",
+  "rule": "Quality review may abstain for wrong-person tracking or unusable framing without consulting classifier scores. Do not tune or retrain on v35."
+}

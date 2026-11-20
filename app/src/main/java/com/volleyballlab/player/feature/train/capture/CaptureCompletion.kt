@@ -12,7 +12,7 @@ import com.volleyballlab.player.pose.analysis.ScoredSession
 import com.volleyballlab.player.pose.model.PoseFrame
 import com.volleyballlab.player.pose.review.CapturedReviewInput
 import com.volleyballlab.player.pose.review.CapturedReviewWriter
-import com.volleyballlab.player.pose.review.ReviewIssue
+import com.volleyballlab.player.pose.review.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +32,8 @@ internal data class CaptureCompletionInput(
     val guidedAngles: Boolean,
     val angleStages: List<SessionAngleStage>,
     val replayFrames: List<PoseFrame>,
+    val targetReps: Int = 5,
+    val endedEarly: Boolean = false,
 )
 
 /**
@@ -69,7 +71,9 @@ internal class CaptureCompletion(
             }
             var offset = 0
             val issues = mutableListOf<ReviewIssue>()
+            val reviewReps = mutableListOf<ReviewRep>()
             parts.forEach { part ->
+                reviewReps += part.reviewReps.map { it.copy(repNumber = it.repNumber + offset) }
                 issues += part.issues.map { it.copy(repNumber = it.repNumber + offset) }
                 offset += part.session.repCount
             }
@@ -80,7 +84,7 @@ internal class CaptureCompletion(
                 reps = parts.flatMap { it.session.reps }.mapIndexed { index, rep -> rep.copy(index = index) },
                 angleStages = if (input.guidedAngles) input.angleStages else emptyList(),
             )
-            ScoredSession(result, issues.toList(), parts.sumOf { it.assessedCueCount })
+            ScoredSession(result, issues.toList(), parts.sumOf { it.assessedCueCount }, reviewReps)
         }
         val videoPath = withTimeoutOrNull(VIDEO_FINALIZE_TIMEOUT_MS) { videoFinalization?.await() }
         videoFinalization?.cancel()
@@ -89,7 +93,10 @@ internal class CaptureCompletion(
             if (origin != null) {
                 try {
                     reviewWriter.save(videoPath, input.skill,
-                        CapturedReviewInput(input.replayFrames, scored.issues, scored.assessedCueCount, origin))
+                        CapturedReviewInput(input.replayFrames, scored.issues, scored.assessedCueCount, origin,
+                            scored.reviewReps, if (input.guidedAngles) GuidedReview(input.targetReps,
+                                input.angleStages.map { GuidedStageReview(it.angle, it.liveRepCount, it.validRepCount, it.liveRepCount >= input.targetReps) },
+                                input.endedEarly) else null))
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {

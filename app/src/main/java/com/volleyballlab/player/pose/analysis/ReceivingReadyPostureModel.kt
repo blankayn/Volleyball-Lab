@@ -27,7 +27,8 @@ fun interface FaultProbabilityModel : AutoCloseable {
 }
 
 /**
- * LiteRT execution of the TensorFlow model exported by train_receiving_ready_tf.py.
+ * LiteRT execution of the TensorFlow model exported by
+ * tools/receiving-ready-model/train_receiving_ready_tf.py.
  * Buffers are reused because this runs on every pose frame after warm-up.
  */
 class LiteRtReceivingReadyModel private constructor(
@@ -180,7 +181,7 @@ class ReceivingReadyPostureEvaluator(
             BodyPoint.RIGHT_FOOT_INDEX,
         )
 
-        /** Order must match ready_posture_tf/deployment_metadata.json exactly. */
+        /** Order must match tools/receiving-ready-model/model/deployment_metadata.json exactly. */
         internal fun descriptors(knees: List<Float?>, trunks: List<Float?>): FloatArray? {
             val knee32 = resampleFinite(knees, WINDOW_SIZE) ?: return null
             val trunk32 = resampleFinite(trunks, WINDOW_SIZE) ?: return null

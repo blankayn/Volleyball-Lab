@@ -14,7 +14,6 @@ import com.volleyballlab.player.data.auth.GoogleIdResult
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CoachAccounts
 import com.volleyballlab.player.domain.model.CourtPosition
-import com.volleyballlab.player.domain.model.DominantHand
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.UserRole
 import com.volleyballlab.player.domain.model.AddressOption
@@ -49,7 +48,6 @@ data class AuthFormState(
     val password: String = "",
     val confirmPassword: String = "",
     val position: CourtPosition? = null,
-    val dominantHand: DominantHand? = null,
     val goalSkill: Skill? = null,
     val country: AddressOption? = null,
     val area: AddressOption? = null,
@@ -230,7 +228,6 @@ class AuthViewModel(
     fun onPasswordChange(value: String) = edit { it.copy(password = value) }
     fun onConfirmPasswordChange(value: String) = edit { it.copy(confirmPassword = value) }
     fun onPositionChange(value: CourtPosition?) = edit { it.copy(position = value) }
-    fun onHandChange(value: DominantHand?) = edit { it.copy(dominantHand = value) }
     fun onGoalSkillChange(value: Skill?) = edit { it.copy(goalSkill = value) }
     fun onRememberChange(value: Boolean) = _state.update { it.copy(rememberMe = value) }
     fun togglePasswordVisible() = _state.update { it.copy(passwordVisible = !it.passwordVisible) }
@@ -292,7 +289,6 @@ class AuthViewModel(
                             lastName = form.lastName.trim(),
                             address = form.address,
                             position = form.position ?: existing.position,
-                            dominantHand = form.dominantHand ?: existing.dominantHand,
                             goalSkill = form.goalSkill ?: existing.goalSkill,
                         )
                     }

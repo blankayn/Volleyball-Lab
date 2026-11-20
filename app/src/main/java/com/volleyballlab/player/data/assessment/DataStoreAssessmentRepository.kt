@@ -39,7 +39,7 @@ private val Context.assessmentStore: DataStore<Preferences> by preferencesDataSt
 class DataStoreAssessmentRepository(
     private val context: Context,
     private val authRepository: AuthRepository,
-) : AssessmentRepository {
+) : AssessmentRepository, ScopedAssessmentStore {
 
     private val preferences: Flow<Preferences> = context.assessmentStore.data
         .catch { failure ->
@@ -73,8 +73,24 @@ class DataStoreAssessmentRepository(
         scope != null && stored[scope.boolean(KEY_ONBOARDED)] == true
     }
 
+    override fun assessmentFor(uid: String): Flow<SkillAssessment> = preferences.map { stored ->
+        val scope = requireNotNull(UserScope.of(uid))
+        SkillAssessment(
+            ratings = Skill.All.mapNotNull { skill -> stored[scope.string(ratingKey(skill))]
+                ?.toEnumOrNull<SelfRating>()?.let { skill to it } }.toMap(),
+            experience = stored[scope.string(KEY_EXPERIENCE)]?.toEnumOrNull<ExperienceLevel>(),
+            completedAtEpochMs = stored[scope.long(KEY_COMPLETED_AT)] ?: 0L,
+        )
+    }
+    override fun hasOnboardedFor(uid: String): Flow<Boolean> = preferences.map { stored ->
+        stored[requireNotNull(UserScope.of(uid)).boolean(KEY_ONBOARDED)] == true
+    }
     override suspend fun save(assessment: SkillAssessment) {
-        val scope = UserScope.of(authRepository.currentUid) ?: return
+        val uid = authRepository.currentUid ?: return
+        saveFor(uid, assessment)
+    }
+    override suspend fun saveFor(uid: String, assessment: SkillAssessment) {
+        val scope = requireNotNull(UserScope.of(uid))
         context.assessmentStore.edit { stored ->
             Skill.All.forEach { skill ->
                 // Cleared answers are removed rather than written as a default, so
@@ -95,7 +111,11 @@ class DataStoreAssessmentRepository(
     }
 
     override suspend fun skip() {
-        val scope = UserScope.of(authRepository.currentUid) ?: return
+        val uid = authRepository.currentUid ?: return
+        skipFor(uid)
+    }
+    override suspend fun skipFor(uid: String) {
+        val scope = requireNotNull(UserScope.of(uid))
         context.assessmentStore.edit { stored -> stored[scope.boolean(KEY_ONBOARDED)] = true }
     }
 

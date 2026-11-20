@@ -9,6 +9,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoachAiContractTest {
+    @Test fun `equipment instructions are rejected before live text or audio is accepted`() {
+        for (instruction in listOf("Meet the ball above your head.", "Practice WALL rebounds.",
+            "Toss above your forehead.", "Ask for partner feeds.", "Use volleyballs.")) {
+            assertTrue(!CoachAiContract.isPostureOnly(instruction))
+            for (field in listOf("headline", "explanation", "nextAction")) {
+                val prose = listOf("headline", "explanation", "nextAction").joinToString(",") {
+                    "\"$it\":\"${if (it == field) instruction else "Keep a balanced stance."}\""
+                }
+                assertNull(CoachAiContract.parseAndValidate("""{"focusCueId":"PassKneeFlexion",$prose}""", request))
+            }
+        }
+        assertTrue(CoachAiContract.isPostureOnly("Keep your shoulders level and your knees softly bent."))
+    }
     @Test fun `generated copy cannot reverse the evidence selected correction`() {
         val constrained = request.copy(approvedNextAction = "Rise slightly from the deep crouch.")
         val reversed = """{"focusCueId":"PassKneeFlexion","headline":"Ready position","explanation":"Keep a controlled base.","nextAction":"Bend your knees more."}"""

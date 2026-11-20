@@ -26,6 +26,7 @@ def main() -> int:
     parser.add_argument("--min-usable", type=float, default=0.5)
     parser.add_argument("--quality-field", choices=("usable_frac", "feature_usable_frac"), default="usable_frac")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--architecture", choices=train.ARCHITECTURES, default="auto")
     args = parser.parse_args()
 
     X, y, groups, _ = train.load(Path(args.data), args.skill, args.min_usable, args.quality_field)
@@ -54,7 +55,7 @@ def main() -> int:
         (X_train, X_test), _, _ = train.standardise(X[train_mask], X[test_mask])
         weights = {i: len(y_train) / (len(classes) * max(1, (y_train == i).sum()))
                    for i in range(len(classes))}
-        model = train.build(X.shape[1], X.shape[2], len(classes), len(X_train))
+        model = train.build_model(args.architecture, X.shape[1], X.shape[2], len(classes), len(X_train))
         model.compile(optimizer=keras.optimizers.Adam(1e-3),
                       loss="sparse_categorical_crossentropy", metrics=["accuracy"])
         history = model.fit(
@@ -94,6 +95,7 @@ def main() -> int:
         "min_usable": args.min_usable,
         "quality_field": args.quality_field,
         "epochs_per_fold": args.epochs,
+        "architecture": args.architecture,
         "samples": int(len(X)),
         "class_counts": dict(Counter(y.tolist())),
         "source_groups": unique_groups,

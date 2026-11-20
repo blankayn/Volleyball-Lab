@@ -4,6 +4,7 @@ import { ApiError, authorizedSession, candidateIdentity } from "./firebase.mjs";
 import { ExplanationStore } from "./store.mjs";
 import { recordingRequest } from "./recordings.mjs";
 import { liveCoachingRequest } from "./live-coaching.mjs";
+import { trainingSetupRequest } from "./training-setup.mjs";
 
 const HTTP = { INVALID_ARGUMENT: 400, UNAUTHENTICATED: 401, PERMISSION_DENIED: 403, NOT_FOUND: 404, FAILED_PRECONDITION: 400, ABORTED: 409, RESOURCE_EXHAUSTED: 429, UNAVAILABLE: 503, INTERNAL: 500 };
 const hashKey = (type, value) => createHash("sha256").update(`volleyball-lab:${type}:${value}`).digest("hex");
@@ -47,6 +48,7 @@ export function createWorker({ fetchImpl = fetch, generate = requestGroqExplanat
       if (origin) headers["Access-Control-Allow-Origin"] = origin;
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "GET, HEAD, PUT, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Firebase-AppCheck, Firebase-Instance-ID-Token", "Access-Control-Max-Age": "3600" } });
       const url = new URL(request.url);
+      if (url.pathname === "/personalizeTrainingSetup") return trainingSetupRequest(request, env, headers, { fetchImpl, now });
       if (["/coachLiveStage", "/coachVoicePreview"].includes(url.pathname)) return liveCoachingRequest(request, env, headers, { fetchImpl, now });
       if (url.pathname.startsWith("/recordings/")) return recordingRequest(request, env, headers, { fetchImpl, now });
       if (url.pathname === "/health" && request.method === "GET") return Response.json({ ok: true, service: "volleyball-session-ai", version: EXPLANATION_VERSION, configured: Boolean(env.GROQ_API_KEY && env.AI_DB) }, { headers });

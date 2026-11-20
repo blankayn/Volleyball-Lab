@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:pathData="M8 78 C16 58 40 55 60 42 C81 29 78 17 70 15 C87 17 92 32 73 49 C53 65 29 62 8 78 Z" android:fillColor="#008E5D" android:fillAlpha="0.32" />
+    <path android:pathData="M12 88 C-1 70 31 58 50 53 C28 63 16 70 17 76 C16 81 20 85 24 88 C18 89 14 89 12 88 Z" android:fillColor="#008E5D" android:fillAlpha="0.22" />
+    <path android:pathData="M65 55 C81 41 83 31 78 26 C89 31 87 46 65 55 Z" android:fillColor="#008E5D" android:fillAlpha="0.21" />
+    <path android:pathData="M8.28,21.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M12.58,21.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M16.880000000000003,21.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M21.18,21.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M8.28,25.5 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M12.25,25.5 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M16.55,25.5 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M21.18,25.5 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M8.28,30.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M12.25,30.0 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M16.55,30.0 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M21.18,30.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M8.28,34.5 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M12.25,34.5 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M16.55,34.5 a1.05,1.05 0 1,0 2.1,0 a1.05,1.05 0 1,0 -2.1,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M21.18,34.5 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.23" />
+    <path android:pathData="M8.28,39.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M12.58,39.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M16.880000000000003,39.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M21.18,39.0 a0.72,0.72 0 1,0 1.44,0 a0.72,0.72 0 1,0 -1.44,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.14" />
+    <path android:pathData="M47.00,64.00 Q42.02,62.34 41.24,65.15 Q40.46,67.95 40.12,71.64 Q39.77,75.32 39.50,77.32 Q39.23,79.32 39.70,83.08 Q40.16,86.83 42.00,87.00 Q43.84,87.17 44.97,83.55 Q46.11,79.94 46.17,78.31 Q46.23,76.68 48.04,73.88 Q49.86,71.09 50.92,68.37 Q51.98,65.66 47.00,64.00 Z" android:fillColor="#00694B" android:fillAlpha="0.78" />
+    <group android:translateX="42" android:translateY="87" android:rotation="0.00">
+        <path android:pathData="M-2.2,-2 L1.7,-2.3 Q2.9,-.1 4.5,.65 L7,1.6 Q8.45,2.1 8.4,3.4 L-2.1,3.4 Q-3.05,2.3 -2.2,-2 Z" android:fillColor="#00694B" android:fillAlpha="0.78" />
+        <path android:pathData="M-1.8,2.6 L7,2.6" android:strokeColor="#008E5D" android:strokeAlpha="0.36" android:strokeWidth="0.55" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+    <path android:pathData="M47.96,73.92 Q43.80,73.60 40.28,71.36" android:strokeColor="#008E5D" android:strokeAlpha="0.39" android:strokeWidth="0.72" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M46.09,76.23 Q42.92,76.24 40.39,74.33" android:strokeColor="#008E5D" android:strokeAlpha="0.39" android:strokeWidth="0.72" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M58.00,64.00 Q53.07,65.79 54.13,68.27 Q55.19,70.75 56.95,73.03 Q58.71,75.30 58.33,76.85 Q57.94,78.39 58.06,82.54 Q58.18,86.70 60.00,87.00 Q61.82,87.30 63.28,83.42 Q64.74,79.53 65.01,77.11 Q65.29,74.70 64.89,71.03 Q64.49,67.37 63.71,64.79 Q62.93,62.21 58.00,64.00 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+    <group android:translateX="60" android:translateY="87" android:rotation="0.00">
+        <path android:pathData="M-2.2,-2 L1.7,-2.3 Q2.9,-.1 4.5,.65 L7,1.6 Q8.45,2.1 8.4,3.4 L-2.1,3.4 Q-3.05,2.3 -2.2,-2 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+        <path android:pathData="M-1.8,2.6 L7,2.6" android:strokeColor="#00694B" android:strokeAlpha="0.36" android:strokeWidth="0.55" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+    <path android:pathData="M64.69,70.54 Q61.20,72.80 57.07,73.30" android:strokeColor="#00694B" android:strokeAlpha="0.39" android:strokeWidth="0.72" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M64.58,73.31 Q62.08,75.22 58.94,75.37" android:strokeColor="#00694B" android:strokeAlpha="0.39" android:strokeWidth="0.72" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M38.00,46.00 Q41.46,43.98 39.59,41.38 Q37.72,38.77 35.41,35.81 Q33.11,32.86 32.32,30.82 Q31.52,28.79 29.00,25.02 Q26.48,21.26 25.00,22.00 Q23.52,22.74 25.02,27.02 Q26.52,31.29 27.70,33.22 Q28.89,35.14 30.37,38.67 Q31.84,42.19 33.19,45.10 Q34.54,48.02 38.00,46.00 Z" android:fillColor="#00694B" android:fillAlpha="0.86" />
+    <group android:translateX="25" android:translateY="22" android:rotation="-116.57">
+        <path android:pathData="M-2,-1.4 L1,-1.9 L3,-3.4 Q4,-3.6 3.9,-2.6 L2.8,-1.2 L5.3,-1.7 Q6.4,-1.4 5.5,-.5 L3.7,.2 L6.3,.6 Q7.2,1.2 6.2,1.7 L3.8,1.4 L5.3,2.8 Q5.4,3.6 4.5,3.4 L1.1,2 L-2,1.5 Z" android:fillColor="#00694B" android:fillAlpha="0.86" />
+    </group>
+    <path android:pathData="M33.90,44.53 Q35.76,42.16 38.64,41.44" android:strokeColor="#008E5D" android:strokeAlpha="0.34" android:strokeWidth="0.65" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <group android:translateX="43.5" android:translateY="45.0" android:rotation="-25.35">
+        <path android:pathData="M-7.490169943749475,2 Q-6.490169943749475,-2 -3,-3 L-2,-6 H2 L3,-3 Q6.490169943749475,-2 7.490169943749475,2 Q5.490169943749475,7 9.35,11.773325783312039 L9.85,20.02379604162864 Q8.85,24.02379604162864 0,24.02379604162864 Q-8.85,24.02379604162864 -9.85,20.02379604162864 Q-7.85,10 -7.490169943749475,2 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+        <path android:pathData="M-9.45,19.52379604162864 Q0,21.52379604162864 9.45,19.52379604162864 M-3.7,-2 Q0,3 3.7,-2 M-4.490169943749475,4 Q-2.490169943749475,9 -6.85,16.02379604162864" android:strokeColor="#00694B" android:strokeAlpha="0.55" android:strokeWidth="0.78" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+    <group android:translateX="41" android:translateY="35" android:rotation="-22.00">
+        <path android:pathData="M-4.5,3.5 Q-6.5,1 -6.3,-1.9 Q-6.6,-6.5 -2.7,-7.8 Q3.2,-9.4 5.8,-4.8 L5.6,-2.8 L7,-.8 Q7.4,0 5.8,.7 Q5.9,4.8 2.7,5.8 L2.5,8.3 H-3.7 L-3.3,5.1 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+        <path android:pathData="M-5.4,-3 Q-3.4,-6 2.6,-5.9 Q4.4,-5.7 5.3,-4.1" android:strokeColor="#00694B" android:strokeAlpha="0.32" android:strokeWidth="0.8" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    </group>
+    <path android:pathData="M49.00,44.00 Q52.33,41.78 50.24,39.19 Q48.15,36.59 45.65,33.77 Q43.16,30.95 42.75,29.05 Q42.34,27.15 40.45,23.32 Q38.57,19.48 37.00,20.00 Q35.43,20.52 36.23,24.72 Q37.02,28.93 37.93,30.99 Q38.84,33.05 40.67,36.71 Q42.49,40.37 44.08,43.29 Q45.67,46.22 49.00,44.00 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+    <group android:translateX="37" android:translateY="20" android:rotation="-108.43">
+        <path android:pathData="M-2,-1.4 L1,-1.9 L3,-3.4 Q4,-3.6 3.9,-2.6 L2.8,-1.2 L5.3,-1.7 Q6.4,-1.4 5.5,-.5 L3.7,.2 L6.3,.6 Q7.2,1.2 6.2,1.7 L3.8,1.4 L5.3,2.8 Q5.4,3.6 4.5,3.4 L1.1,2 L-2,1.5 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+    </group>
+    <path android:pathData="M44.75,42.67 Q46.44,40.16 49.29,39.30" android:strokeColor="#00694B" android:strokeAlpha="0.34" android:strokeWidth="0.65" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <group android:translateX="24" android:translateY="12" android:rotation="24.00">
+        <path android:pathData="M-6.2,0 a6.2,6.2 0 1,0 12.4,0 a6.2,6.2 0 1,0 -12.4,0 Z" android:fillColor="#008E5D" android:fillAlpha="0.17" />
+        <path android:pathData="M-5.5,0 a5.5,5.5 0 1,0 11.0,0 a5.5,5.5 0 1,0 -11.0,0 Z" android:fillColor="#008E5D" android:fillAlpha="1" />
+        <path android:pathData="M-4.35,-1.8 Q-3.2,-3.94 -.28,-4.53 Q1.05,-3.68 1.36,-2.28 Q-.62,-2.55 -2.64,-1.63 Q-3.8,-.82 -4.53,.62 Q-4.87,-.51 -4.35,-1.8 Z M2.5,-3.8 Q5.1,-1.74 4.58,1.12 Q3.46,2.4 1.96,2.5 Q2.7,.98 2.31,-.95 Q2.07,-2.74 .91,-4.5 Q1.74,-4.43 2.5,-3.8 Z M3.58,2.9 Q2.2,4.9 -.79,4.65 Q-2.64,4.25 -3.51,2.85 Q-3.13,1.4 -2.15,.52 Q-1.68,2.05 .16,2.91 Q1.56,3.63 3.58,2.9 Z" android:fillColor="#FFFFFF" android:fillAlpha="0.95" />
+    </group>
+</vector>

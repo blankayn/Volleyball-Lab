@@ -89,7 +89,9 @@ class PersonalizedLiveCoachingTest {
         assertEquals("Hi Maya.", opening.first())
         assertEquals("Today's about your forearm platform.", opening[1])
         assertEquals("I'll watch the first couple before I say anything.", opening.last())
-        assertEquals(4, opening.size)
+        // Name, focus, setup, which way to face, then the promise to watch first.
+        assertEquals(FacingGuide.opening(null), opening[3])
+        assertEquals(5, opening.size)
         assertEquals(opening.joinToString(" "), plan.openingText(Skill.Receiving))
         assertFalse(plan.openingText(Skill.Receiving).contains("Santos"))
     }
@@ -133,8 +135,8 @@ class PersonalizedLiveCoachingTest {
         Skill.All.forEach { skill ->
             val plan = LiveCoachingPlan.forAthlete(skill, AthleteProfile.Anonymous)
             assertEquals("Your live coach", plan.title)
-            assertEquals(listOf(CoachPhrasebook.opening(skill), "I'll watch the first couple before I say anything."),
-                plan.opening(skill))
+            assertEquals(listOf(CoachPhrasebook.opening(skill), FacingGuide.opening(null),
+                "I'll watch the first couple before I say anything."), plan.opening(skill))
         }
     }
 

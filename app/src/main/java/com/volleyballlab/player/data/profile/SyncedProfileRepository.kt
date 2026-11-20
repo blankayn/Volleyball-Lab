@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Cloud identity/address combined with the existing local training preferences. */
+/** Private cloud identity and confirmed training preferences with an account-scoped cache. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncedProfileRepository(
     private val local: ScopedProfileStore,
@@ -20,12 +20,19 @@ class SyncedProfileRepository(
 ) : ProfileRepository {
     private val latest = java.util.concurrent.ConcurrentHashMap<String, Map<String, Any?>>()
     private val edits = Mutex()
+    private val restored = MutableStateFlow<Set<String>>(emptySet())
     private val statuses = MutableStateFlow<Map<String, com.volleyballlab.player.domain.repository.ProfileSyncStatus>>(emptyMap())
     override val syncStatus = combine(auth.currentUser, statuses, cloud.errors, cloud.pending) { user, states, errors, pending ->
         if (errors[user?.uid] != null) com.volleyballlab.player.domain.repository.ProfileSyncStatus.Failed
         else if (states[user?.uid] != com.volleyballlab.player.domain.repository.ProfileSyncStatus.WaitingForConnection && user?.uid in pending)
             com.volleyballlab.player.domain.repository.ProfileSyncStatus.Saving
         else states[user?.uid] ?: com.volleyballlab.player.domain.repository.ProfileSyncStatus.Checking
+    }
+    override suspend fun awaitInitialRestore() {
+        val uid = auth.currentUid ?: return
+        kotlinx.coroutines.withTimeoutOrNull(4_000) {
+            restored.first { uid in it || auth.currentUid != uid }
+        }
     }
     override suspend fun retrySync() { auth.currentUid?.let { cloud.retry(it) } }
     override suspend fun current(): AthleteProfile {
@@ -43,6 +50,9 @@ class SyncedProfileRepository(
                     else -> com.volleyballlab.player.domain.repository.ProfileSyncStatus.Saved
                 }) }
                 latest[uid] = snapshot.fields
+                if (!snapshot.fromCache || snapshot.fields["trainingSetup"] is Map<*, *>) {
+                    restored.update { it + uid }
+                }
                 if (!snapshot.fromCache && !migrated) {
                     cloud.fillMissing(uid, ProfileCloudSchema.seed(local.profileFor(uid).first()))
                     migrated = true

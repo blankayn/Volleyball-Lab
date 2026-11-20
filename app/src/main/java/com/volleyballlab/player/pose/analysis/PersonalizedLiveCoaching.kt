@@ -3,7 +3,6 @@ package com.volleyballlab.player.pose.analysis
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
-import com.volleyballlab.player.domain.model.DominantHand
 import com.volleyballlab.player.domain.model.ExperienceLevel
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
@@ -20,7 +19,6 @@ data class LiveCoachingPlan(
     val lastSessionFocus: CueId? = null,
     val lastValidReps: Int? = null,
     val lastTotalReps: Int? = null,
-    val dominantSide: Side? = null,
     val assignmentTitle: String? = null,
     val humanCoachName: String? = null,
 ) {
@@ -44,9 +42,8 @@ data class LiveCoachingPlan(
         }
         focusCueIds.firstOrNull()?.let { add("Today's about your ${CoachPhrasebook.focusName(it)}.") }
         add(CoachPhrasebook.opening(skill, sessionsOnSkill))
-        if (repsPerAngle != null) {
-            add("Front view first, ${CoachPhrasebook.numberWord(repsPerAngle).lowercase()} reps, then side.")
-        }
+        // Which way to face, before anything can be counted.
+        add(FacingGuide.opening(repsPerAngle))
         // True: the director stays silent on form for the first two reps of a view.
         add("I'll watch the first couple before I say anything.")
     }
@@ -98,11 +95,6 @@ data class LiveCoachingPlan(
                 focusLabel = cues.firstOrNull()?.let { "Your focus: ${CoachPhrasebook.focusName(it)}" }
                     ?: "Your focus: ${skill.name.lowercase()} form",
                 experience = plan?.experience ?: profile.trainingSetup?.assessment?.experience,
-                dominantSide = when (profile.dominantHand) {
-                    DominantHand.Left -> Side.Left
-                    DominantHand.Right -> Side.Right
-                    null -> null
-                },
             )
         }
 

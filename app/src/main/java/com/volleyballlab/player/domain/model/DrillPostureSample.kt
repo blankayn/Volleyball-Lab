@@ -4,11 +4,11 @@ import kotlin.math.roundToInt
 
 /** Reviewed sprite-sheet regions; illustrations are independent of camera analysis. */
 enum class PostureSheet(val skill: Skill, val firstRowEnd: Int, val secondRowEnd: Int) {
-    Serving(Skill.Serving, 478, 954),
-    Receiving(Skill.Receiving, 477, 955),
-    Setting(Skill.Setting, 496, 960),
-    Spiking(Skill.Spiking, 478, 954),
-    Blocking(Skill.Blocking, 483, 965);
+    Serving(Skill.Serving, 452, 937),
+    Receiving(Skill.Receiving, 479, 958),
+    Setting(Skill.Setting, 466, 949),
+    Spiking(Skill.Spiking, 449, 938),
+    Blocking(Skill.Blocking, 459, 942);
 
     fun rowStart(row: Int): Int = when (row) { 0 -> 0; 1 -> firstRowEnd; else -> secondRowEnd }
     fun rowEnd(row: Int): Int = when (row) { 0 -> firstRowEnd; 1 -> secondRowEnd; else -> 1448 }
@@ -33,12 +33,12 @@ data class DrillPostureSample(val sheet: PostureSheet, val row: Int, val steps: 
 
 object DrillPostureSamples {
     private fun steps(vararg values: Pair<String, String>) = values.map { PostureSampleStep(it.first, it.second) }
-    private val serve = steps("Ready" to "Balance your feet before the toss.", "Toss" to "Prepare the hitting elbow while keeping the toss in front.", "Contact" to "Reach high with a firm, open hitting hand.", "Reset" to "Finish the swing and regain a balanced stance.")
+    private val serve = steps("Ready" to "Balance your feet before raising your arms.", "Prepare" to "Raise your guiding arm and draw the other elbow back.", "Position" to "Reach high with a firm, open hitting hand.", "Reset" to "Finish the swing and regain a balanced stance.")
     private val jumpServe = steps("Ready" to "Begin with balanced feet in one spot.", "Load" to "Bend the knees and prepare the hitting arm without stepping forward.", "Reach" to "Jump from the same spot and reach above the hitting shoulder.", "Land" to "Land in the starting spot with softened knees.")
-    private val pass = steps("Ready" to "Keep a balanced base with soft knees.", "Platform" to "Join your hands and straighten the elbows.", "Contact" to "Keep the platform quiet and use controlled leg extension.", "Reset" to "Separate the hands and return to ready position.")
-    private val passingPosition = steps("Ready" to "Start with balanced feet in one spot.", "Position" to "Use a feed within reach and join the hands without chasing the ball.", "Platform" to "Present a stable forearm platform toward the target.", "Reset" to "Recover your stance in the same spot before the next feed.")
+    private val pass = steps("Ready" to "Keep a balanced base with soft knees.", "Platform" to "Join your hands and straighten the elbows.", "Position" to "Keep the platform quiet and use controlled leg extension.", "Reset" to "Separate the hands and return to ready position.")
+    private val passingPosition = steps("Ready" to "Start with balanced feet in one spot.", "Position" to "Bend your knees comfortably and join your hands in front of your body.", "Platform" to "Present a stable forearm platform with level shoulders.", "Reset" to "Recover your stance in the same spot before the next repetition.")
     private val set = steps("Ready" to "Bring both hands above the forehead.", "Cushion" to "Soften the knees and keep the hands balanced.", "Extend" to "Extend the legs and both arms together.", "Reset" to "Regain balance and prepare both hands again.")
-    private val backSet = steps("Ready" to "Keep the hands prepared above your forehead.", "Cushion" to "Receive with balanced hands and softened knees.", "Back set" to "Extend both arms together toward the rear target.", "Reset" to "Return to a balanced upright stance.")
+    private val backSet = steps("Ready" to "Keep the hands prepared above your forehead.", "Cushion" to "Keep your hands balanced and your knees softly bent.", "Extend" to "Extend both arms overhead while keeping your trunk upright.", "Reset" to "Return to a balanced upright stance.")
     private val swing = steps("Ready" to "Keep both feet grounded in a balanced stance.", "Prepare" to "Draw the hitting elbow back and lift the guiding arm.", "Reach" to "Reach high while rotating the torso under control.", "Recover" to "Finish the arm swing and regain balance.")
     private val jumpHit = steps("Ready" to "Prepare with balanced feet in one spot.", "Load" to "Bend the knees and hips before an in-place takeoff.", "Reach" to "Reach high with the hitting arm in front of the shoulder.", "Land" to "Land in the starting spot with control and softened knees.")
     private val block = steps("Ready" to "Keep both hands ready and the feet balanced in one spot.", "Load" to "Bend the knees while keeping the shoulders square.", "Reach" to "Jump straight up and extend both arms overhead and slightly forward.", "Land" to "Land in the same spot on both feet and soften the knees.")

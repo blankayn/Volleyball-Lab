@@ -1,0 +1,274 @@
+{
+  "model": "TensorFlow class-balanced logistic receiving-ready classifier",
+  "scope": "insufficient knee bend / too-upright forearm-pass ready posture",
+  "dataset": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\pass-ready-v29-development-descriptors.csv",
+  "dataset_sha256": "a100c867857b2881971353457d72dd1c93077d5af3323742f38a85d6a46f9f1c",
+  "samples": 48,
+  "video_sources": 25,
+  "class_counts": {
+    "ok": 36,
+    "fault": 12
+  },
+  "features_in_order": [
+    "knee_mean_median",
+    "knee_mean_q10",
+    "knee_mean_q90",
+    "trunk_forward_lean_median",
+    "trunk_forward_lean_q10",
+    "trunk_forward_lean_q90"
+  ],
+  "evaluation_protocol": "leave-one-video-source-out; preprocessing fitted inside each fold",
+  "source_separated_metrics": {
+    "samples": 48,
+    "correct": 42,
+    "accuracy": 0.875,
+    "balanced_accuracy": 0.8611111111111112,
+    "fault_recall": 0.8333333333333334,
+    "ok_recall": 0.8888888888888888,
+    "confusion_matrix_ok_fault": [
+      [
+        32,
+        4
+      ],
+      [
+        2,
+        10
+      ]
+    ],
+    "accuracy_wilson_95": [
+      0.7529954171361317,
+      0.9414294856142802
+    ]
+  },
+  "source_separated_operating_metrics": {
+    "samples": 48,
+    "correct": 44,
+    "accuracy": 0.9166666666666666,
+    "balanced_accuracy": 0.9444444444444444,
+    "fault_recall": 1.0,
+    "ok_recall": 0.8888888888888888,
+    "confusion_matrix_ok_fault": [
+      [
+        32,
+        4
+      ],
+      [
+        0,
+        12
+      ]
+    ],
+    "accuracy_wilson_95": [
+      0.8044669820963272,
+      0.9671162431819081
+    ],
+    "threshold": 0.40000000000000013,
+    "selection_note": "Threshold selected on source-held-out development predictions using a coarse 0.05 grid; requires untouched external validation."
+  },
+  "source_separated_selective_policy_metrics": {
+    "samples": 44,
+    "correct": 41,
+    "accuracy": 0.9318181818181818,
+    "balanced_accuracy": 0.9571428571428571,
+    "fault_recall": 1.0,
+    "ok_recall": 0.9142857142857143,
+    "confusion_matrix_ok_fault": [
+      [
+        32,
+        3
+      ],
+      [
+        0,
+        9
+      ]
+    ],
+    "accuracy_wilson_95": [
+      0.8177495562977846,
+      0.9765406040926183
+    ],
+    "ok_below": 0.4,
+    "fault_at_or_above": 0.6,
+    "abstain_from_inclusive": 0.4,
+    "abstain_to_exclusive": 0.6,
+    "abstentions": 4,
+    "coverage": 0.9166666666666666,
+    "total_development_samples": 48,
+    "policy_note": "Return uncertain/request another clean stance inside the abstention band; thresholds selected on development evidence only."
+  },
+  "full_fit_metrics": {
+    "samples": 48,
+    "correct": 45,
+    "accuracy": 0.9375,
+    "balanced_accuracy": 0.9583333333333333,
+    "fault_recall": 1.0,
+    "ok_recall": 0.9166666666666666,
+    "confusion_matrix_ok_fault": [
+      [
+        33,
+        3
+      ],
+      [
+        0,
+        12
+      ]
+    ],
+    "accuracy_wilson_95": [
+      0.8316456194505365,
+      0.9785167670916107
+    ]
+  },
+  "historical_v26_metrics": {
+    "samples": 10,
+    "correct": 7,
+    "accuracy": 0.7,
+    "balanced_accuracy": 0.625,
+    "fault_recall": 0.5,
+    "ok_recall": 0.75,
+    "confusion_matrix_ok_fault": [
+      [
+        6,
+        2
+      ],
+      [
+        1,
+        1
+      ]
+    ],
+    "accuracy_wilson_95": [
+      0.39677814746114537,
+      0.8922087325936989
+    ],
+    "note": "Retrospective only: v26 labels/results were already inspected before this trainer.",
+    "sample_ids": [
+      "ontr_fault_stands_from_deep_ball",
+      "ontr_ok_hold_lower_position",
+      "natke_fault_standing_up",
+      "natke_ok_stay_low",
+      "teacher_ok_low_passing_posture",
+      "playsports_ok_athletic_stance",
+      "chijo_ok_ready_position",
+      "bodyposture_ok_medium",
+      "bodyposture_ok_low",
+      "poell_ok_reception_stance"
+    ]
+  },
+  "pre_update_v29_paired_check": {
+    "report": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v29\\sealed_score.json",
+    "report_sha256": "92fdd55b6e8cf79eb8f58e7ae675772b1590dcac8532efd3b79cef9889f79e9a",
+    "candidate_model_sha256": "b1447c282b2cff799b2a84fe533b591b117366e7e180a23806773c25f5cbd257",
+    "samples_scored": 2,
+    "correct": 1,
+    "accuracy": 0.5,
+    "rows": [
+      {
+        "sample_id": "patpowers_fault_lifts_with_legs",
+        "source_group": "5tjrreGwyVk",
+        "label": "fault",
+        "fault_probability": 0.9485350251197815,
+        "prediction": "fault",
+        "correct": true
+      },
+      {
+        "sample_id": "patpowers_ok_forward_down",
+        "source_group": "5tjrreGwyVk",
+        "label": "ok",
+        "fault_probability": 0.5454959869384766,
+        "prediction": "fault",
+        "correct": false
+      }
+    ],
+    "abstentions": [
+      {
+        "name": "stayinglow_ok_good_posture",
+        "reason": "Overlay tracks a standing background player instead of the foreground receiver; posture features describe the wrong person."
+      }
+    ],
+    "note": "This check was sealed and scored before v29 examples were added to development; it is now spent."
+  },
+  "target_accuracy": 0.8,
+  "target_met": true,
+  "requested_accuracy_target": 1.0,
+  "requested_accuracy_target_met": false,
+  "pose_quality_mpjpe": {
+    "report": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\tum_volleyball_test_mpjpe.json",
+    "report_sha256": "4794b23e34d5ceb9a1fd01245e2bc1b9301f2f2c2487332a76ec850fbff15ba5",
+    "volleyball_specific": true,
+    "dataset": "TUM Volleyball Dataset (Belagiannis et al., AMDO 2014)",
+    "metric": "2-D MPJPE on 12 directly matched TUM/MediaPipe joints",
+    "test_images": 271,
+    "image_detection_rate": 0.3948339483394834,
+    "detection_inclusive_reliable_joint_coverage": 0.3404059040590406,
+    "mpjpe_pixels": 17.763810806412636,
+    "pck_at_0_2_torso": 0.5872274143302181,
+    "note": "This still-image metric filters individual joints by visibility and bounds. It does not reproduce the app's 32-frame quality gate. Pose placement quality is separate from proper/fault classification accuracy.",
+    "per_joint_visibility_gated_mpjpe_pixels": 15.708235252545322
+  },
+  "general_pose_sanity_check": {
+    "report": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\lsp_test_mpjpe.json",
+    "report_sha256": "37ef9fe65eebdcabfc70d01e94da42986bbb8e58481d267a6d0b8cc1df6a1bb4",
+    "volleyball_specific": false,
+    "dataset": "Leeds Sports Pose (LSP)",
+    "metric": "2-D MPJPE on 12 directly matched LSP/MediaPipe joints",
+    "test_images": 1000,
+    "image_detection_rate": 0.894,
+    "mpjpe_pixels": 7.183652990022482,
+    "note": "Mixed-sport pose sanity check; it is not volleyball evidence."
+  },
+  "final_training": {
+    "framework": "TensorFlow 2.21.0",
+    "optimizer": "deterministic full-batch gradient descent",
+    "steps": 2000,
+    "learning_rate": 0.05,
+    "l2": 0.001,
+    "class_balanced": true,
+    "impute": [
+      138.87954711914062,
+      124.15821838378906,
+      152.2447509765625,
+      29.028873443603516,
+      14.779414176940918,
+      36.209625244140625
+    ],
+    "center": [
+      138.87954711914062,
+      124.15821838378906,
+      152.2447509765625,
+      29.028873443603516,
+      14.779414176940918,
+      36.209625244140625
+    ],
+    "scale": [
+      32.13287353515625,
+      29.117660522460938,
+      26.305084228515625,
+      30.238197326660156,
+      30.450050354003906,
+      22.228778839111328
+    ],
+    "scaled_weights": [
+      1.8943865299224854,
+      1.5507656335830688,
+      1.3932784795761108,
+      -0.3020455539226532,
+      -2.716829299926758,
+      -0.8089509606361389
+    ],
+    "scaled_bias": -1.6773029565811157
+  },
+  "artifacts": {
+    "keras": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\receiving_ready_posture.keras",
+    "keras_sha256": "59c088ff2b52740290cd2def411faa3cc583c913c5203dbfef7b412b5300d72c",
+    "tflite": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\receiving_ready_posture.tflite",
+    "tflite_sha256": "ab47e1c2e7c0fbb634dec4d8424524cdf3a7eb56a4e7f77ff006eb765acba251",
+    "training_copy": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\ready_posture_training_v29.csv",
+    "predictions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\source_separated_predictions.csv",
+    "deployment_metadata": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\ready_posture_tf\\deployment_metadata.json",
+    "deployment_metadata_sha256": "4107108ddd8ec76478c86be6d0736159363f1828bf44c20262ad4b7ab0f4216f",
+    "export_max_probability_difference": 6.258487701416016e-07
+  },
+  "limitations": [
+    "Development evidence has only 48 clips and 12 fault clips.",
+    "The historical v26 set has already been inspected and is no longer a fresh test.",
+    "The v29 paired source was scored before training but is now spent and cannot support a post-update generalization claim.",
+    "A new untouched, source-disjoint validation set is required for a final real-world claim."
+  ]
+}

@@ -29,7 +29,19 @@ they are not persisted across process restart or reused for new camera entries.
 ## Practice and storage
 
 Train → Drill library offers search, skill/difficulty filters, guides, and manual
-History. Guides include equipment, setup, numbered steps, common mistakes, and
+History. Every drill card has a Camera check button, and the Drills tab opens with
+up to three "Recommended for you" picks (`DrillRecommendations`): the focus skill's
+drill at the athlete's level and its next step up, then the least-trained other
+skills relevant to their position. Picks reuse the dashboard's `SkillRecommendation`
+and only include drills the account can start. On a drill's page the camera is the
+only way to practise; the manual counting workout is no longer started from there. Existing unfinished workouts can still be resumed from the library.
+
+Train → a skill is the other way in, and deliberately not a second copy of the
+library: it is that skill's three drills as a path, easiest first (`SkillPath`).
+Each step shows its best camera score against 80 (the Advanced band); a step at
+80+ is Strong, and the first open step below that is the one to train now. Only
+camera scores move the path; manual workouts never do. Each step links to its
+guide in the library, and Done after a camera session returns to the path. Guides include equipment, setup, numbered steps, common mistakes, and
 the existing skill illustrations. Defaults: 3 sets, the drill's target reps,
 30 seconds rest. Tap a number to enter any permitted value: 1–5 sets, 1–100
 target reps, 0–120 rest seconds.
@@ -50,7 +62,8 @@ save is finalized once.
 Manual records contain target configuration, confirmed sets/reps, timestamps,
 practice/rest duration, and completed/partial status. They are not consumed by
 dashboard totals, Progress scores/statistics, or coach submissions. Camera checks
-use ordinary camera sessions and return to the originating drill detail on Done;
+use ordinary camera sessions and return on Done to whichever screen started them
+(the drill's page or the library);
 they neither complete manual sets nor verify ball-target outcomes.
 
 ## Verification

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -69,14 +71,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlin.math.roundToInt
 import com.volleyballlab.player.R
-import com.volleyballlab.player.domain.model.CueUnit
-import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.ui.coaching.CoachingAudio
 import com.volleyballlab.player.ui.coaching.CoachingAudioStatus
 import com.volleyballlab.player.pose.analysis.PoseGuide
+import com.volleyballlab.player.pose.analysis.ReferenceMoment
 import com.volleyballlab.player.ui.coaching.SpeechPriority
 import com.volleyballlab.player.ui.coaching.SpeechStyle
 import com.volleyballlab.player.pose.analysis.CoachingEventType
@@ -89,6 +89,8 @@ import com.volleyballlab.player.pose.quality.PoseQuality
 import com.volleyballlab.player.ui.theme.LocalReduceMotion
 import com.volleyballlab.player.ui.theme.VbButtonShape
 import com.volleyballlab.player.ui.theme.VbMotion
+import com.volleyballlab.player.pose.analysis.CuePlainWords
+import com.volleyballlab.player.ui.component.CueGauge
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import com.volleyballlab.player.ui.theme.vbColors
 import com.volleyballlab.player.ui.theme.vbTween
@@ -168,14 +170,11 @@ private fun GrantedCaptureScreen(
     val coachingPlan by viewModel.coachingPlan.collectAsStateWithLifecycle()
     val repFeedback by viewModel.repFeedback.collectAsStateWithLifecycle()
     val speechWindowOpen by viewModel.speechWindowOpen.collectAsStateWithLifecycle()
+    val referenceFigure by viewModel.referenceFigure.collectAsStateWithLifecycle()
     val preferences by viewModel.coachingPreferences.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     val feedbackView = LocalView.current
     var muted by remember { mutableStateOf(false) }
-    val voicePreviewText = stringResource(R.string.coaching_voice_preview)
-    var voiceTesting by remember { mutableStateOf(false) }
-    val voiceTestScope = androidx.compose.runtime.rememberCoroutineScope()
-    val liveCoachingRepository = (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.liveCoachingRepository
     val submittedEvents = remember { mutableMapOf<String, Long>() }
     val audio = remember(context, feedbackView) {
         CoachingAudio(context, onValidRepHaptic = {
@@ -302,7 +301,9 @@ private fun GrantedCaptureScreen(
                     // never spoken can be handed back to the director.
                     if (submittedEvents.size > 32) submittedEvents.clear()
                     submittedEvents[key] = event.id
-                    audio.submit(event.text, key, priority, delivery.expiresInMs, delivery.style)
+                    // A short cue is spoken once the full instruction has been heard;
+                    // "Say again" still repeats the full one.
+                    audio.submit(event.speech, key, priority, delivery.expiresInMs, delivery.style, repeatText = event.text)
                 }
             }
             launch { viewModel.validRepEvents.collect { audio.feedbackValidRep() } }
@@ -326,6 +327,7 @@ private fun GrantedCaptureScreen(
         guidedOptions = guidedOptions,
         coachingText = coachingMessage?.text,
         coachLine = coachingMessage?.takeIf { it.repNumber == null }?.text,
+        notCounted = coachingMessage?.takeIf { it.type == CoachingEventType.NotCounted }?.text,
         onSayAgain = { audio.repeatLast() },
         coachingPlan = coachingPlan,
         repFeedback = repFeedback,
@@ -360,23 +362,6 @@ private fun GrantedCaptureScreen(
             }
         },
         onBack = onBack,
-        onTestVoice = {
-            if (!preferences.voiceEnabled || muted) {
-                android.widget.Toast.makeText(context, "Enable and unmute voice coaching to test it.", android.widget.Toast.LENGTH_SHORT).show()
-            } else if (!voiceTesting) voiceTestScope.launch {
-                voiceTesting = true
-                val path = try {
-                    kotlinx.coroutines.withTimeoutOrNull(4_000) { liveCoachingRepository.previewVoice() }
-                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                catch (_: Exception) { null }
-                voiceTesting = false
-                // A slow preview must never interrupt a session that already started.
-                if (viewModel.uiState.value is CaptureUiState.Framing) {
-                    audio.playGuidance(voicePreviewText, path)
-                } else path?.let { java.io.File(it).delete() }
-            }
-        },
-        voiceTesting = voiceTesting,
         modifier = modifier.fillMaxSize(),
         cameraContent = {
             CameraPreview(
@@ -389,14 +374,27 @@ private fun GrantedCaptureScreen(
             )
             val currentFrame = frame
             val recording = state as? CaptureUiState.Recording
-            val guide = if (preferences.poseGuideEnabled && currentFrame != null && recording != null && recording.rotation == null) {
+            // The whole-body reference and the single correction limb never share
+            // the picture: one target at a time.
+            val reference = referenceFigure
+            val guide = if (reference == null && preferences.poseGuideEnabled && currentFrame != null &&
+                recording != null && recording.rotation == null) {
                 PoseGuide.limbs(currentFrame, livePosture, skill, recording.angle)
             } else emptyList()
-            PoseOverlay(frame = currentFrame, posture = livePosture, guide = guide, modifier = Modifier.fillMaxSize())
-            if (guide.isNotEmpty()) androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-                Text(stringResource(R.string.coaching_guide_legend), color = Color(0xFFFFD87A),
+            PoseOverlay(frame = currentFrame, posture = livePosture, guide = guide, reference = reference,
+                modifier = Modifier.fillMaxSize())
+            // Says what the gold drawing is, every time it is on screen.
+            val legend = when {
+                reference?.moment == ReferenceMoment.Start -> R.string.coaching_reference_start
+                reference?.moment == ReferenceMoment.Finish -> R.string.coaching_reference_finish
+                guide.isNotEmpty() -> R.string.coaching_guide_legend
+                else -> null
+            }
+            if (legend != null && currentFrame != null) androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                Text(stringResource(legend), color = Color(0xFFFFD87A),
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.background(Color.Black.copy(alpha = .65f)).padding(horizontal = 8.dp, vertical = 4.dp))
+                    modifier = Modifier.testTag("capture-reference-legend")
+                        .background(Color.Black.copy(alpha = .65f)).padding(horizontal = 8.dp, vertical = 4.dp))
             }
         },
     )
@@ -777,13 +775,16 @@ internal fun LivePostureCard(
                         textAlign = TextAlign.Center,
                     )
                     posture.measured?.let { measured ->
+                        val reading = CuePlainWords.read(cue, measured)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = formatLiveMeasured(cue, measured),
-                            style = MaterialTheme.typography.labelMedium.merge(VbTabularNumerals),
-                            color = Color.White.copy(alpha = 0.8f),
+                            text = reading.line,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.85f),
                             textAlign = TextAlign.Center,
                         )
+                        Spacer(Modifier.height(4.dp))
+                        CueGauge(reading, Modifier.widthIn(max = 220.dp), onDark = true)
                     }
                 }
             }
@@ -817,12 +818,6 @@ private fun LiveCueDots(posture: LivePostureUi, modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-private fun formatLiveMeasured(cue: FormCue, measured: Float): String = when (cue.unit) {
-    CueUnit.Degrees -> "${measured.roundToInt()}° · ${cue.target.start.roundToInt()}–${cue.target.endInclusive.roundToInt()}°"
-    CueUnit.Metres -> String.format(Locale.US, "%.2f m · %.2f–%.2f m", measured, cue.target.start, cue.target.endInclusive)
-    CueUnit.Ratio -> "${(measured * 100).roundToInt()}% · ${(cue.target.start * 100).roundToInt()}–${(cue.target.endInclusive * 100).roundToInt()}%"
 }
 
 private const val SEVERE_LIVE_SCORE = 0.35f

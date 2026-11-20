@@ -1,4 +1,4 @@
-# AI Volleyball Coach status — 31 October 2026
+# AI Volleyball Coach status — 5 November 2026
 
 The training and coaching software now covers all five skills. Reliable trained
 coaching performance is **not yet established**. There is no defensible overall
@@ -16,14 +16,18 @@ This establishes preprocessing conventions on measured inputs, not independently
 validated pose or coaching accuracy. The [input contract decision](adr/0001-version-temporal-blocking-inputs.md)
 records the incompatible version boundary.
 
-The full physical-phone replay completed 100 inferences, but p95 processing was
-382.02 ms, above the 150 ms budget. Stage profiling identified repeated video
-seeking as the largest cost. A sequential-decoder diagnostic passed at 125.84 ms;
-the optimized 100-inference acceptance and final color/rotation/scale checks are
-still pending. A color-format compatibility fix and platform fallback are built;
-the wireless phone disconnected during its update. See the
+The final physical-phone replay passed all six device tests and completed 100
+inferences with no invalid outputs, at **132.20 ms p95** against a 150 ms budget.
+This follows failed full runs at 382.02 ms and 195.27 ms. Changes include forward
+video decoding, color/scale corrections, input bitmap release and a single
+detector per test session. Cold detector construction remains 7.13 seconds and
+is excluded from the per-frame timing. These public-clip measurements do not
+establish live-camera throughput or coaching accuracy. See the
 [performance investigation](ml-mobile-pipeline-performance.md) for exact artifacts,
-limits and outstanding checks. The deployment audit remains false.
+limits and outstanding checks. Final Python recomputation passed for the exact
+model and pose asset. The deployment audit remains false due to missing locked
+player-separated evaluation, calibrated acceptance and independent coach review;
+the phone timing gate is satisfied for this measured replay.
 
 An earlier physical Infinix X6833B running Android 14 ran the experimental
 visible-arm TCN for 100 inferences, with zero invalid outputs. Classifier-only
@@ -58,11 +62,10 @@ remain required. A new segmentation guard rejects windows whose signal peak is
 at a boundary, where preparation or recovery is absent. This fixes that specific
 partial-action case; it does not validate every recorded repetition boundary.
 
-Current ML regression verification: 86 tests passed. Pose/tracker alignment:
-7 tests passed. The v2 baseline passed 351 Android unit tests plus build/lint
-with zero lint errors (159 warnings, 5 hints), and its two physical-device tests
-passed. Decoder unit coverage subsequently increased the Android suite to 356
-passing tests. Final integrated-reader lint and device acceptance are pending.
+Current ML regression verification: 91 tests passed, including all-skill review
+packet integrity and conservative source-family split protection. Pose/tracker alignment:
+9 tests passed. The final integrated build passed 357 Android unit tests,
+APK assembly and lint. Its six physical-device tests passed on 3 November.
 The earlier debug update installed successfully on the connected phone with `-r`.
 The existing Blocking video retained its original 33,284,279-byte size and the
 saved-session store remained present. The fix applies to subsequent segmentation;
@@ -173,10 +176,18 @@ analysis of every joint or complete spike mechanics from an occluded camera.
 
 ## MPJPE and remaining work
 
-Actual MPJPE is **unmeasured**. MediaPipe world coordinates are predictions, not
-ground truth. A meaningful MPJPE result needs paired, time-aligned, calibrated
-metric 3D reference joints with a documented joint mapping and alignment policy.
-The existing MPJPE evaluator can compute this when such data exist.
+A [measured general-pose 3D pilot](mpjpe-3d-benchmark-status.md) now reports
+**143.274 mm** on 20 preselected MPI-INF-3DHP TS5 frames / 240 joint pairs,
+using the app's exact pose asset and original independent metric reference
+coordinates. Independent numerical recomputation and a second CLI run agreed.
+This 12-joint IMAGE-mode pilot exceeds 50 mm and is not five-skill volleyball
+validation. A continuous MADS volleyball-video benchmark additionally measured
+**172.716 mm** on 969 valid frames / 11,628 joint pairs, with independent
+motion-capture references and supplied camera calibration. Neither sample meets
+50 mm. The MADS sequence has no five-skill frame labels, so actual volleyball
+**per-skill** 3D MPJPE remains **unmeasured**. See the linked benchmark status for
+protocols, coverage and reproducibility. MediaPipe's own world
+coordinates do not become ground truth merely because they are expressed in metres.
 
 The user confirmed that no coach-reviewed athlete-identified recordings or
 calibrated 3D ground truth are available. Public-source research and rejected
@@ -189,12 +200,29 @@ evaluation cohort. More epochs on these same clips cannot resolve these limits.
 
 ## Reproduction and validation
 
+The [3 November five-skill improvement run](ml-five-skill-improvement-20261103.md)
+records the broader learning-rate comparison, all-five-skill locked audit and
+25-example local coach-review packet. These preserve the distinction between
+provisional development measurements and the requested independently verified
+80% target for each skill.
+
+The subsequent [source expansion](ml-source-expansion-20261103.md) admits one
+new provisional Setting sequence, re-extracts the prior five with the current
+pose configuration and records a six-sequence, three-source development refit.
+Additional positive footage does not supply the missing independent faulty
+players. These models remain outside production app assets.
+
+The [independent evidence audit](ml-independent-evidence-audit-20261103.md)
+checks the latest five corpora and records the external review/cohort gap for
+every skill. Further setting-sensor and Sports-QA research did not supply a
+verified camera-based correct/faulty dataset for the requested objective.
+
 See [the training README](../tools/form-classifier/README.md) for commands,
 registry fields and release limitations. Generated artifacts live under
 `outputs/ai-coach-development`, `outputs/ai-coach-locked-audit` and the associated
 logs. Generated outputs are local artifacts, not versioned training assets.
 
-Regression validation: 44 form-pipeline unit tests, 2 MPJPE utility tests and
+Historical baseline validation: 44 form-pipeline unit tests, 2 MPJPE utility tests and
 344 Android unit tests passed. Debug APK assembly and Android lint completed
 successfully. Unit tests use
 controlled fixtures to verify software behavior; they are not an independent

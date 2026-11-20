@@ -17,6 +17,31 @@ skill selection → drill selection → camera session → full-body pose captur
 pose-quality validation → AI feedback → session results. The surrounding app
 shell exists so that flow can be demonstrated end to end.
 
+## Machine learning: where everything is
+
+The app runs two models on the phone. Both are in this repository, with what is
+needed to check them.
+
+| What | Model | Where it is | How it was made and tested |
+| --- | --- | --- | --- |
+| Body tracking | MediaPipe Pose Landmarker (Google, pretrained) | `app/src/main/assets/pose_landmarker_full.task` | Not trained by us. Accuracy on volleyball images: `tools/receiving-ready-model/validation-v35/RELEASE_READINESS_V35.md` (MPJPE section) |
+| Receiving ready posture (knees bent enough?) | Our TensorFlow model, exported to TensorFlow Lite | `app/src/main/assets/receiving_ready_posture.tflite` | `tools/receiving-ready-model/` — training script, training data, model files, and the test on new videos. Start with its `README.md` |
+
+**Result to quote for our model:** 13 of 14 correct (92.86%, 95% interval
+68.5%–98.7%) on new videos it never saw, from front view, receiving only. 6 of 20
+test clips got no decision because the pose quality was too low. Details and
+limits: `tools/receiving-ready-model/README.md`.
+
+**What is not machine learning.** Rep counting, the movement check, the five
+skills' form scores, facing instructions and the reference figure are measured
+rules on the tracked body (joint angles and positions against the targets in
+`FormCueCatalog` in `FormCue.kt`), not a trained model. See *The pose pipeline* below.
+
+**Research that did not ship.** `tools/form-classifier/` is an earlier
+multi-skill classifier with placeholder weights; the app does not load it. A
+blocking-arm model has app code (`BlockingArmModel.kt`) but no model file, so it
+never runs. The `docs/ml-*.md` files record that research.
+
 ---
 
 ## Build and run

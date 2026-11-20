@@ -9,10 +9,11 @@ import com.volleyballlab.player.domain.model.RepResult
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.model.PoseFrame
+import com.volleyballlab.player.pose.review.ReviewRep
 import com.volleyballlab.player.pose.review.ReviewIssue
 import com.volleyballlab.player.pose.review.VideoReviewFeedback
 
-data class ScoredSession(val session: SessionResult, val issues: List<ReviewIssue>, val assessedCueCount: Int)
+data class ScoredSession(val session: SessionResult, val issues: List<ReviewIssue>, val assessedCueCount: Int, val reviewReps: List<ReviewRep> = emptyList())
 
 /** Pure scoring shared by completed live windows and the final session analysis. */
 class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
@@ -48,7 +49,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
             rep.cueScores.mapNotNull { scored ->
                 val cue = FormCueCatalog.byId(scored.cueId) ?: return@mapNotNull null
                 feedback.issueFor(window, rep.index + 1, cue.id, cue.phase,
-                    scored.measured ?: return@mapNotNull null, scored.score ?: return@mapNotNull null)
+                    scored.measured ?: return@mapNotNull null, scored.score ?: return@mapNotNull null)?.copy(angle = angle ?: CameraAngle.Unknown)
             }
         }
         return ScoredSession(SessionResult(
@@ -58,7 +59,11 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
             startedAtEpochMs = startedAtEpochMs,
             durationMs = if (frames.size < 2) 0L else frames.last().timestampMs - frames.first().timestampMs,
             reps = reps,
-        ), issues, reps.sumOf { rep -> rep.cueScores.count { it.score != null } })
+        ), issues, reps.sumOf { rep -> rep.cueScores.count { it.score != null } },
+            windows.zip(reps).map { (window, rep) -> ReviewRep(rep.index + 1,
+                window.frames.first().cameraTimestampMs,
+                (window.frameFor(RepPhase.Contact) ?: window.frames.first()).cameraTimestampMs,
+                window.frames.last().cameraTimestampMs, rep.formScore(skill), angle ?: CameraAngle.Unknown) })
     }
 
     fun scoreRep(

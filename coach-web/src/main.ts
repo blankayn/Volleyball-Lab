@@ -19,7 +19,7 @@ if (!appRoot) throw new Error("#app missing");
 const root: HTMLElement = appRoot;
 
 function setupScreen(missing: string[]): void {
-  document.title = "Setup needed — Volleyball Lab Coach Portal";
+  document.title = "Setup needed — Volleyball Lab";
   root.innerHTML = `<div class="wrap"><div class="auth-shell" style="max-width:640px"><div class="auth-card">
     <p class="eyebrow">Setup needed</p>
     <h1>Connect the backend first</h1>
@@ -38,12 +38,11 @@ function setupScreen(missing: string[]): void {
 }
 
 function notCoachPage(): void {
-  document.title = "Coach portal — Volleyball Lab";
+  document.title = "Team portal — Volleyball Lab";
   root.innerHTML = `<div class="wrap"><div class="auth-shell"><div class="auth-card">
-    <p class="eyebrow">Coach portal</p>
+    <p class="eyebrow">Team portal</p>
     <h1>Players train in the app</h1>
-    <p class="muted">This account is a player account, and the portal is for coaches.
-      Training, scores and your own coach connection live in the Android app.</p>
+    <p class="muted">This is a player account. Training and scores are available in the Android app.</p>
     <button class="btn btn-primary" style="width:100%" id="not-coach-out">Sign out</button>
   </div></div></div>`;
   root.querySelector("#not-coach-out")?.addEventListener("click", async () => {

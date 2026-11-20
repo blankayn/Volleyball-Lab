@@ -12,6 +12,7 @@
     <string name="session_report_mixed">The measured reps did not show a clear pattern to correct. Repeat the drill slowly and aim for a consistent setup each time.</string>
     <string name="session_report_progress">Progress since a comparable session</string>
     <string name="session_report_closer">%1$s moved closer to the practice range, from %2$s to %3$s.</string>
+    <string name="session_report_closer_still">%1$s moved closer to the practice range, though it is still %2$s.</string>
     <string name="session_report_basis">This report uses the body positions the camera could measure.</string>
     <string name="result_stat_completed">Completed</string>
     <string name="result_stat_best_run">Best run</string>

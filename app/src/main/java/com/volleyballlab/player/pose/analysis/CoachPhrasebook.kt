@@ -347,8 +347,69 @@ object CoachPhrasebook {
     const val TRACKING_RESTORED = "Got you again, carry on."
     const val GO = "Go when you're ready."
     const val SAME_AGAIN = "Same again from this side."
-    const val IDLE = "Whenever you're ready."
     const val HOLD_STILL = "That's it, hold still."
+
+    /** Prototype [PersonalElbowBaseline] cue: compared with the athlete's own best reps, never a fixed height. */
+    const val ELBOW_BELOW_BEST = "Your elbow came through lower than on your best reps. Lift it high like before."
+
+    /**
+     * Said when a movement finished and was not the skill. It leads with the
+     * fact that nothing was counted, then gives the one change that would have
+     * made it a rep. No count, score or praise is attached to it.
+     */
+    fun notCounted(fault: MovementFault): String = NOT_COUNTED_PREFIX + when (fault) {
+        MovementFault.ReachOverhead -> "Swing your hitting hand up above your head."
+        MovementFault.UseBothHands -> "Bring both hands up together."
+        MovementFault.HandsAboveForehead -> "Bring both hands up above your forehead."
+        MovementFault.BendElbowsFirst -> "Bend your elbows and shape your hands above your forehead."
+        MovementFault.ReachBothHandsHigh -> "Reach both hands up above your head."
+        MovementFault.StraightenArms -> "Straighten your arms at the top of the block."
+        MovementFault.JoinPlatform -> "Join your forearms out in front of you as you bend your knees."
+        MovementFault.PlatformTooHigh -> "Keep your joined forearms below your shoulders."
+        MovementFault.ArmsNotVisible -> "I lost sight of your arms. Keep your hands inside the picture."
+        MovementFault.LegsNotVisible -> "I lost sight of your legs. Step back so your feet are in view."
+    }
+
+    /** [notCounted] once it has been heard: the same fix, in as few words as still name it. */
+    fun notCountedShort(fault: MovementFault): String = NOT_COUNTED_PREFIX + when (fault) {
+        MovementFault.ReachOverhead -> "Hand above your head."
+        MovementFault.UseBothHands -> "Both hands up."
+        MovementFault.HandsAboveForehead -> "Hands above your forehead."
+        MovementFault.BendElbowsFirst -> "Bend your elbows."
+        MovementFault.ReachBothHandsHigh -> "Both hands higher."
+        MovementFault.StraightenArms -> "Straighter arms."
+        MovementFault.JoinPlatform -> "Forearms together."
+        MovementFault.PlatformTooHigh -> "Forearms lower."
+        MovementFault.ArmsNotVisible -> "Keep your arms in view."
+        MovementFault.LegsNotVisible -> "Step back."
+    }
+
+    fun notCountedCue(fault: MovementFault) = SpokenCue(notCounted(fault), notCountedShort(fault))
+
+    const val NOT_COUNTED_PREFIX = "Not counted. "
+
+    /**
+     * For an athlete who is in view and ready but has produced no rep for a
+     * while: what a rep of this skill is, rather than a vague invitation.
+     */
+    fun idle(skill: Skill): String = when (skill) {
+        Skill.Serving -> "I'm waiting for a serve. Swing your hitting hand up above your head."
+        Skill.Receiving -> "I'm waiting for a pass. Join your forearms in front and bend your knees."
+        Skill.Setting -> "I'm waiting for a set. Bring both hands up above your forehead with your elbows bent."
+        Skill.Spiking -> "I'm waiting for a spike. Load your knees, then swing your hitting hand up overhead."
+        Skill.Blocking -> "I'm waiting for a block. Reach both hands up above your head."
+    }
+
+    /** [idle] once it has been heard: a reminder of the rep, not a lesson. */
+    fun idleShort(skill: Skill): String = "Ready when you are: " + when (skill) {
+        Skill.Serving -> "hand above your head."
+        Skill.Receiving -> "forearms together, knees bent."
+        Skill.Setting -> "hands above your forehead."
+        Skill.Spiking -> "load, then reach high."
+        Skill.Blocking -> "both hands up high."
+    }
+
+    fun idleCue(skill: Skill) = SpokenCue(idle(skill), idleShort(skill))
 
     fun watching(planFocus: CueId?, stageIndex: Int): String =
         if (planFocus != null && stageIndex % 2 == 0) "I'm watching your ${focusName(planFocus)}."

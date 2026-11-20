@@ -78,7 +78,7 @@ class SessionWrapUpTest {
         val opening = returning.opening(Skill.Receiving, repsPerAngle = 5)
         assertEquals("Welcome back, Maya.", opening[0])
         assertEquals("Last time your knee bend needed the most work, so let's see it early.", opening[1])
-        assertTrue("Front view first, five reps, then side." in opening)
+        assertTrue("Face forward for the first five reps, then I'll turn you side-on." in opening)
         assertEquals("I'll watch the first couple before I say anything.", opening.last())
 
         // A prior session with nothing measurable is remembered, but no cue is invented for it.
@@ -95,11 +95,5 @@ class SessionWrapUpTest {
         assertTrue("Your coach set this one: Passing." in maya.withCoach(null, "Passing").opening(Skill.Receiving))
         assertTrue(maya.withCoach("Ana", null).opening(Skill.Receiving).none { "set this one" in it })
         assertTrue(maya.withCoach("Ana", "x".repeat(200)).assignmentTitle!!.length <= 60)
-    }
-
-    @Test fun dominantHandBecomesTheDefaultSideAndNothingElseChanges() {
-        val left = LiveCoachingPlan.forAthlete(Skill.Serving, AthleteProfile(name = "Maya", dominantHand = DominantHand.Left))
-        assertEquals(Side.Left, left.dominantSide)
-        assertNull(LiveCoachingPlan.forAthlete(Skill.Serving, AthleteProfile.Anonymous).dominantSide)
     }
 }

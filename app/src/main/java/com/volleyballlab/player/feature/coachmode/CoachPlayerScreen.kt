@@ -295,12 +295,6 @@ internal fun CoachPlayerContent(
                 Text("Remove from team", color = MaterialTheme.colorScheme.error)
             }
         }
-        item(key = "footnote") {
-            CoachFootnote(
-                text = stringResource(R.string.coach_player_focus_source),
-                modifier = Modifier.padding(horizontal = CoachGutter + 4.dp, vertical = 6.dp),
-            )
-        }
     }
     if (confirmRemoval) AlertDialog(
         onDismissRequest = { confirmRemoval = false }, title = { Text("Remove this player?") },

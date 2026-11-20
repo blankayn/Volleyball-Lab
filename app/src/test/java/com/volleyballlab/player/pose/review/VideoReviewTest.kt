@@ -89,7 +89,7 @@ class VideoReviewTest {
         val (issues, assessed) = VideoReviewFeedback().analyse(static, Skill.Receiving, 50)
         assertTrue(issues.isEmpty())
         assertEquals(0, assessed)
-        assertEquals(emptyList<ReviewIssue>() to 0, VideoReviewFeedback().analyse(emptyList(), Skill.Receiving, 50))
+        assertEquals(VideoReviewFeedback.Feedback(emptyList(), 0, emptyList()), VideoReviewFeedback().analyse(emptyList(), Skill.Receiving, 50))
     }
 
     @Test fun `cached replay preserves video coordinates timestamps and cue identity`() {

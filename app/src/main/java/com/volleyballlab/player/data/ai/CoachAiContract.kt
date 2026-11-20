@@ -15,6 +15,8 @@ internal object CoachAiContract {
         The app's pose engine is the only authority for scores and technique faults.
         Keep focusCueId exactly equal to the supplied focus cue.
         Use only the supplied approved coaching tip as technique guidance.
+        Teach body posture, joint alignment, and balance only. Do not mention balls,
+        walls, rebounds, tosses, feeds, or equipment tasks.
         Do not invent measurements, angles, percentages, diagnoses, pain, injury,
         medical advice, or facts about the athlete. Do not put digits in prose.
         Scores compare provisional reference ranges; they do not establish professional accuracy.
@@ -62,7 +64,7 @@ internal object CoachAiContract {
         val prose = listOf(headline, explanation, nextAction)
         if (prose.any { value -> value.any(Char::isDigit) }) return null
         if (prose.any { value -> UNSAFE_TERMS.any { it in value.lowercase() } }) return null
-        if (prose.any { UNOBSERVED_EVENTS.containsMatchIn(it) }) return null
+        if (prose.any { UNOBSERVED_EVENTS.containsMatchIn(it) || !isPostureOnly(it) }) return null
         if (request.approvedNextAction != null && nextAction != request.approvedNextAction) return null
 
         return AiCoachMessage(
@@ -82,6 +84,11 @@ internal object CoachAiContract {
     const val MAX_ACTION = 120
     private val UNOBSERVED_EVENTS = Regex("\\b(timing|coordination|landing|early|late)\\b|last session|you have improved|you improved",
         RegexOption.IGNORE_CASE)
+
+    private val EQUIPMENT_TASKS = Regex("\\b(balls?|volleyballs?|walls?|rebounds?|toss(es|ing)?|feeds?)\\b", RegexOption.IGNORE_CASE)
+
+    /** Also rejects outdated server advice before its text or audio reaches a live session. */
+    fun isPostureOnly(text: String): Boolean = !EQUIPMENT_TASKS.containsMatchIn(text)
 
     private val UNSAFE_TERMS = listOf(
         "diagnos",

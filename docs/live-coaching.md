@@ -1,7 +1,10 @@
 # Live coaching
 
 Profile → Live coaching has independent Pose Guide and Detailed AI Coaching
-switches, both initially off. Voice and haptics retain their existing defaults.
+switches. Detailed AI Coaching starts off. Pose Guide starts on since
+17 November 2026, when it gained the reference figure described below; an
+account that had already switched it off stays off. Voice and haptics retain
+their existing defaults.
 Preferences belong to the signed-in account on that phone.
 
 Pose Guide draws a translucent gold reference limb with the athlete's observed
@@ -105,11 +108,12 @@ name the previously corrected cue. The evidence and acknowledgment rules below
 extend this flow. Provisional scoring ranges are unchanged.
 
 Angle breaks speak the local outcome and turn instruction immediately. Optional
-AI advice updates only the card and never reopens the speech gate. Front and Side
-are required for guided capture; Rear can be skipped. Finish from Front requests
+AI advice updates only the card and never reopens the speech gate. Guided capture
+is Front then Side, both required; the Rear view was removed on 19 Nov 2026
+(saved sessions with a rear stage still display it). Finish from Front requests
 Side, and Finish before the Side target explains the remaining reps. An explicit
-confirmed early exit and the recording limit retain incomplete sessions. The
-ten-rep option has a six-minute limit. Review metadata records stage targets and
+confirmed early exit and the recording limit retain incomplete sessions. Both
+the five- and ten-rep options have a five-minute limit. Review metadata records stage targets and
 completeness without changing saved scoring fields.
 
 The live view label and rep counters refer to the same angle. During a turn and
@@ -338,3 +342,165 @@ Not verified, and needing the owner's phone: voice rate and pitch by ear, speech
 timing at real rep tempo, audibility on court, audio-focus behaviour with music
 playing, and the new on-screen "Say again" and closing card layouts. Coach-labelled
 validation above is still outstanding and unaffected.
+
+## Movement check and facing (17 November 2026)
+
+Reported from a live session: reps and good reps were awarded while standing
+still and for plain knee bends.
+
+Cause. Both counters looked only at the shape of one curve, rescaled to whatever
+range it had covered, with a floor of 0.001. A still athlete's range decayed to
+the tracker's jitter and the jitter then crossed the thresholds. A knee bend was
+the whole definition of a pass, and was also what moved the hip-height signal the
+spike was segmented on. The cue scores agreed with the count: arms hanging at the
+sides are straight, so they earned full marks for a straight platform or arm.
+
+A finished movement is now a rep only if it passes the movement check, applied
+identically by `LiveRepCounter` and `RepSegmenter` through
+`SkillAnalyzer.verdict`:
+
+| Skill | Signal | Must also be true at contact |
+| --- | --- | --- |
+| Serving, Spiking | higher wrist above the shoulder line | hitting hand itself rose at least 0.35 torso lengths and finished 0.55 or more above the shoulders, with that arm in view |
+| Setting | mean wrist height | both hands at least 0.30 above the shoulders and within 0.35 of each other; the elbows closed past 150 degrees on the way up |
+| Blocking | mean wrist height | both hands at least 0.60 above the shoulders; elbows at least 120 degrees |
+| Receiving | knee flexion | knees at least 15 degrees deeper than the start; wrists no further apart than 0.60 of shoulder width, below the shoulders, and ahead of the hips in a side view |
+
+Heights are in torso lengths (shoulder line to hip line in the image), so they do
+not change with distance from the camera. Neither counter scales its thresholds
+below the skill's minimum travel. A movement smaller than that is dropped
+silently, as is a hand that never rose above the shoulder line in a one-armed
+skill. The one-armed travel was 0.60 at first and was lowered the same day: a
+server who starts as taught, hitting hand already beside the head with the
+guiding arm held up, has about half a torso length left to travel and was being
+refused without a word. A larger one that fails is Not counted: it adds nothing to reps, good
+reps, streak or score, the card shows "Not counted" with the one change needed,
+and the coach says it (the same reason at most once in eight seconds). Only
+observed joints are judged: a hidden far arm in a side view is skipped, a pass
+seen from behind accepts a platform hidden by the body, and a hitting arm that
+leaves the picture is reported as not visible rather than as a fault.
+
+Spiking is now segmented on the hitting hand, like the serve, so the standing
+arm-swing drill counts and a knee bend does not. The Loading phase for Setting,
+Spiking and Blocking is the deepest observed knee bend before contact, not the
+lowest point of the hand signal. Every saved-session window now opens up to
+half a second before the first rise, as the live counter's always did, so both
+measure a rep's travel from the same stance; the Preparation frame of a saved
+rep is that much earlier than before. Cue targets, weights and tolerances are
+unchanged.
+
+Facing. `FacingGuide` gives each skill and view a stance in the athlete's own
+left and right. Front is "Face forward". Side is "Turn to your left, so your
+right shoulder points at the camera" or its mirror: for Serving and Spiking the
+hitting arm observed in the front view must be nearest the camera and the other
+profile is refused (before an arm has been observed the turn is only suggested;
+the profile no longer stores a dominant hand); Receiving, Setting and Blocking are told a direction but accept either
+profile. The opening brief, the turn instruction, the view chip and the
+wrong-way prompt all use it. Facing the wrong way at rest suspends counting with
+the direction to turn. Free practice accepts any readable view and suspends on a
+body turned part-way between two.
+
+After twelve idle seconds the coach says what a rep of the selected skill is.
+
+## Reference figure (17 November 2026)
+
+Pose Guide now also draws a whole-body reference figure: the athlete's own body
+in the skill's start or finish position, in dashed translucent gold under the
+tracked skeleton, with a label that reads "Reference: start position" or
+"Reference: finish position".
+
+When it is drawn:
+
+- Opening brief and countdown: start and finish alternate every 1.4 seconds, so
+  the athlete sees what one rep is before recording begins.
+- A turn to a new view: the start position in the facing being asked for, then
+  start and finish alternating during the turn's countdown.
+- Facing the wrong way during a view: the start position, facing the right way.
+- A movement that was Not counted: the finish position, for as long as the
+  reason is on the card. Not for a fault of visibility, where the body's
+  position was not the problem.
+- The twelve-second idle prompt: start and finish alternating.
+
+It is never drawn while a movement is under way, during setup framing, or once
+the closing begins, and it replaces the single correction limb rather than
+sharing the picture with it.
+
+Where the positions come from. `ReferencePoses` reads each scored joint angle out
+of that cue's target in `FormCueCatalog`: the finish position is the pose the
+Contact-phase cues give full marks, and the start position satisfies the
+Preparation and Loading cues. Retuning a target moves the figure with it. Angles
+no cue scores (the idle arm, the knees at the finish) are plain choices and are
+marked as such in the code. For Setting this means the finish position has the
+hands above the forehead with bent elbows, because that is what scoring reads at
+the highest point of the hands today; see "Known and left as found" below.
+
+How it is placed. `ReferenceFigure` builds the pose from the athlete's own
+segment lengths, stands it on their feet, and sizes it by their whole standing
+chain (shin, thigh and trunk) so an error in any one tracked length cancels. A
+limb the camera did not see takes a typical length for that trunk. Size and
+position are averaged over recent frames so the figure does not shiver with the
+tracker. It faces the way the stance asks; where either side profile is accepted
+it follows the one the athlete took, and in free practice it follows their view.
+
+What it is not. It is a flat drawing of a three-dimensional pose: facing the
+camera, a knee bend shows only as lower hips and a forward lean only as a shorter
+trunk, so it reads properly only side-on. It draws the current first-pass
+targets exactly as they stand and makes no claim about ideal technique.
+
+## Progressive instruction (17 November 2026)
+
+Live lines are taught in full once, then spoken as a short cue: "Turn to your
+left, so your right shoulder points at the camera" becomes "Turn left", and
+"Not counted. Join your forearms out in front of you as you bend your knees"
+becomes "Not counted. Forearms together." This applies to Not counted reasons,
+wrong-facing prompts and the idle prompt. A new athlete (experience "New") hears
+the full version twice; anyone who has not heard a line for two minutes hears it
+in full again. Only speech is shortened: the card always shows the full
+sentence and "Say again" repeats it. A line that was dropped before it was
+heard, or any line in a muted session, does not count as taught.
+`ProgressiveInstructions` keeps this per session.
+
+### Verification (17 November 2026)
+
+- `.\gradlew.bat :app:testDebugUnitTest`: 559 tests, 0 failures, 0 skipped.
+  New: `MovementVerdictTest` (still athlete with tracker noise, knee bends, wrong
+  and correct movements for all five skills, a cocked serve start, side and rear
+  views, live and saved counts agreeing), `FacingGuideTest`, `ReferencePoseTest`
+  (every start and finish position scored by the real analyzers and scorer and
+  given full marks on the cues read there; start-to-finish counted as a rep by
+  both counters from the front and the side; placement, facing and steadiness),
+  and eight capture integration cases.
+- `.\gradlew.bat :app:compileDebugAndroidTestKotlin`: compiled; not run.
+- The ten positions were rendered from the app's geometry and looked at by eye
+  as stick figures, front and side. That checks the shapes, not the app screen.
+
+Not verified, and needing the owner's phone: every threshold in the table. They
+are first-pass values from body proportions, tested on a posed figure with
+synthetic noise, not on recorded athletes. Expect to retune them. Watch in
+particular for correct reps reported as Not counted, the Receiving knee-dip
+minimum for athletes who stay low, and free practice suspending on a view the
+orientation detector cannot name. For the reference figure: how it looks and
+reads on a real screen at three metres, whether its size and position sit on a
+real athlete, how steady it is, whether the dashed gold is visible against a
+bright court, and whether the label overlaps other controls on a small phone.
+Lint was not run.
+
+Known and left as found: for Setting, Contact is still the highest point of the
+hands, where a full set has straight arms, yet `SetElbowFlexion` expects bent
+elbows there and `SetExtensionFollowThrough` is read after the hands come down.
+The debug-only demo detector's figure does not form a platform, so it no longer
+counts in Receiving.
+
+## Side-view detection (19 Nov 2026)
+
+`CameraOrientationDetector` also accepts Side when shoulders and hips overlap on
+screen (width at most 0.25 / 0.20 of torso height, measured in pixels) and the
+depth estimate does not flatly say square-on. Side confidence is graded by how
+far inside the side rules a frame sits. `OrientationStabilityGate` accepts a
+view after a second of continuous tracking in which at least 90% of frames were
+accepted, instead of requiring every frame. Replayed on 213 labelled side-view
+clips this raised side frames passing the live check from 27% to 40%, and clips
+where the gate opens from 21% to 39%, with 2 of 84 front-view clips wrongly
+opened. The opt-in replays are `OrientationReplay` and `RepCountReplay`
+(`VL_ORIENTATION_DIR=<dir with landmarks/>`); see
+`outputs/orientation-eval-20261119/README.md` for the data.

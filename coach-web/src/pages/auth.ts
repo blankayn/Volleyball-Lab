@@ -23,8 +23,8 @@ import { icon } from "../lib/icons";
 function authLayout(kind: "login" | "register", content: string): string {
   const registering = kind === "register";
   const header = registering ? topbar(false, "auth") : `<header class="topbar"><div class="topbar-inner">
-    <a class="brand" href="#/" aria-label="Volleyball Lab home"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="" /><span>Volleyball Lab <small>Coach</small></span></a>
-    <nav aria-label="Coach account"><a class="auth-header-link" href="#/register">Become a coach</a></nav>
+    <a class="brand" href="#/" aria-label="Volleyball Lab home"><img class="brand-mark" src="/assets/volleyball-lab-logo.png" alt="" /><span>Volleyball Lab <small>Team portal</small></span></a>
+    <nav aria-label="Account"><a class="auth-header-link" href="#/register">Create an account</a></nav>
   </div></header>`;
   const pageFooter = registering ? footer() : `<footer class="footer auth-login-footer"><div class="wrap">
     <span>© 2026 Volleyball Lab</span><nav aria-label="Portal footer"><a href="#/">Home</a><a href="#/register">Create account</a></nav>
@@ -32,8 +32,8 @@ function authLayout(kind: "login" | "register", content: string): string {
   return `<div class="auth-page">${header}
     <main class="auth-layout auth-layout-${kind}">
       ${registering ? `
-      <aside class="auth-story" aria-label="Coaching with Volleyball Lab">
-        <div class="auth-story-top"><span class="auth-edition">THE COACH’S CORNER</span><span class="auth-court-mark">${icon("court")}</span></div>
+      <aside class="auth-story" aria-label="Training with Volleyball Lab">
+        <div class="auth-story-top"><span class="auth-edition">THE TEAM CORNER</span><span class="auth-court-mark">${icon("court")}</span></div>
         <div class="auth-story-copy"><p class="eyebrow">${registering ? "Start something stronger" : "Make the next session count"}</p><h2>${registering ? "Build the team.<br /><em>Shape the game.</em>" : "Back to the court.<br /><em>Eyes on progress.</em>"}</h2></div>
         <figure class="auth-story-visual">
           <img src="/assets/${registering ? "auth-court-line.jpg" : "auth-sunset-net.jpg"}" alt="${registering ? "Volleyball resting on a court line in a softly lit indoor gym" : "Close view of a beach volleyball net in warm evening light"}" width="900" height="${registering ? "1350" : "1599"}" decoding="async" />
@@ -42,7 +42,7 @@ function authLayout(kind: "login" | "register", content: string): string {
         </figure>
         <div class="auth-story-bottom"><span>Train<span aria-hidden="true">/</span>Review<span aria-hidden="true">/</span>Improve</span>${icon("arrow")}</div>
       </aside>` : ""}
-      <section class="auth-form-panel" aria-label="${registering ? "Create coach account" : "Coach sign in"}">${content}</section>
+      <section class="auth-form-panel" aria-label="${registering ? "Create account" : "Sign in"}">${content}</section>
     </main>${pageFooter}</div>`;
 }
 
@@ -79,10 +79,10 @@ function friendly(code: string): string {
 }
 
 export function renderLogin(root: HTMLElement): void {
-  document.title = "Login — Volleyball Lab Coach Portal";
+  document.title = "Login — Volleyball Lab";
   root.innerHTML = authLayout("login", `<div class="auth-card">
     <img class="login-card-logo" src="/assets/volleyball-lab-logo.png" alt="Volleyball Lab" width="48" height="48" />
-    <p class="eyebrow">Your coaching workspace</p>
+    <p class="eyebrow">Your team workspace</p>
     <h1>Login</h1>
     <p class="muted">Your queue, roster and assignments are where you left them.</p>
     <div id="form-error" aria-live="assertive"></div>
@@ -96,7 +96,7 @@ export function renderLogin(root: HTMLElement): void {
       <div class="login-options"><label><input id="remember-me" type="checkbox" checked />Remember me</label><a href="#/forgot-password" id="forgot-password">Forgot password?</a></div>
       <button class="btn btn-primary auth-submit" type="submit"><span class="auth-submit-label">Login</span><span class="auth-submit-icon">${icon("arrow")}</span></button>
     </form>
-    <p class="auth-switch">New here? <a href="#/register">Register as a coach</a></p>
+    <p class="auth-switch">New here? <a href="#/register">Create an account</a></p>
   </div>`);
 
   wirePasswordVisibility(root);
@@ -178,7 +178,7 @@ export function renderLogin(root: HTMLElement): void {
       const code = failure instanceof Error ? failure.message : String((failure as { code?: string }).code ?? failure);
       if (err) {
         const message = code === "portal/player-account"
-          ? "That account is a player account. The portal is for coaches — players train in the Android app."
+          ? "That is a player account. Player training is available in the Android app."
           : code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")
             ? "Incorrect email or password."
             : friendly(code);
@@ -198,13 +198,13 @@ export function renderLogin(root: HTMLElement): void {
 const FIELD_ERROR = "Please fill in your name, a valid email and a password of 6+ characters.";
 
 export function renderRegister(root: HTMLElement): void {
-  document.title = "Register — Volleyball Lab Coach Portal";
+  document.title = "Register — Volleyball Lab";
   const specOptions = SPECIALISATIONS.map(
     (s) => `<option value="${s}">${s === "AllAround" ? "All-around" : s}</option>`,
   ).join("");
 
   root.innerHTML = authLayout("register", `<div class="auth-card">
-    <p class="eyebrow">Coach registration</p>
+    <p class="eyebrow">Account registration</p>
     <h1>Set up your team</h1>
     <p class="muted">Create your profile, connect your athletes, and plan their next session.</p>
     <div id="form-error"></div>
@@ -212,7 +212,7 @@ export function renderRegister(root: HTMLElement): void {
       <div class="form-section-title"><span>01</span><h2>Your account &amp; team</h2></div>
       <div class="form-grid">
         <div class="field"><label for="name">Your name</label>
-          <input id="name" autocomplete="name" required maxlength="60" placeholder="Coach Rivera" /></div>
+          <input id="name" autocomplete="name" required maxlength="60" placeholder="Alex Rivera" /></div>
         <div class="field"><label for="team">Team name</label>
           <input id="team" maxlength="48" placeholder="UC Junior Spikers" /></div>
       </div>
@@ -222,7 +222,7 @@ export function renderRegister(root: HTMLElement): void {
         <div class="field"><label for="password">Password</label>
           <div class="password-input"><input id="password" type="password" autocomplete="new-password" required minlength="6" placeholder="6+ characters" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div></div>
       </div>
-      <div class="form-section-title"><span>02</span><h2>Your coaching profile</h2></div>
+      <div class="form-section-title"><span>02</span><h2>Your profile</h2></div>
       <div class="form-grid">
         <div class="field"><label for="org">School or club</label>
           <input id="org" maxlength="48" placeholder="University of Cebu" /></div>
@@ -232,10 +232,10 @@ export function renderRegister(root: HTMLElement): void {
       <div class="form-grid">
         <div class="field"><label for="spec">Specialisation</label>
           <select id="spec">${specOptions}</select></div>
-        <div class="field"><label for="years">Years coaching</label>
+        <div class="field"><label for="years">Years of experience</label>
           <input id="years" type="number" min="0" max="70" placeholder="e.g. 6" /></div>
       </div>
-      <button class="btn btn-primary auth-submit" type="submit">Create coach account ${icon("arrow")}</button>
+      <button class="btn btn-primary auth-submit" type="submit">Create account ${icon("arrow")}</button>
     </form>
     <p class="auth-switch">Already registered? <a href="#/login">Sign in</a></p>
   </div>`);

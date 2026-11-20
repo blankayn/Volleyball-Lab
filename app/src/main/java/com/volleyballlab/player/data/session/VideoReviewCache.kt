@@ -32,7 +32,7 @@ class VideoReviewCache(private val context: Context) : CapturedReviewWriter {
             val source = File(path)
             val record = json.decodeFromString<Record>(AtomicFile(fileFor(context, path, persistent)).openRead().bufferedReader().use { it.readText() })
             record.takeIf {
-                it.version == VERSION && it.length == source.length() && it.modified == source.lastModified() &&
+                it.version in 1..VERSION && it.length == source.length() && it.modified == source.lastModified() &&
                     it.skill == skill.name && it.review.width > 0 && it.review.height > 0
             }?.review
         }.getOrNull() }
@@ -70,7 +70,7 @@ class VideoReviewCache(private val context: Context) : CapturedReviewWriter {
     }
 
     companion object {
-        private const val VERSION = 1
+        private const val VERSION = 2
         private val json = Json { ignoreUnknownKeys = true }
         private fun fileFor(context: Context, path: String, persistent: Boolean = false): File {
             val key = MessageDigest.getInstance("SHA-256").digest(path.toByteArray()).joinToString("") { "%02x".format(it) }

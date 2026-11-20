@@ -23,6 +23,8 @@ data class CapturedReviewInput(
     val issues: List<ReviewIssue>,
     val assessedCueCount: Int,
     val videoOriginCameraMs: Long,
+    val reps: List<ReviewRep> = emptyList(),
+    val guided: GuidedReview? = null,
 )
 
 fun interface CapturedReviewWriter {
@@ -43,5 +45,10 @@ fun CapturedReviewInput.toReview(durationMs: Long, width: Int, height: Int): Vid
     return VideoReview(durationMs, width, height, interval, poses,
         issues.map { it.copy(timestampMs = it.timestampMs - videoOriginCameraMs) }
             .filter { it.timestampMs in 0..durationMs }.sortedWith(compareBy<ReviewIssue> { it.timestampMs }.thenBy { it.score }),
-        assessedCueCount, fromCapture = true)
+        assessedCueCount, fromCapture = true,
+        reps = reps.filter { it.endMs >= videoOriginCameraMs && it.startMs - videoOriginCameraMs <= durationMs }.map {
+            it.copy(startMs = (it.startMs - videoOriginCameraMs).coerceIn(0, durationMs),
+                contactMs = (it.contactMs - videoOriginCameraMs).coerceIn(0, durationMs),
+                endMs = (it.endMs - videoOriginCameraMs).coerceIn(0, durationMs))
+        }, guided = guided, guidedCapture = guided != null)
 }

@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
+import com.volleyballlab.player.pose.analysis.CuePlainWords
+import com.volleyballlab.player.ui.component.CueGauge
 import com.volleyballlab.player.ui.theme.vbColors
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
@@ -53,7 +55,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.feature.coach.AssignmentResultActions
 import com.volleyballlab.player.appContainer
-import com.volleyballlab.player.domain.model.CueUnit
 import com.volleyballlab.player.domain.model.CoachAssessmentEngine
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.FormCue
@@ -312,7 +313,6 @@ private fun ResultContent(
                     ) {
                         Text(doneLabel ?: if (assignmentId != null) "Back to assignment" else stringResource(R.string.result_save))
                     }
-                    PoseBenchmarkDisclosure()
                     Spacer(Modifier.height(4.dp))
                 }
             }
@@ -522,45 +522,32 @@ private fun CueRow(summary: CueSummary, modifier: Modifier = Modifier) {
                 color = if (summary.meanScore != null) scoreColor(percent) else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (summary.meanScore != null) LinearProgressIndicator(
-            progress = { animatedProgress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
-            color = scoreColor(percent),
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-        )
-        Text(
-            text = measurementLine(summary),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        val measured = summary.meanMeasured
+        if (measured != null) {
+            // Where the typical rep sat against the practice range, in words and a
+            // gauge rather than "132°, target 155–180°".
+            val reading = CuePlainWords.read(summary.cue, measured)
+            CueGauge(reading)
+            Text(
+                text = reading.verdict.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (reading.inRange) MaterialTheme.vbColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            if (summary.meanScore != null) LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = scoreColor(percent),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
+            Text(
+                text = stringResource(R.string.result_cue_unmeasured),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
-}
-
-/**
- * "132 deg, target 155-180 deg", or an honest note when nothing was measurable.
- */
-@Composable
-private fun measurementLine(summary: CueSummary): String {
-    val measured = summary.meanMeasured
-        ?: return stringResource(R.string.result_cue_unmeasured)
-    return stringResource(
-        R.string.result_measured_vs_target,
-        formatValue(measured, summary.cue.unit),
-        formatRange(summary.cue),
-    )
-}
-
-private fun formatValue(value: Float, unit: CueUnit): String = when (unit) {
-    CueUnit.Degrees -> String.format(Locale.US, "%.0f°", value)
-    CueUnit.Metres -> String.format(Locale.US, "%.2f m", value)
-    CueUnit.Ratio -> String.format(Locale.US, "%.0f%%", value * 100)
-}
-
-private fun formatRange(cue: FormCue): String {
-    val from = formatValue(cue.target.start, cue.unit)
-    val to = formatValue(cue.target.endInclusive, cue.unit)
-    return "$from - $to"
 }

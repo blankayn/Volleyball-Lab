@@ -65,6 +65,18 @@ class DatasetTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_skill(self.root, "block", {}, "feature_usable_frac", .5)
 
+    def test_recorded_source_family_survives_and_cannot_be_rewritten(self):
+        self.write_bundle(source_group=np.array(['episode-a', 'episode-b', 'x', 'y']))
+        attach_source_hash(self.root / 'clip_sequences.npz', 'a' * 64,
+                           source_family='related-coaching-collection')
+        data = load_skill(self.root, 'block', {}, 'feature_usable_frac', .5)
+        self.assertEqual(data.rows[0]['source_family'], 'related-coaching-collection')
+        with self.assertRaisesRegex(ValueError, 'source family'):
+            load_skill(self.root, 'block', {'clip:0': {'source_family': 'different'}}, 'feature_usable_frac', .5)
+        self.write_bundle(source_family=np.array(['wrong-length']))
+        with self.assertRaisesRegex(ValueError, 'dimensions'):
+            load_skill(self.root, 'block', {}, 'feature_usable_frac', .5)
+
     def test_narrow_task_scope_survives_extraction_and_cannot_be_relabelled(self):
         attach_source_hash(self.root / "clip_sequences.npz", "a" * 64, "block_to_attack_retreat")
         data = load_skill(self.root, "block", {}, "feature_usable_frac", .5)

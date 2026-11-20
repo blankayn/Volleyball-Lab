@@ -349,12 +349,6 @@ fun CoachReviewScreen(
             }
         }
 
-        if (tab == 0) item {
-            CoachFootnote(
-                text = stringResource(R.string.coach_review_analysis_source),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
-        }
     }
 }
 

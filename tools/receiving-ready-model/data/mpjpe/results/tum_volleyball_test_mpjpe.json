@@ -1,0 +1,99 @@
+{
+  "created_at_utc": "2026-09-21T05:52:44.913821+00:00",
+  "metric": "2-D MPJPE on 12 directly matched TUM/MediaPipe joints",
+  "dataset": "TUM Volleyball Dataset (Belagiannis et al., AMDO 2014)",
+  "dataset_url": "https://www.campar.in.tum.de/public_datasets/singlehuman/README.html",
+  "split": "test",
+  "published_split_frames": "train 1-800; test 837-1107",
+  "selected_images": 271,
+  "detected_images": 107,
+  "image_detection_rate": 0.3948339483394834,
+  "inference_mode": "IMAGE",
+  "temporal_tracking_evaluated": false,
+  "android_32_pose_frame_quality_gate_evaluated": false,
+  "coordinate_convention": "MATLAB one-based annotations converted to zero-based coordinates by subtracting 1 from x and y.",
+  "direct_joint_count": 12,
+  "excluded_annotations": [
+    "bottom head",
+    "top head"
+  ],
+  "exclusion_reason": "MediaPipe has no direct equivalents; no synthetic joints were invented.",
+  "app_model_hash_verified": true,
+  "app_model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "all_detected_joint_metrics": {
+    "mpjpe_pixels": 17.763810806412636,
+    "mpjpe_pixels_image_cluster_bootstrap_95": [
+      14.651789561450556,
+      21.31967936638886
+    ],
+    "median_pixels": 8.75283722813281,
+    "p90_pixels": 50.14065696945967,
+    "mpjpe_fraction_image_diagonal": 0.06261565117396833,
+    "mpjpe_torso_normalized": 0.3001663511776214,
+    "pck_at_0_2_torso": 0.5872274143302181,
+    "detection_inclusive_pck_at_0_2_torso": 0.23185731857318573
+  },
+  "per_joint_visibility_gated_metrics": {
+    "gate_scope": "individual predicted joint",
+    "gate_definition": "visibility >= 0.40 and normalized x/y coordinates inside [0, 1]",
+    "minimum_visibility": 0.4,
+    "presence_threshold_applied": false,
+    "mpjpe_pixels": 15.708235252545322,
+    "mpjpe_pixels_image_cluster_bootstrap_95": [
+      12.800433545888081,
+      18.956459121148004
+    ],
+    "mpjpe_torso_normalized": 0.26741992866669295,
+    "reliable_joint_coverage_on_detected_images": 0.8621495327102804,
+    "detection_inclusive_reliable_joint_coverage": 0.3404059040590406,
+    "is_android_32_pose_frame_quality_gate": false
+  },
+  "app_quality_gated_metrics": {
+    "gate_scope": "individual predicted joint",
+    "gate_definition": "visibility >= 0.40 and normalized x/y coordinates inside [0, 1]",
+    "minimum_visibility": 0.4,
+    "presence_threshold_applied": false,
+    "mpjpe_pixels": 15.708235252545322,
+    "mpjpe_pixels_image_cluster_bootstrap_95": [
+      12.800433545888081,
+      18.956459121148004
+    ],
+    "mpjpe_torso_normalized": 0.26741992866669295,
+    "reliable_joint_coverage_on_detected_images": 0.8621495327102804,
+    "detection_inclusive_reliable_joint_coverage": 0.3404059040590406,
+    "is_android_32_pose_frame_quality_gate": false,
+    "deprecated_alias": true,
+    "replacement_key": "per_joint_visibility_gated_metrics",
+    "warning": "This is not the Android app's rolling 32-pose-frame quality gate."
+  },
+  "per_joint_mpjpe_pixels": {
+    "right_ankle": 22.056845711957713,
+    "right_knee": 12.305151576172856,
+    "right_hip": 13.873687546683433,
+    "left_hip": 12.847289376564833,
+    "left_knee": 14.856243177710137,
+    "left_ankle": 22.512017255227608,
+    "right_wrist": 24.531657430937706,
+    "right_elbow": 16.903217607434367,
+    "right_shoulder": 11.751535617653037,
+    "left_shoulder": 15.230907761865572,
+    "left_elbow": 17.933208824961156,
+    "left_wrist": 28.363967789783228
+  },
+  "classification_accuracy_is_separate": true,
+  "model": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\pose_landmarker_full.task",
+  "model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "dataset_archive_sha256": "a7bfb77242bfb4e056bc479da1a0c8d10249237107cc6f15ef289a44f1fb8435",
+  "joints_mat_sha256": "a7dde9bf0205719ae721920a1f5aeef5cd57845d8faef2b91e1d3a692f6f2460",
+  "per_image_csv": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\tum_volleyball_test_per_image.csv",
+  "per_joint_csv": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\tum_volleyball_test_per_joint.csv",
+  "overlay_audit": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\tum_volleyball_test_overlay_audit",
+  "limitations": [
+    "This is 2-D pixel MPJPE, not 3-D millimetres.",
+    "The dataset images are independently cropped, low-resolution single-player still frames.",
+    "IMAGE mode evaluates per-image pose weights, not temporal tracking.",
+    "The changing crops cannot validate the app's rolling 32-pose-frame gate or stable-camera behavior.",
+    "MPJPE measures landmark placement, not ready-posture classification.",
+    "MPJPE is conditional on detection; detection-inclusive coverage and PCK are reported separately."
+  ]
+}

@@ -58,3 +58,42 @@ test('invalid fields, role injection, large strings and wrong types fail on crea
   await assertFails(updateDoc(ref(), { updatedAt: deleteField() }));
   await assertFails(setDoc(ref('new-owner'), { name: 'No timestamp' }));
 });
+
+const starterPlan = () => ({ focusSkill: 'Serving', weeklySessionGoal: 3, goalText: 'Keep serves in',
+  experience: 'New', concern: 'Aiming', summary: 'Start with serving practice.', source: 'groq',
+  starterDrillId: 'serve-standing-float', completedAtEpochMs: 123,
+  reason: 'You chose serving.', questionId: 'serving', optionId: 'aim' });
+const trainingSetup = () => ({ version: 1, hasOnboarded: true,
+  assessment: { ratings: { Serving: 'Okay', Receiving: 'Confident', Setting: 'Struggling', Spiking: 'Okay', Blocking: 'Confident' }, experience: 'New', completedAtEpochMs: 123 }, plan: starterPlan() });
+
+test('confirmed training setup and independent goal updates are private, bounded, and merge compatible', async () => {
+  await assertSucceeds(setDoc(ref(), { ...profile(), trainingSetup: trainingSetup(),
+    goalSkill: 'Serving', weeklySessionGoal: 3, goalText: 'Keep serves in', position: null, dominantHand: 'Left' }));
+  await assertSucceeds(updateDoc(ref(), { name: 'Updated name', updatedAt: serverTimestamp() }));
+  const saved = (await getDoc(ref())).data();
+  if (saved.trainingSetup.plan.focusSkill !== 'Serving' || saved.trainingSetup.assessment.ratings.Receiving !== 'Confident')
+    throw new Error('Profile edit erased saved setup');
+  for (const uid of ['coach', 'other', null]) await assertFails(getDoc(ref(uid, 'player')));
+  const invalid = [
+    { version: 2 }, { transcript: 'Raw provider prompt' }, { hasOnboarded: false },
+    { assessment: { ratings: { Serving: 'AI guessed' }, experience: 'New', completedAtEpochMs: 123 } },
+    { plan: { ...starterPlan(), score: 99 } }, { plan: { ...starterPlan(), weeklySessionGoal: 0 } },
+    { plan: { ...starterPlan(), weeklySessionGoal: 3.5 } }, { plan: { ...starterPlan(), goalText: 'x'.repeat(161) } },
+    { plan: { ...starterPlan(), starterDrillId: 'serve-jump-float' } },
+    { plan: { ...starterPlan(), starterDrillId: 'receive-wall-platform' } },
+    { plan: { ...starterPlan(), source: 'measured' } },
+  ];
+  for (const mutation of invalid) await assertFails(updateDoc(ref(), {
+    trainingSetup: { ...trainingSetup(), ...mutation }, updatedAt: serverTimestamp() }));
+  for (const mutation of [{ weeklySessionGoal: 15 }, { goalText: 'x'.repeat(161) }, { position: 'Invented' }, { dominantHand: 'Both' }])
+    await assertFails(updateDoc(ref(), { ...mutation, updatedAt: serverTimestamp() }));
+});
+
+test('skipped setup restores completion without inventing a plan and deletion blocks setup access', async () => {
+  await assertSucceeds(setDoc(ref(), { trainingSetup: { ...trainingSetup(), plan: null }, updatedAt: serverTimestamp() }));
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'accountDeletions/player'), { status: 'pending' });
+  });
+  await assertFails(getDoc(ref()));
+  await assertFails(updateDoc(ref(), { trainingSetup: trainingSetup(), updatedAt: serverTimestamp() }));
+});

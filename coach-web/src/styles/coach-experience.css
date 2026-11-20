@@ -24,8 +24,12 @@
 .session-summary-copy { flex: 1; display: grid; gap: 5px; min-width: 0; }
 .session-summary-copy > strong { font-size: calc(15px * var(--portal-scale)); font-weight: 600; }
 .session-summary-copy .muted { font-size: calc(12px * var(--portal-scale)); line-height: 1.5; }
-.session-state { font-size: calc(10px * var(--portal-scale)); font-weight: 500; color: var(--rust); background: var(--portal-accent-tint); padding: 5px 8px; border-radius: 5px; white-space: nowrap; }
+.session-state { font-size: calc(10px * var(--portal-scale)); font-weight: 500; color: var(--rust); background: var(--portal-accent-tint); padding: 5px 8px; border-radius: 5px; max-width: 130px; white-space: normal; line-height: 1.5; text-align: center; }
 .session-state.answered { background: var(--portal-subtle); color: var(--ink-soft); }
+[data-coach-reel] { padding: 16px; margin-block: 12px; border: 1px solid var(--line); border-radius: 10px; }
+[data-coach-reel] .chip-row { flex-wrap: wrap; }
+[data-reel-clip][aria-pressed="true"] { background: var(--portal-accent-tint); border-color: var(--rust); color: var(--rust); }
+[data-reel-comment] { line-height: 1.7; margin-bottom: 0; }
 .session-chevron { display: flex; color: var(--ink-faint); transition: transform .2s ease; }
 .session-chevron svg { width: 18px; height: 18px; }
 .coach-session[open] > summary .session-chevron { transform: rotate(180deg); }

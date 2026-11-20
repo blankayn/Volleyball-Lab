@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.runtime.saveable.rememberSaveable
-import com.volleyballlab.player.ui.component.ScoreArc
 import com.volleyballlab.player.ui.theme.VbMotion
 import com.volleyballlab.player.ui.theme.VbTabularNumerals
 import com.volleyballlab.player.ui.theme.vbTween
@@ -189,54 +188,13 @@ private fun DashboardOverview(
     modifier: Modifier,
 ) {
     val revealed = rememberRevealed()
-    val latest = sessions.maxByOrNull { it.startedAtEpochMs }
-    val latestScore = latest?.formScore()
-    // Overall progress only: no daily or weekly breakdown on the dashboard.
-    val scored = remember(sessions) { sessions.sortedBy { it.startedAtEpochMs }.mapNotNull { it.formScore() } }
-    val firstScore = scored.firstOrNull()
+    val scored = remember(sessions) { sessions.mapNotNull { it.formScore() } }
     val bestScore = scored.maxOrNull()
     val learning = remember(sessions) { com.volleyballlab.player.domain.model.LearningProgress.from(sessions) }
     val validReps = sessions.sumOf { session -> session.reps.count { it.isValidFor(session.skill) } }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Progress", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f))
-            TextButton(onClick = onViewProgress) {
-                Text("View progress")
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(18.dp))
-            }
-        }
-
-        StudentCard(Modifier.fillMaxWidth(), shape = DashboardShape) {
-            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (latestScore != null) ScoreArc(score = latestScore, diameter = 104.dp)
-                else IconTile(Icons.Rounded.TrackChanges)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("LATEST FORM", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        text = when {
-                            latestScore != null -> latest?.let { stringResource(it.skill.displayName) }.orEmpty()
-                            sessions.isEmpty() -> "No sessions yet"
-                            else -> "No measurable score"
-                        },
-                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = when {
-                            sessions.isEmpty() -> "Record a session to see your form here."
-                            latestScore == null -> "Your latest session had no measurable form score."
-                            firstScore != null && bestScore != null && scored.size >= 2 ->
-                                "First session $firstScore · Best $bestScore"
-                            else -> "Record another session to compare your form."
-                        },
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+        HomeProgressSection(sessions, onViewProgress)
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DashboardStat(sessions.size, "Sessions", Icons.Rounded.Schedule, revealed, Modifier.weight(1f))

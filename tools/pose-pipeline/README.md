@@ -59,8 +59,21 @@ point `--model` somewhere else.
 the mean 3D Euclidean distance between a predicted joint and an independently
 annotated joint, in millimetres. It reports overall, per-skill, per-clip and
 per-joint results, along with the fraction of annotations that were measurable.
-The manuscript's **< 50 mm** value is a target, not a measured result. No MPJPE
-value should be claimed until calibrated ground truth is supplied.
+The manuscript's **< 50 mm** value is a target that the measured samples have not
+met. A new recording needs its own independent metric reference before a
+per-session MPJPE can be reported.
+
+A first real **general-pose** pilot now measures **143.274 mm** against original
+MPI-INF-3DHP TS5 reference coordinates on 20 preselected frames and 12 joint
+pairs per frame. This is separate from five-skill volleyball evaluation and from
+the official universal-skeleton dataset protocol. See
+[3D benchmark evidence and reproduction](../../docs/mpjpe-3d-benchmark-status.md).
+`prepare_mpi3dhp_benchmark.py` obtains a bounded subset with exact HTTP ranges;
+`benchmark_mpi3dhp.py` runs the frozen app asset, documents the coordinate mapping
+and reports unfiltered and visibility-filtered results with coverage. Optional
+benchmark dependencies are in `requirements-benchmark.txt`. Use `general` as
+the annotation skill for these external generic poses; it cannot satisfy the
+five-volleyball-skill target.
 
 Run `extract.py` on the evaluation clips first, using the same model bundle as
 the app. Prepare a CSV with one row per annotated joint:
@@ -194,6 +207,25 @@ yt-dlp -f "bv*[vcodec^=avc1]+ba/b[vcodec^=avc1]" <url>
 ```
 
 The failure names the codec so this is obvious rather than mysterious.
+
+## MADS volleyball 3D benchmark
+
+`benchmark_mads.py` evaluates the original MADS camera-1 volleyball recording
+against its independent motion-capture reference and supplied calibration. It
+uses continuous VIDEO inference and preserves original frame alignment. The
+initial measured result is 172.716 mm on 969 valid frames; this exceeds 50 mm.
+`prepare_mads_benchmark.py` retrieves only the three pinned camera-1/reference
+files (about 145 MB rather than the entire release), enforcing size/CRC/SHA-256
+and transfer limits. `--references-only` fetches less than 0.5 MB.
+`export_mads_benchmark.py` rechecks the raw reference result and exports the small
+`pose_benchmark.json` summary used by the app's **About 3D accuracy** dialog.
+The app build binds that summary to the exact pose-model hash. Dataset MPJPE is
+kept separate from individual recordings and technique scores.
+`verify_mads_benchmark.py` independently recomputes the saved result from raw
+MATLAB references and predictions. The benchmark refuses changed reference data.
+Individual skill labels are unavailable, so the evaluator reports
+`volleyball_unspecified` without satisfying five-skill coverage. See
+[benchmark status](../../docs/mpjpe-3d-benchmark-status.md) for commands and limits.
 
 ## Known issues
 

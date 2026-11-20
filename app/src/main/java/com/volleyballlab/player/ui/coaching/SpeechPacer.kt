@@ -18,6 +18,8 @@ data class CoachingSpeech(
     val createdAtMs: Long,
     val expiresInMs: Long = 5_000,
     val style: SpeechStyle = SpeechStyle.Guidance,
+    /** What "Say again" repeats: the full instruction when [text] is its short cue. */
+    val repeatText: String = text,
 )
 
 /** One estimate for every bounded wait on speech, so no turn is cut short or trapped. */

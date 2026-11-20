@@ -38,22 +38,121 @@ data class RepWindow(
 }
 
 /**
+ * Why a completed movement was not counted as a repetition.
+ *
+ * Every value names one thing the athlete can change, because the reason is
+ * spoken and shown the moment the movement ends. A fault means the body was
+ * observed doing something other than the skill. A joint that could not be seen
+ * is never treated as a fault of technique: it is either [ArmsNotVisible] or
+ * [LegsNotVisible], or the check that needed it is skipped.
+ */
+enum class MovementFault {
+    /** Serve, spike: the hitting hand never rose above the head. */
+    ReachOverhead,
+
+    /** Set, block: one hand rose and the other stayed down. */
+    UseBothHands,
+
+    /** Set: both hands moved, but stayed below the face. */
+    HandsAboveForehead,
+
+    /** Set: straight arms were lifted; the elbows never bent to shape the hands. */
+    BendElbowsFirst,
+
+    /** Block: the hands stopped short of clearing the head. */
+    ReachBothHandsHigh,
+
+    /** Block: the hands went up but the arms stayed folded. */
+    StraightenArms,
+
+    /** Receive: the knees bent with no forearm platform in front of the body. */
+    JoinPlatform,
+
+    /** Receive: the joined hands were lifted above the shoulders. */
+    PlatformTooHigh,
+
+    /** The arm or arms that define this skill were not in view at contact. */
+    ArmsNotVisible,
+
+    /** Receive: neither leg was in view at the bottom of the bend. */
+    LegsNotVisible,
+}
+
+/** The outcome of checking one completed movement against its skill. */
+sealed interface MovementVerdict {
+
+    /** The skill's movement, start to finish. Only this is counted and scored. */
+    data object Counted : MovementVerdict
+
+    /**
+     * Too small to be an attempt at the skill: a shifted foot, a scratched nose,
+     * tracker jitter. Dropped without comment, because commenting on movements
+     * the athlete did not mean as a rep is how a coach becomes a nag.
+     */
+    data object TooSmall : MovementVerdict
+
+    /** A real attempt that was not the skill. The athlete is told [fault]. */
+    data class NotCounted(val fault: MovementFault) : MovementVerdict
+}
+
+/**
  * Skill-specific measurement logic.
  *
  * There is one implementation per [Skill], and the compiler enforces that via
- * [SkillAnalyzers]. Two responsibilities, deliberately kept separate:
+ * [SkillAnalyzers]. Three responsibilities, deliberately kept separate:
  *
  * 1. [segmentationSignal] - a single scalar per frame that peaks at the moment of
- *    contact. This is what turns a continuous video into countable repetitions.
- * 2. [measure] - given a segmented rep, produce the raw value for one cue.
+ *    contact. This is what turns a continuous video into candidate movements.
+ * 2. [verdict] - decides whether a candidate movement is this skill at all.
+ * 3. [measure] - given a counted rep, produce the raw value for one cue.
  *
  * Scoring is not here. Turning a measurement into a 0..1 score is
  * [FormCue.score]'s job, so thresholds can be retuned after the coach interviews
  * without touching a line of geometry.
+ *
+ * ## Why [verdict] exists
+ *
+ * The segmenters only see the *shape* of one curve, rescaled to whatever range
+ * it happened to cover. On its own that counts anything: with no absolute size
+ * a few millimetres of tracker jitter is a full-height peak, and a knee bend is
+ * indistinguishable from a forearm pass or a spike jump. Worse, the cue scores
+ * agreed with it - arms hanging at the sides are straight, so they earned full
+ * marks for a "straight platform". [minExcursion] gives the curve a real-world
+ * size, and [verdict] checks the limbs the skill is actually performed with.
  */
 interface SkillAnalyzer {
 
     val skill: Skill
+
+    /**
+     * The least rise of [segmentationSignal] above rest, in the signal's own
+     * unit, that can be this skill's action. Both segmenters refuse to scale
+     * their thresholds below it, so a motionless athlete has nothing to cross.
+     *
+     * Zero keeps the purely relative behaviour, which is only right for a signal
+     * with no physical unit, as in a test double.
+     */
+    val minExcursion: Float get() = 0f
+
+    /**
+     * The frame of deepest load among [frames], which run from the start of a
+     * movement to its contact. Null uses the lowest point of the segmentation
+     * signal, which is right only when that signal is the thing being loaded.
+     *
+     * Skills segmented on the hands override this: the lowest the hands get says
+     * nothing about when the knees were bent deepest, and a knee-load cue read
+     * off the wrong frame corrects an athlete who loaded properly.
+     */
+    fun loadingFrame(frames: List<PoseFrame>): PoseFrame? = null
+
+    /**
+     * Whether [window] is one complete repetition of this skill.
+     *
+     * Checked on every candidate before it is counted, live and in the final
+     * analysis alike, so the badge on the camera screen and the saved session
+     * cannot disagree about what a rep is.
+     */
+    fun verdict(window: RepWindow): MovementVerdict = MovementVerdict.Counted
 
     /**
      * A scalar that rises through the action and peaks at contact.
@@ -183,4 +282,146 @@ internal object AnalyzerSupport {
             ) / 2f
         return shoulderY - meanWristY
     }
+
+    // --- Body-relative heights, for deciding whether a movement is the skill ---
+
+    /**
+     * Shoulder-to-hip length in the image: the ruler every hand height below is
+     * measured with.
+     *
+     * A fraction of the frame means nothing on its own - the same reach covers a
+     * third of the picture from two metres and a sixth from four. Dividing by the
+     * athlete's own torso turns it into "how many torso lengths", which is the
+     * same number wherever they stand. Null when the torso has collapsed to a
+     * point, which only happens when tracking has.
+     */
+    fun torsoImageLength(frame: PoseFrame): Float? =
+        Angles.distance2D(Angles.shoulderCentreImage(frame), Angles.hipCentreImage(frame))
+            .takeIf { it.isFinite() && it >= MIN_TORSO_IMAGE }
+
+    /**
+     * Height of one wrist above the shoulder line, in torso lengths.
+     *
+     * Rough landmarks on the scale: about -1 with the arm hanging, 0 at the
+     * shoulders, 0.4 at the nose, 0.6 at the top of the head, and a little over
+     * 1 at a full overhead reach.
+     */
+    fun wristRise(frame: PoseFrame, side: Side): Float? {
+        val torso = torsoImageLength(frame) ?: return null
+        return ((Angles.shoulderCentreImage(frame).y - frame.image(wrist(side)).y) / torso)
+            .takeIf { it.isFinite() }
+    }
+
+    /** [wristRise] of whichever hand is higher: the signal for one-armed overhead actions. */
+    fun higherWristRise(frame: PoseFrame): Float? {
+        val left = wristRise(frame, Side.Left) ?: return null
+        val right = wristRise(frame, Side.Right) ?: return null
+        return maxOf(left, right)
+    }
+
+    /** The highest one hand reached, and the frame it reached it on. */
+    data class Peak(val frame: PoseFrame, val rise: Float)
+
+    /**
+     * Frames whose torso length is consistent with the rest of the movement.
+     *
+     * When tracking slips for a frame, the shoulders and hips can collapse
+     * toward each other. Every hand height is divided by the torso, so on that
+     * frame a hand at shoulder level reads as a full overhead reach. Public
+     * coaching footage had such frames, with the torso at half its length,
+     * and one of them was enough to make a single wrist look raised. A frame
+     * is kept when its torso is within a third of the movement's median.
+     */
+    fun steadyFrames(frames: List<PoseFrame>): List<PoseFrame> {
+        val torsos = frames.mapNotNull { torsoImageLength(it) }.sorted()
+        if (torsos.isEmpty()) return emptyList()
+        val median = torsos[torsos.size / 2]
+        return frames.filter { frame ->
+            torsoImageLength(frame)?.let { it in median * STEADY_TORSO_LOW..median * STEADY_TORSO_HIGH } == true
+        }
+    }
+
+    /**
+     * The highest [side]'s hand reached over [frames], read from the frames
+     * themselves rather than from the contact frame.
+     *
+     * The contact frame is the peak of a *smoothed* signal. A fast arm swing is
+     * above the head for one or two camera frames, and the smoothing lands
+     * contact beside them, or on the toss. Verdicts that read the hand only at
+     * contact refused real serves on public footage for "reach overhead".
+     */
+    fun peakRise(frames: List<PoseFrame>, side: Side): Peak? =
+        frames.mapNotNull { frame -> wristRise(frame, side)?.let { Peak(frame, it) } }.maxByOrNull { it.rise }
+
+    /** Mean [wristRise] of both hands: the signal for two-handed overhead actions. */
+    fun meanWristRise(frame: PoseFrame): Float? {
+        val left = wristRise(frame, Side.Left) ?: return null
+        val right = wristRise(frame, Side.Right) ?: return null
+        return (left + right) / 2f
+    }
+
+    /** Seen by the camera and inside the picture, rather than inferred or clipped. */
+    fun observed(frame: PoseFrame, point: BodyPoint): Boolean {
+        val image = frame.image(point)
+        return AngleCuePolicy.isReliable(frame, point) && image.x in 0f..1f && image.y in 0f..1f
+    }
+
+    /** True when the whole arm on [side] was observed: shoulder, elbow and wrist. */
+    fun armObserved(frame: PoseFrame, side: Side): Boolean =
+        listOf(shoulder(side), elbow(side), wrist(side)).all { observed(frame, it) }
+
+    /** The arms a verdict may rely on. A side view honestly returns one. */
+    fun observedArms(frame: PoseFrame): List<Side> = Side.entries.filter { armObserved(frame, it) }
+
+    /** True when the whole leg on [side] was observed: hip, knee and ankle. */
+    fun legObserved(frame: PoseFrame, side: Side): Boolean =
+        listOf(hip(side), knee(side), ankle(side)).all { observed(frame, it) }
+
+    /** Mean elbow angle over the arms that were actually observed in [frame]. */
+    fun observedElbowAngle(frame: PoseFrame): Float? =
+        observedArms(frame).mapNotNull { elbowAngle(frame, it) }.takeIf { it.isNotEmpty() }
+            ?.average()?.toFloat()
+
+    /**
+     * How far [signal] rose from its lowest point before contact to contact.
+     *
+     * Measured from the lowest point rather than the first frame, because a
+     * movement that dips before it rises - a backswing, a load - starts its
+     * climb from the dip. Null when the signal cannot be read at contact.
+     */
+    fun excursion(window: RepWindow, signal: (PoseFrame) -> Float?): Float? {
+        val contact = window.frameFor(RepPhase.Contact) ?: return null
+        val peak = signal(contact)?.takeIf { it.isFinite() } ?: return null
+        val rest = window.frames.asSequence()
+            .takeWhile { it.timestampMs <= contact.timestampMs }
+            .mapNotNull { signal(it)?.takeIf(Float::isFinite) }
+            .minOrNull() ?: return null
+        return peak - rest
+    }
+
+    /**
+     * The frame of deepest knee bend among [frames], reading only legs that were
+     * observed. Smoothed over three frames so one jittery knee does not win.
+     */
+    fun deepestKneeBend(frames: List<PoseFrame>): PoseFrame? {
+        val angles = frames.map { frame ->
+            Side.entries.filter { legObserved(frame, it) }.mapNotNull { kneeAngle(frame, it) }
+                .takeIf { it.isNotEmpty() }?.average()?.toFloat()
+        }
+        var best: Int? = null
+        var bestAngle = Float.MAX_VALUE
+        for (index in frames.indices) {
+            angles[index] ?: continue
+            val around = (index - 1..index + 1).mapNotNull { angles.getOrNull(it) }
+            val smoothed = around.average().toFloat()
+            if (smoothed < bestAngle) { bestAngle = smoothed; best = index }
+        }
+        return best?.let(frames::get)
+    }
+
+    private const val MIN_TORSO_IMAGE = 0.03f
+
+    /** The torso range [steadyFrames] accepts, as fractions of the median. */
+    private const val STEADY_TORSO_LOW = 0.75f
+    private const val STEADY_TORSO_HIGH = 1.33f
 }

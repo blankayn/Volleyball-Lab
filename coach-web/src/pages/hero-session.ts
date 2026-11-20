@@ -17,7 +17,7 @@ export function heroSession(): string {
     <g class="pose-joints">${joints.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join("")}</g>
   </svg>`;
 
-  return `<figure class="analysis-visual session-demo" aria-label="Serving technique coaching demonstration">
+  return `<figure class="analysis-visual session-demo" aria-label="Serving technique demonstration">
     <div class="session-photo">
       <img src="/assets/volleyball-serving.jpg" alt="Volleyball player preparing an overhead serve with an illustrative pose skeleton aligned to her arms, torso, and legs" width="736" height="920" fetchpriority="high" />
       ${skeleton}
@@ -26,14 +26,14 @@ export function heroSession(): string {
       <div class="session-photo-footer"><span>Overhand serve</span><span>Frame 014</span></div>
     </div>
     <div class="session-insights">
-      <div class="session-heading"><span class="session-dot"></span><span>Coaching session</span></div>
+      <div class="session-heading"><span class="session-dot"></span><span>Training session</span></div>
       <div class="session-score-card">
         <div class="session-panel-label">${icon("chart")} Form score</div>
         <div class="session-score"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="session-ring-track" cx="50" cy="50" r="43"/><circle class="session-ring-value" cx="50" cy="50" r="43" pathLength="100"/></svg><strong>92<span>%</span></strong></div>
         <p>Strong foundation</p>
       </div>
       <div class="session-metric-card"><div class="session-panel-label">${icon("alignment")} Body alignment <strong>94%</strong></div><div class="session-meter"><i style="--meter-fill:.94"></i></div></div>
-      <div class="session-cue-card"><div class="session-panel-label">${icon("message")} Coach cue <span data-cue-count>01 / 03</span></div><strong data-cue-title>Load with balance.</strong><p data-cue-text>Keep your weight controlled as you prepare to contact the ball.</p></div>
+      <div class="session-cue-card"><div class="session-panel-label">${icon("message")} Practice cue <span data-cue-count>01 / 03</span></div><strong data-cue-title>Load with balance.</strong><p data-cue-text>Keep your weight controlled as you prepare to contact the ball.</p></div>
     </div>
     <figcaption class="session-controls">
       <div class="session-controls-top"><button type="button" class="session-play" data-demo-play aria-pressed="true">${icon("play")}<span>Pause demo</span></button><span class="session-clock" data-demo-time>00:00 / 00:09</span><button type="button" class="session-overlay-toggle" data-demo-overlay aria-pressed="true">${icon("pose")}<span>Skeleton on</span></button></div>

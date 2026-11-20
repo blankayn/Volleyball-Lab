@@ -118,6 +118,9 @@ def main() -> int:
     parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--min-usable", type=float, default=0.5)
     parser.add_argument("--quality-field", choices=("usable_frac", "feature_usable_frac"), default="usable_frac")
+    parser.add_argument("--architecture", default="auto",
+                        choices=("auto", "gap-linear", "gap-dense8", "conv8", "conv12x8", "flat-dense16"),
+                        help="model used for both the LOSO evaluation and the exported fit (see train.py)")
     args = parser.parse_args()
     if args.epochs < 1 or not 0 <= args.min_usable <= 1:
         parser.error("epochs must be positive and min-usable must be between 0 and 1")
@@ -132,6 +135,7 @@ def main() -> int:
         report["quality_profile"] = provenance.get("quality_profile", "legacy-all33-visibility")
     report["min_usable"] = args.min_usable
     report["quality_field"] = args.quality_field
+    report["architecture"] = args.architecture
     destination = args.out / "status.json"
 
     def save():
@@ -190,12 +194,13 @@ def main() -> int:
                     if not unvalidated:
                         run(Path(__file__).with_name("evaluate_loso.py"), "--data", snapshot,
                             "--skill", skill, "--epochs", args.epochs, "--quality-field", args.quality_field,
-                            "--out", folder / "evaluation.json")
+                            "--architecture", args.architecture, "--out", folder / "evaluation.json")
                         evaluation = json.loads((folder / "evaluation.json").read_text(encoding="utf-8"))
                         if evaluation["folds_evaluated"] != len(status["source_groups"]):
                             raise ValueError("Evaluation skipped a source fold")
                     run(Path(__file__).with_name("train.py"), "--data", snapshot, "--skill", skill,
-                        "--epochs", args.epochs, "--quality-field", args.quality_field, "--train-all", "--out", folder)
+                        "--epochs", args.epochs, "--quality-field", args.quality_field,
+                        "--architecture", args.architecture, "--train-all", "--out", folder)
                     verify_export(folder, X)
                     if "label_origin" in report:
                         metadata_path = folder / "form_classifier.json"

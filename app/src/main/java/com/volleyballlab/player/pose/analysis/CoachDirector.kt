@@ -376,11 +376,15 @@ class CoachDirector {
         return emit(CoachingEventType.RepMilestone, text, timestampMs)
     }
 
-    fun onTracking(timestampMs: Long, requestedAngle: CameraAngle? = null): CoachingEvent? {
+    /**
+     * @param facingPrompt the skill-specific way to say which direction to face,
+     *   from [FacingGuide]. It replaces the generic line for [requestedAngle].
+     */
+    fun onTracking(timestampMs: Long, requestedAngle: CameraAngle? = null, facingPrompt: String? = null): CoachingEvent? {
         interruptObservation()
         if (trackingAt?.let { timestampMs - it < 10_000 } == true) return null
         trackingAt = timestampMs
-        val text = when (requestedAngle) {
+        val text = facingPrompt ?: when (requestedAngle) {
             CameraAngle.Front -> "Face the camera again so I can assess this view."
             CameraAngle.Side -> "Turn sideways again so I can assess this view."
             CameraAngle.Rear -> "Face away from the camera again for this view."

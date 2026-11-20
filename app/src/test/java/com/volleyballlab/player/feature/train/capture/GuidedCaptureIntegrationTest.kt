@@ -69,6 +69,239 @@ class GuidedCaptureIntegrationTest {
         }
     }
 
+    @Test fun `a movement that is not the skill earns nothing and is explained`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
+            val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.coachingEvents.collect { events += it }
+            }
+            try {
+                feed.stand(180); feed.stand(35)
+                events.clear()
+                val reason = com.volleyballlab.player.pose.analysis.CoachPhrasebook.notCounted(
+                    com.volleyballlab.player.pose.analysis.MovementFault.UseBothHands)
+                // One hand goes up: a real movement, but not a set.
+                repeat(2) { feed.rep(hands = setOf(BodyPoint.LEFT_WRIST)) }
+                val refused = vm.uiState.value as CaptureUiState.Recording
+                assertEquals(0, refused.totalMetrics.reps)
+                assertEquals(0, refused.totalMetrics.validReps)
+                assertEquals(0, refused.totalMetrics.bestStreak)
+                assertNull(refused.totalMetrics.estimatedFormScore)
+                assertNull("No rep verdict for a movement that was not a rep", vm.repFeedback.value)
+                assertEquals(com.volleyballlab.player.pose.analysis.CoachingEventType.NotCounted, vm.coachingMessage.value?.type)
+                assertEquals(reason, vm.coachingMessage.value?.text)
+                assertNull(vm.coachingMessage.value?.repNumber)
+                assertEquals("The same reason is shown each time but spoken once", 1, events.count { it.text == reason })
+                assertTrue(events.none { it.repNumber != null })
+
+                // The correct movement straight afterwards is counted as the first rep.
+                feed.rep()
+                assertEquals(1, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+                assertEquals("Rep 1 of 5", vm.repFeedback.value?.countText)
+            } finally { speech.cancel() }
+        }
+    }
+
+    @Test fun `a repeated reason is taught in full first, then spoken as a short cue with the full one on the card`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
+            val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.coachingEvents.collect { events += it }
+            }
+            try {
+                vm.setVoiceGuidanceEnabled(true)
+                feed.stand(180); feed.stand(35)
+                events.clear()
+                val cue = com.volleyballlab.player.pose.analysis.CoachPhrasebook.notCountedCue(
+                    com.volleyballlab.player.pose.analysis.MovementFault.UseBothHands)
+                feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+                feed.stand(110)
+                feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+                val spoken = events.filter { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.NotCounted }
+                assertEquals(listOf(cue.full, cue.short), spoken.map { it.speech })
+                assertTrue("The card keeps the full sentence", spoken.all { it.text == cue.full })
+                assertEquals(cue.full, vm.coachingMessage.value?.text)
+            } finally { speech.cancel() }
+        }
+    }
+
+    @Test fun `with voice off nothing is shortened, because nothing was heard`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
+            val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.coachingEvents.collect { events += it }
+            }
+            try {
+                feed.stand(180); feed.stand(35)
+                feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+                feed.stand(110)
+                feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+                val spoken = events.filter { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.NotCounted }
+                assertEquals(2, spoken.size)
+                assertTrue(spoken.all { it.speech == it.text })
+            } finally { speech.cancel() }
+        }
+    }
+
+    @Test fun `standing still through a view counts nothing and is told what a rep is`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
+            val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.coachingEvents.collect { events += it }
+            }
+            try {
+                feed.stand(180); feed.stand(35)
+                events.clear()
+                feed.stand(220)
+                val idle = vm.uiState.value as CaptureUiState.Recording
+                assertEquals(0, idle.totalMetrics.reps)
+                assertNull(vm.repFeedback.value)
+                assertEquals(listOf(com.volleyballlab.player.pose.analysis.CoachPhrasebook.idle(Skill.Setting)), events.map { it.text })
+            } finally { speech.cancel() }
+        }
+    }
+
+    @Test fun `the side turn says which way to face and a two-handed skill accepts either profile`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            feed.stand(180)
+            val front = vm.uiState.value as CaptureUiState.Recording
+            assertEquals(com.volleyballlab.player.pose.analysis.Facing.Forward, front.displayedProgress(vm.guidedOptions.value).facing)
+            feed.stand(35); repeat(5) { feed.rep() }
+            val turn = vm.uiState.value as CaptureUiState.Recording
+            assertEquals("Turn to your left, so your right shoulder points at the camera.", turn.rotation!!.instruction)
+            assertEquals(com.volleyballlab.player.pose.analysis.Facing.Left, turn.displayedProgress(vm.guidedOptions.value).facing)
+            // This fixture stands the other way round. A set reads the same from either side.
+            feed.stand(60, CameraAngle.Side)
+            val side = vm.uiState.value as CaptureUiState.Recording
+            assertNull(side.rotation)
+            assertEquals(CameraAngle.Side, side.angle)
+        }
+    }
+
+    @Test fun `a serve must clear the head and its side view needs the hitting arm nearest the camera`() = runTest(dispatcher) {
+        withCapture(skill = Skill.Serving) { vm, feed ->
+            feed.stand(180); feed.stand(35)
+            // Hands raised to the face count as a set, but not as a serve.
+            feed.rep()
+            assertEquals(0, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+            assertEquals(com.volleyballlab.player.pose.analysis.CoachPhrasebook.notCounted(
+                com.volleyballlab.player.pose.analysis.MovementFault.ReachOverhead), vm.coachingMessage.value?.text)
+            repeat(5) { feed.rep(peak = .42f) }
+            val turn = vm.uiState.value as CaptureUiState.Recording
+            assertEquals(5, turn.totalMetrics.reps)
+            assertTrue(turn.rotation!!.instruction.startsWith("Turn to your left, so your right shoulder points at the camera."))
+            // Side-on, but with the hitting arm on the far side: the view does not begin.
+            feed.stand(60, CameraAngle.Side)
+            val waiting = vm.uiState.value as CaptureUiState.Recording
+            assertEquals(CameraAngle.Side, waiting.rotation?.requestedAngle)
+            assertEquals(CameraAngle.Front, waiting.angle)
+        }
+    }
+
+    @Test fun `the reference figure shows a rep before recording, the finish after a refusal, and nothing mid-movement`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            val framing = mutableListOf<Any?>()
+            val countdown = mutableSetOf<com.volleyballlab.player.pose.analysis.ReferenceMoment>()
+            feed.afterFrame = {
+                val figure = vm.referenceFigure.value
+                when (vm.uiState.value) {
+                    is CaptureUiState.Framing -> framing += figure
+                    is CaptureUiState.CountingDown -> figure?.let { countdown += it.moment }
+                    else -> Unit
+                }
+            }
+            feed.stand(180)
+            feed.afterFrame = null
+            assertTrue("Setup is left uncluttered", framing.isNotEmpty() && framing.all { it == null })
+            assertEquals("Both positions are shown before the first rep",
+                com.volleyballlab.player.pose.analysis.ReferenceMoment.entries.toSet(), countdown)
+
+            feed.stand(35)
+            assertNull("Ready and waiting: there is nothing to point at", vm.referenceFigure.value)
+
+            // One hand goes up. Not counted, and the finish position goes up with the reason.
+            feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+            val shown = requireNotNull(vm.referenceFigure.value)
+            assertEquals(com.volleyballlab.player.pose.analysis.ReferenceMoment.Finish, shown.moment)
+            assertEquals(com.volleyballlab.player.pose.analysis.Facing.Forward, shown.facing)
+            // It stands on the athlete's own feet, at their size, inside the picture.
+            assertEquals(0.80f, shown.points.getValue(BodyPoint.LEFT_ANKLE).y, 0.01f)
+            assertEquals(0.24f, shown.points.getValue(BodyPoint.LEFT_SHOULDER).y, 0.03f)
+            assertEquals(0.50f, (shown.points.getValue(BodyPoint.LEFT_HIP).x + shown.points.getValue(BodyPoint.RIGHT_HIP).x) / 2f, 0.01f)
+            assertTrue(shown.points.values.all { it.x in 0f..1f && it.y in 0f..1f })
+
+            // The next attempt: the figure is there as they set, and gone once they move.
+            val during = mutableListOf<Any?>()
+            feed.afterFrame = { during += vm.referenceFigure.value }
+            feed.rep()
+            feed.afterFrame = null
+            assertNotNull(during.first())
+            assertTrue("No target is drawn while a movement is under way", during.drop(3).all { it == null })
+            assertEquals(1, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+        }
+    }
+
+    @Test fun `a turn shows the stance to turn into and then follows the profile the athlete took`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            feed.stand(180); feed.stand(35); repeat(5) { feed.rep() }
+            // Asked to turn, still facing the camera: the figure is already side-on.
+            feed.stand(2)
+            val turnInto = requireNotNull(vm.referenceFigure.value)
+            assertEquals(com.volleyballlab.player.pose.analysis.ReferenceMoment.Start, turnInto.moment)
+            assertEquals(com.volleyballlab.player.pose.analysis.Facing.Left, turnInto.facing)
+
+            // This fixture turns the other way, which a set accepts. The figure turns with them
+            // rather than standing back to front, and shows the rep from this side before it begins.
+            val turning = mutableSetOf<Pair<com.volleyballlab.player.pose.analysis.Facing, com.volleyballlab.player.pose.analysis.ReferenceMoment>>()
+            feed.afterFrame = {
+                if ((vm.uiState.value as? CaptureUiState.Recording)?.rotation != null) {
+                    vm.referenceFigure.value?.let { turning += it.facing to it.moment }
+                }
+            }
+            feed.stand(60, CameraAngle.Side)
+            feed.afterFrame = null
+            assertEquals(setOf(com.volleyballlab.player.pose.analysis.Facing.Right), turning.map { it.first }.toSet())
+            assertEquals(com.volleyballlab.player.pose.analysis.ReferenceMoment.entries.toSet(), turning.map { it.second }.toSet())
+            assertNull((vm.uiState.value as CaptureUiState.Recording).rotation)
+            assertNull("The view has begun; the figure steps aside", vm.referenceFigure.value)
+        }
+    }
+
+    @Test fun `standing the wrong way or waiting too long brings the figure back`() = runTest(dispatcher) {
+        withCapture { vm, feed ->
+            feed.stand(180); feed.stand(35)
+            // Side-on during the front view: the figure faces forward, where they should be.
+            feed.stand(20, CameraAngle.Side)
+            val wrongWay = requireNotNull(vm.referenceFigure.value)
+            assertEquals(com.volleyballlab.player.pose.analysis.Facing.Forward, wrongWay.facing)
+            assertEquals(com.volleyballlab.player.pose.analysis.ReferenceMoment.Start, wrongWay.moment)
+
+            // Back the right way and idle: after the wait, the rep is demonstrated again.
+            feed.stand(40)
+            assertNull(vm.referenceFigure.value)
+            val idle = mutableSetOf<com.volleyballlab.player.pose.analysis.ReferenceMoment>()
+            feed.afterFrame = { vm.referenceFigure.value?.let { idle += it.moment } }
+            feed.stand(220)
+            feed.afterFrame = null
+            assertEquals(com.volleyballlab.player.pose.analysis.ReferenceMoment.entries.toSet(), idle)
+            assertEquals(0, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+        }
+    }
+
+    @Test fun `no reference figure is drawn with Pose Guide switched off`() = runTest(dispatcher) {
+        withCapture(poseGuide = false) { vm, feed ->
+            val seen = mutableListOf<Any?>()
+            feed.afterFrame = { seen += vm.referenceFigure.value }
+            feed.stand(180); feed.stand(35)
+            feed.rep(hands = setOf(BodyPoint.LEFT_WRIST))
+            repeat(5) { feed.rep() }
+            feed.stand(20)
+            assertTrue(seen.isNotEmpty() && seen.all { it == null })
+            // The words are unaffected: the refusal was still explained and the reps still counted.
+            assertEquals(5, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+        }
+    }
+
     @Test fun `capture uses the saved athlete focus and reserves the name for the personalized opening`() = runTest(dispatcher) {
         val profile = com.volleyballlab.player.domain.model.AthleteProfile(firstName = "Maya", name = "Maya Santos",
             trainingSetup = com.volleyballlab.player.domain.model.SavedTrainingSetup(plan =
@@ -100,16 +333,14 @@ class GuidedCaptureIntegrationTest {
         withCapture { vm, feed ->
             feed.stand(180); feed.stand(35); repeat(5) { feed.rep() }
             feed.stand(60, CameraAngle.Side); feed.stand(35, CameraAngle.Side)
-            repeat(5) { feed.rep(CameraAngle.Side) }
-            feed.stand(60, CameraAngle.Rear); feed.stand(35, CameraAngle.Rear)
             vm.setVoiceGuidanceEnabled(true)
-            repeat(5) { feed.rep(CameraAngle.Rear) }
+            repeat(5) { feed.rep(CameraAngle.Side) }
             val finishing = vm.uiState.value as CaptureUiState.Recording
             assertTrue(finishing.finishingAfterRep)
-            assertEquals(15, finishing.totalMetrics.reps)
+            assertEquals(10, finishing.totalMetrics.reps)
             assertEquals("Rep 5 of 5", vm.repFeedback.value?.countText)
-            feed.rep(CameraAngle.Rear)
-            assertEquals(15, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+            feed.rep(CameraAngle.Side)
+            assertEquals(10, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
             vm.onFinalRepSpeechFinished("old-session")
             assertTrue(vm.uiState.value is CaptureUiState.Recording)
             vm.onFinalRepSpeechFinished(finishing.sessionId)
@@ -121,10 +352,8 @@ class GuidedCaptureIntegrationTest {
         withCapture { vm, feed ->
             feed.stand(180); feed.stand(35); repeat(5) { feed.rep() }
             feed.stand(60, CameraAngle.Side); feed.stand(35, CameraAngle.Side)
-            repeat(5) { feed.rep(CameraAngle.Side) }
-            feed.stand(60, CameraAngle.Rear); feed.stand(35, CameraAngle.Rear)
             vm.setVoiceGuidanceEnabled(true)
-            repeat(5) { feed.rep(CameraAngle.Rear) }
+            repeat(5) { feed.rep(CameraAngle.Side) }
             val finishing = vm.uiState.value as CaptureUiState.Recording
             assertTrue(finishing.finishingAfterRep)
             // The bound follows the closing's own length, so it is never cut short.
@@ -144,18 +373,16 @@ class GuidedCaptureIntegrationTest {
             feed.stand(180); feed.stand(35); repeat(5) { feed.rep() }
             feed.stand(60, CameraAngle.Side); feed.stand(35, CameraAngle.Side)
             repeat(5) { feed.rep(CameraAngle.Side) }
-            feed.stand(60, CameraAngle.Rear); feed.stand(35, CameraAngle.Rear)
-            repeat(5) { feed.rep(CameraAngle.Rear) }
             val finishing = vm.uiState.value as CaptureUiState.Recording
             assertTrue(finishing.closing.first().startsWith("Five."))
-            assertEquals("That's fifteen reps.", finishing.closing[1])
+            assertEquals("That's ten reps.", finishing.closing[1])
             assertEquals("Let's look at your review.", finishing.closing.last())
             assertTrue(finishing.closing.none { "came good" in it })
             assertNull(finishing.rotation)
         }
     }
 
-    @Test fun `finish, skip rear and confirmed early end all close before saving`() = runTest(dispatcher) {
+    @Test fun `finish, the side view ending the session and confirmed early end all close before saving`() = runTest(dispatcher) {
         // Finish in free practice.
         withCapture { vm, feed ->
             vm.setGuidedAngles(false)
@@ -169,17 +396,20 @@ class GuidedCaptureIntegrationTest {
             vm.onFinalRepSpeechFinished("another-session")
             assertTrue(vm.uiState.value is CaptureUiState.Recording)
         }
-        // Skip the optional rear view.
+        // The side view is the last one: no rear view is requested, and it cannot be skipped.
         withCapture { vm, feed ->
             feed.stand(180); feed.stand(35); repeat(5) { feed.rep() }
+            assertEquals(CameraAngle.Side, (vm.uiState.value as CaptureUiState.Recording).rotation?.requestedAngle)
+            vm.onSkipAngle()
+            assertEquals("Side view is required for this review.",
+                (vm.uiState.value as CaptureUiState.Recording).rotation?.blockedReason)
             feed.stand(60, CameraAngle.Side); feed.stand(35, CameraAngle.Side)
             repeat(5) { feed.rep(CameraAngle.Side) }
-            assertEquals(CameraAngle.Rear, (vm.uiState.value as CaptureUiState.Recording).rotation?.requestedAngle)
-            vm.onSkipAngle()
             val finishing = vm.uiState.value as CaptureUiState.Recording
             assertTrue(finishing.finishingAfterRep)
             assertNull(finishing.rotation)
-            assertEquals("That's ten reps.", finishing.closing.first())
+            // The final rep's own line comes first, then the total.
+            assertEquals("That's ten reps.", finishing.closing[1])
         }
     }
 
@@ -252,7 +482,8 @@ class GuidedCaptureIntegrationTest {
             assertTrue(events.any { it.text == "Same again from this side." && it.repNumber == null })
             events.clear()
             feed.stand(200, CameraAngle.Side)
-            assertEquals(1, events.count { it.text == "Whenever you're ready." })
+            // One nudge per idle spell, and it says what a rep of this skill is.
+            assertEquals(1, events.count { it.text == com.volleyballlab.player.pose.analysis.CoachPhrasebook.idle(Skill.Setting) })
             speech.cancel()
         } finally { store.clear(); runCurrent() }
     }
@@ -360,8 +591,10 @@ class GuidedCaptureIntegrationTest {
                 feed.stand(35, CameraAngle.Side)
                 val tracking = events.filter { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.Tracking }
                 assertEquals(1, tracking.size)
-                assertTrue(tracking.single().text.startsWith("Face the camera again"))
-                assertEquals(0, (vm.uiState.value as CaptureUiState.Recording).stageMetrics.reps)
+                assertTrue(tracking.single().text.startsWith("Face forward again"))
+                val state = vm.uiState.value as CaptureUiState.Recording
+                assertEquals("The card says which way to turn too", tracking.single().text, state.suspensionHint)
+                assertEquals(0, state.stageMetrics.reps)
             } finally { speech.cancel() }
         }
     }
@@ -380,7 +613,7 @@ class GuidedCaptureIntegrationTest {
                 val tracking = events.filter { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.Tracking }
                 assertEquals(1, tracking.size)
                 assertTrue(tracking.single().text.contains("whole body is visible"))
-                assertFalse(tracking.single().text.contains("Face the camera again"))
+                assertFalse(tracking.single().text.contains("Face forward"))
                 assertNull((vm.uiState.value as CaptureUiState.Recording).suspensionHint)
             } finally { speech.cancel() }
         }
@@ -755,10 +988,13 @@ class GuidedCaptureIntegrationTest {
 
     private suspend fun TestScope.withCapture(detailed: Boolean = false, ai: LiveCoachingRepository? = null,
         profile: com.volleyballlab.player.domain.model.AthleteProfile = com.volleyballlab.player.domain.model.AthleteProfile.Anonymous,
+        skill: Skill = Skill.Setting,
+        poseGuide: Boolean = true,
         body: suspend TestScope.(CaptureViewModel, Feed) -> Unit) {
         val detector = FakeDetector()
         val prefs = object : CoachingPreferencesRepository {
-            override val preferences = flowOf(CoachingPreferences(detailedAiCoachingEnabled = detailed))
+            override val preferences = flowOf(CoachingPreferences(detailedAiCoachingEnabled = detailed,
+                poseGuideEnabled = poseGuide))
             override suspend fun setVoiceEnabled(enabled: Boolean) = Unit
             override suspend fun setHapticsEnabled(enabled: Boolean) = Unit
             override suspend fun setPoseGuideEnabled(enabled: Boolean) = Unit
@@ -768,7 +1004,7 @@ class GuidedCaptureIntegrationTest {
             override val profile = flowOf(profile)
             override suspend fun save(profile: com.volleyballlab.player.domain.model.AthleteProfile) = Unit
         }
-        val vm = CaptureViewModel(Skill.Setting, "test", { detector }, { detector }, NoOpRepository, SessionScorer(), false,
+        val vm = CaptureViewModel(skill, "test", { detector }, { detector }, NoOpRepository, SessionScorer(), false,
             coachingPreferencesRepository = prefs, liveCoachingRepository = ai, profileRepository = profiles)
         val store = ViewModelStore().apply { put("capture", vm) }
         runCurrent()
@@ -778,13 +1014,28 @@ class GuidedCaptureIntegrationTest {
     private class Feed(val scope: TestScope, val detector: FakeDetector, val vm: CaptureViewModel) {
         var timestamp = 0L
         var hideFeet = false
+        /** Runs once each frame has been fully handled, for tests that watch what is on screen as it happens. */
+        var afterFrame: (() -> Unit)? = null
         suspend fun stand(frames: Int, angle: CameraAngle = CameraAngle.Front, occluded: Boolean = false) {
             repeat(frames) { emit(pose(angle, occluded)) }
         }
-        suspend fun rep(angle: CameraAngle = CameraAngle.Front, occluded: Boolean = false) {
-            listOf(0f, .05f, .15f, .25f, .35f, .35f, .35f, .25f, .15f, .05f, 0f, 0f).forEach { lift ->
+        /**
+         * One raise and lowering of the hands.
+         *
+         * @param peak how far the wrists travel up the picture. The default ends
+         *   above the face, which is a set; a taller one clears the head.
+         * @param hands the wrists that move. Both is the skill; one is not.
+         */
+        suspend fun rep(
+            angle: CameraAngle = CameraAngle.Front,
+            occluded: Boolean = false,
+            peak: Float = .35f,
+            hands: Set<BodyPoint> = setOf(BodyPoint.LEFT_WRIST, BodyPoint.RIGHT_WRIST),
+        ) {
+            listOf(0f, .05f, .15f, .25f, .35f, .35f, .35f, .25f, .15f, .05f, 0f, 0f).forEach { step ->
+                val lift = step / .35f * peak
                 val base = pose(angle, occluded)
-                val wrists = setOf(BodyPoint.LEFT_WRIST.ordinal, BodyPoint.RIGHT_WRIST.ordinal)
+                val wrists = hands.map { it.ordinal }.toSet()
                 emit(base.copy(
                     image = base.image.mapIndexed { index, point -> if (index in wrists) point.copy(y = point.y - lift) else point },
                     world = base.world.mapIndexed { index, point -> if (index in wrists) point.copy(y = point.y - lift * 2f) else point },
@@ -813,6 +1064,7 @@ class GuidedCaptureIntegrationTest {
                 vm.onOpeningFinished()
                 scope.runCurrent()
             }
+            afterFrame?.invoke()
             timestamp += 80
             scope.advanceTimeBy(80)
             scope.runCurrent()

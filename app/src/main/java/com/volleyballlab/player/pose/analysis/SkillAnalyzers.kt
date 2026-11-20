@@ -1,5 +1,6 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.RepPhase
@@ -11,8 +12,96 @@ import com.volleyballlab.player.pose.analysis.AnalyzerSupport.meanKneeAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.shoulderAngle
 import com.volleyballlab.player.pose.model.BodyPoint
 import com.volleyballlab.player.pose.model.PoseFrame
+import kotlin.math.abs
 
 private fun Side.opposite(): Side = if (this == Side.Left) Side.Right else Side.Left
+
+/**
+ * The movement check shared by the two one-armed overhead skills.
+ *
+ * A serve and a spike are both, at the level a pose can see, one hand travelling
+ * from below the shoulders to above the head. What separates a rep from
+ * everything else an athlete does in front of a camera is how far that hand
+ * went and where it finished.
+ *
+ * Heights are in torso lengths; see [AnalyzerSupport.wristRise]. These are
+ * first-pass values chosen from body proportions, in the same spirit as the cue
+ * targets, and are gathered per skill so device testing can retune them in one
+ * place.
+ */
+private object OverheadSwing {
+
+    /**
+     * The hitting hand must travel this far upward: about seventeen centimetres
+     * on an adult, several times the tracker's jitter.
+     *
+     * Deliberately modest. A server who starts as they are taught to - hitting
+     * hand already up beside the head - has little further to go, and a larger
+     * figure here silently refused that swing. Where the hand finishes is what
+     * tells a swing from everything else; this only has to rule out a hand that
+     * was already overhead and wobbled.
+     */
+    const val MIN_TRAVEL = 0.35f
+
+    /**
+     * Where the hitting hand must finish: clear of the top of the head. An
+     * overhead contact with a bent arm still reaches it; a hand raised to the
+     * face does not.
+     */
+    const val MIN_CONTACT_RISE = 0.55f
+
+    /**
+     * A hand that never got above the shoulder line was not an attempt at an
+     * overhead swing - hands on hips, a tug at a shirt - and is passed over in
+     * silence rather than coached.
+     */
+    const val ATTEMPT_RISE = 0f
+
+    /**
+     * Peaks closer together than this are one moment: the hitting hand is the
+     * higher one. Further apart, the toss came first and the swing after it.
+     */
+    const val SAME_MOMENT_MS = 150L
+
+    /**
+     * Judged on each hand's own peak across the movement, not on the contact
+     * frame. Contact is the peak of a smoothed curve. On public coaching
+     * footage it landed beside a swing that was overhead for one or two
+     * frames, or on the toss, and real serves filmed from behind were refused
+     * for "reach overhead".
+     */
+    fun verdict(window: RepWindow): MovementVerdict {
+        val frames = AnalyzerSupport.steadyFrames(window.frames)
+        val left = AnalyzerSupport.peakRise(frames, Side.Left)
+        val right = AnalyzerSupport.peakRise(frames, Side.Right)
+        val hitting = when {
+            left == null && right == null -> return MovementVerdict.TooSmall
+            left == null -> Side.Right
+            right == null -> Side.Left
+            // The toss rises first and the swing follows it, so when both
+            // hands went above the shoulders the later peak is the hitting
+            // hand. That also catches a low "shot-put" swing behind a high toss.
+            left.rise >= ATTEMPT_RISE && right.rise >= ATTEMPT_RISE &&
+                abs(left.frame.timestampMs - right.frame.timestampMs) > SAME_MOMENT_MS ->
+                if (left.frame.timestampMs > right.frame.timestampMs) Side.Left else Side.Right
+            else -> if (left.rise >= right.rise) Side.Left else Side.Right
+        }
+        val peak = (if (hitting == Side.Left) left else right) ?: return MovementVerdict.TooSmall
+        // The hitting hand's own travel up to its peak, not the segmentation
+        // signal's. That signal follows whichever hand is higher, so a guiding
+        // arm held up in front would hide most of the swing that passes it.
+        val lowest = frames.asSequence()
+            .takeWhile { it.timestampMs <= peak.frame.timestampMs }
+            .mapNotNull { AnalyzerSupport.wristRise(it, hitting) }
+            .minOrNull() ?: return MovementVerdict.TooSmall
+        if (peak.rise - lowest < MIN_TRAVEL || peak.rise < ATTEMPT_RISE) return MovementVerdict.TooSmall
+        if (!AnalyzerSupport.armObserved(peak.frame, hitting)) {
+            return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        }
+        if (peak.rise < MIN_CONTACT_RISE) return MovementVerdict.NotCounted(MovementFault.ReachOverhead)
+        return MovementVerdict.Counted
+    }
+}
 
 /**
  * Overhand serve.
@@ -24,8 +113,13 @@ private fun Side.opposite(): Side = if (this == Side.Left) Side.Right else Side.
 class ServeAnalyzer : SkillAnalyzer {
     override val skill = Skill.Serving
 
-    override fun segmentationSignal(frame: PoseFrame): Float =
-        AnalyzerSupport.wristRiseAboveShoulders(frame)
+    override fun segmentationSignal(frame: PoseFrame): Float? =
+        AnalyzerSupport.higherWristRise(frame)
+
+    override val minExcursion: Float get() = OverheadSwing.MIN_TRAVEL
+
+    override fun verdict(window: RepWindow): MovementVerdict =
+        OverheadSwing.verdict(window)
 
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
@@ -59,6 +153,61 @@ class ReceiveAnalyzer : SkillAnalyzer {
     override fun segmentationSignal(frame: PoseFrame): Float? =
         meanKneeAngle(frame)?.let { STRAIGHT_LEG_DEGREES - it }
 
+    override val minExcursion: Float get() = MIN_KNEE_DIP_DEGREES
+
+    /**
+     * A pass is a knee bend *with a platform under the ball*. The bend alone is
+     * what this skill is segmented on, so without this check every squat, and
+     * every time the athlete sat down into their stance, was a counted pass -
+     * and a well-scored one, because arms hanging at the sides are straight.
+     */
+    override fun verdict(window: RepWindow): MovementVerdict {
+        val contact = window.frameFor(RepPhase.Contact) ?: return MovementVerdict.TooSmall
+        val dip = AnalyzerSupport.excursion(window, ::segmentationSignal) ?: return MovementVerdict.TooSmall
+        if (dip < MIN_KNEE_DIP_DEGREES) return MovementVerdict.TooSmall
+        if (Side.entries.none { AnalyzerSupport.legObserved(contact, it) }) {
+            return MovementVerdict.NotCounted(MovementFault.LegsNotVisible)
+        }
+        return platformFault(contact)?.let { MovementVerdict.NotCounted(it) } ?: MovementVerdict.Counted
+    }
+
+    /**
+     * What is wrong with the forearm platform at the bottom of the bend, or null.
+     *
+     * Each test reads only what the camera saw. From behind, a correct platform
+     * is hidden by the athlete's own back, so hidden hands are accepted there
+     * and nowhere else; hands that *are* visible hanging apart are a fault from
+     * any direction.
+     */
+    private fun platformFault(frame: PoseFrame): MovementFault? {
+        val view = CameraOrientationDetector().detect(frame).angle
+        val wrists = Side.entries.filter { AnalyzerSupport.observed(frame, AnalyzerSupport.wrist(it)) }
+        if (wrists.isEmpty()) {
+            return if (view == CameraAngle.Rear) null else MovementFault.ArmsNotVisible
+        }
+        if (wrists.any { side -> AnalyzerSupport.wristRise(frame, side)?.let { it > MAX_PLATFORM_RISE } == true }) {
+            return MovementFault.PlatformTooHigh
+        }
+        if (wrists.size == 2) {
+            val shoulders = Angles.distance(
+                frame.world(BodyPoint.LEFT_SHOULDER), frame.world(BodyPoint.RIGHT_SHOULDER),
+            )
+            val gap = Angles.distance(frame.world(BodyPoint.LEFT_WRIST), frame.world(BodyPoint.RIGHT_WRIST))
+            if (shoulders > MIN_SHOULDER_WIDTH_METRES && gap / shoulders > MAX_WRIST_GAP) {
+                return MovementFault.JoinPlatform
+            }
+        }
+        // Side-on, hands joined against the thighs look the same as a platform
+        // to the gap test, so the hands must also be out in front of the hips.
+        if (view == CameraAngle.Side) {
+            val torso = AnalyzerSupport.torsoImageLength(frame) ?: return null
+            val hipX = Angles.hipCentreImage(frame).x
+            val forward = wrists.maxOf { abs(frame.image(AnalyzerSupport.wrist(it)).x - hipX) } / torso
+            if (forward < MIN_FORWARD_REACH) return MovementFault.JoinPlatform
+        }
+        return null
+    }
+
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         return when (cue.id) {
@@ -72,6 +221,23 @@ class ReceiveAnalyzer : SkillAnalyzer {
 
     private companion object {
         const val STRAIGHT_LEG_DEGREES = 180f
+
+        /**
+         * How much deeper the knees must go than where the movement began.
+         * Standing knees wobble by several degrees in the tracker's depth
+         * estimate; a pass sits well clear of that.
+         */
+        const val MIN_KNEE_DIP_DEGREES = 15f
+
+        /** Wrist gap as a share of shoulder width. Hanging arms measure above 1. */
+        const val MAX_WRIST_GAP = 0.60f
+
+        /** Torso lengths above the shoulder line. A platform lives below it. */
+        const val MAX_PLATFORM_RISE = 0.15f
+
+        /** Torso lengths the hands must be ahead of the hips, seen from the side. */
+        const val MIN_FORWARD_REACH = 0.25f
+        const val MIN_SHOULDER_WIDTH_METRES = 0.05f
     }
 }
 
@@ -84,8 +250,41 @@ class ReceiveAnalyzer : SkillAnalyzer {
 class SetAnalyzer : SkillAnalyzer {
     override val skill = Skill.Setting
 
-    override fun segmentationSignal(frame: PoseFrame): Float =
-        AnalyzerSupport.meanWristRiseAboveShoulders(frame)
+    override fun segmentationSignal(frame: PoseFrame): Float? =
+        AnalyzerSupport.meanWristRise(frame)
+
+    override val minExcursion: Float get() = MIN_EXCURSION
+
+    /** The deepest knee bend before the push, not the lowest the hands got. */
+    override fun loadingFrame(frames: List<PoseFrame>): PoseFrame? =
+        AnalyzerSupport.deepestKneeBend(frames)
+
+    /**
+     * A set is both hands rising together to above the face, with the elbows
+     * bent on the way to shape the hands. One hand, hands that stop at the
+     * chest, and straight arms swung overhead are all something else.
+     */
+    override fun verdict(window: RepWindow): MovementVerdict {
+        val contact = window.frameFor(RepPhase.Contact) ?: return MovementVerdict.TooSmall
+        val excursion = AnalyzerSupport.excursion(window, ::segmentationSignal) ?: return MovementVerdict.TooSmall
+        if (excursion < MIN_EXCURSION) return MovementVerdict.TooSmall
+        val rises = AnalyzerSupport.observedArms(contact).mapNotNull { AnalyzerSupport.wristRise(contact, it) }
+        if (rises.isEmpty()) return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        if (rises.size == 2 && rises.max() >= MIN_HAND_RISE && rises.max() - rises.min() > MAX_HAND_GAP) {
+            return MovementVerdict.NotCounted(MovementFault.UseBothHands)
+        }
+        if (rises.min() < MIN_HAND_RISE) return MovementVerdict.NotCounted(MovementFault.HandsAboveForehead)
+        // Only an elbow that was seen staying straight is a fault. One that could
+        // not be measured on the way up is unknown, not wrong.
+        val tightest = window.frames.asSequence()
+            .takeWhile { it.timestampMs <= contact.timestampMs }
+            .mapNotNull { AnalyzerSupport.observedElbowAngle(it) }
+            .minOrNull()
+        if (tightest != null && tightest > MAX_STRAIGHT_ELBOW) {
+            return MovementVerdict.NotCounted(MovementFault.BendElbowsFirst)
+        }
+        return MovementVerdict.Counted
+    }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
         CueId.SetHandsAboveForehead -> window.frameFor(RepPhase.Contact)
@@ -119,27 +318,58 @@ class SetAnalyzer : SkillAnalyzer {
         // World y increases downward, so "above" is the nose's y minus the wrists'.
         return nose.y - wrists.y
     }
+
+    private companion object {
+        /**
+         * Torso lengths. Smaller than the one-armed skills because a setter can
+         * begin with the hands already raised, leaving only the push to travel.
+         */
+        const val MIN_EXCURSION = 0.30f
+
+        /** Each hand must finish at least level with the face. */
+        const val MIN_HAND_RISE = 0.30f
+
+        /** Further apart in height than this and one hand did the work. */
+        const val MAX_HAND_GAP = 0.35f
+
+        /** An elbow that never closed past this was a straight-arm lift. */
+        const val MAX_STRAIGHT_ELBOW = 150f
+    }
 }
 
 /**
  * Spike approach and attack.
  *
- * Segmentation follows hip height in image space, because the jump is by far the
- * largest and least ambiguous movement in a spike. World space cannot be used
- * here at all: it is hip-centred, so the hips never move in it. See
- * [Angles.hipRiseMetres].
+ * Segmentation follows the hitting hand, as for the serve: the arm swing is the
+ * one thing every spike has, with or without a jump, and it peaks at contact.
  *
- * The absolute value of this signal is meaningless - it is a raw normalised image
- * coordinate - but the segmenter only ever looks at the curve's shape relative to
- * its own range, so that is fine.
+ * ## Why this no longer follows the hips
+ *
+ * It used to be hip height, on the reasoning that the jump is the largest
+ * movement in a spike. Hip height is also what a knee bend moves. Standing up
+ * out of one put the hips at the top of their range, which the segmenter read as
+ * the top of a jump, so every knee bend was counted as a spike - and scored as
+ * a good one, since the "contact" frame was the athlete standing with a straight
+ * arm at their side. It also could not see the standing arm-swing drill at all,
+ * where the hips barely move.
+ *
+ * The jump is still measured: [Angles.hipRiseMetres] at contact, against the
+ * hip height the rep began at.
  */
 class SpikeAnalyzer : SkillAnalyzer {
     override val skill = Skill.Spiking
 
-    override fun segmentationSignal(frame: PoseFrame): Float =
-        // Negated because image y increases downward, and the signal must peak,
-        // not trough, at the top of the jump.
-        -Angles.hipCentreImage(frame).y
+    override fun segmentationSignal(frame: PoseFrame): Float? =
+        AnalyzerSupport.higherWristRise(frame)
+
+    override val minExcursion: Float get() = OverheadSwing.MIN_TRAVEL
+
+    /** The deepest knee bend of the approach, not the lowest the hand got. */
+    override fun loadingFrame(frames: List<PoseFrame>): PoseFrame? =
+        AnalyzerSupport.deepestKneeBend(frames)
+
+    override fun verdict(window: RepWindow): MovementVerdict =
+        OverheadSwing.verdict(window)
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
         CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
@@ -166,8 +396,65 @@ class SpikeAnalyzer : SkillAnalyzer {
 class BlockAnalyzer : SkillAnalyzer {
     override val skill = Skill.Blocking
 
-    override fun segmentationSignal(frame: PoseFrame): Float =
-        AnalyzerSupport.meanWristRiseAboveShoulders(frame)
+    override fun segmentationSignal(frame: PoseFrame): Float? =
+        AnalyzerSupport.meanWristRise(frame)
+
+    override val minExcursion: Float get() = MIN_EXCURSION
+
+    /** The deepest knee bend before the reach, not the lowest the hands got. */
+    override fun loadingFrame(frames: List<PoseFrame>): PoseFrame? =
+        AnalyzerSupport.deepestKneeBend(frames)
+
+    /** A block is both hands reaching clear above the head on mostly straight arms. */
+    override fun verdict(window: RepWindow): MovementVerdict {
+        val contact = window.frameFor(RepPhase.Contact) ?: return MovementVerdict.TooSmall
+        val excursion = AnalyzerSupport.excursion(window, ::segmentationSignal) ?: return MovementVerdict.TooSmall
+        if (excursion < MIN_EXCURSION) return MovementVerdict.TooSmall
+        val rises = AnalyzerSupport.observedArms(contact).mapNotNull { AnalyzerSupport.wristRise(contact, it) }
+        if (rises.isEmpty()) return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        if (rises.size == 2 && rises.max() >= MIN_HAND_RISE && rises.min() < ONE_HAND_BELOW) {
+            return MovementVerdict.NotCounted(MovementFault.UseBothHands)
+        }
+        if (rises.min() < MIN_HAND_RISE) return MovementVerdict.NotCounted(MovementFault.ReachBothHandsHigh)
+        val elbows = AnalyzerSupport.observedElbowAngle(contact)
+        if (elbows != null && elbows < MIN_ELBOW_ANGLE) {
+            return MovementVerdict.NotCounted(MovementFault.StraightenArms)
+        }
+        if (!handsPeakTogether(window)) return MovementVerdict.NotCounted(MovementFault.UseBothHands)
+        return MovementVerdict.Counted
+    }
+
+    /**
+     * A block is both hands going up as one. A spike approach also lifts both
+     * arms, and at the moment their *average* height peaks it looks like a
+     * block. Public footage of hitters attacking a block pad passed this check
+     * 8 times in 19. What gives the spike away is each hand's own peak. On a
+     * block the two peak together, 0 to 67 ms apart. On a spike the hitting
+     * hand peaks 0.3 to 3 s after the other, or the other hand has already
+     * dropped by the time it does.
+     *
+     * The timing is read over every steady frame. Two other designs were tried
+     * on the same footage and rejected:
+     * - Requiring both arms to be seen on the peak frame let half of the spikes
+     *   through, because a spiker's off arm is often hidden mid-swing.
+     * - Reading each peak only from frames where that arm was seen refused real
+     *   blocks, because arms held overhead lose visibility at full reach and
+     *   the filter moved the peak elsewhere.
+     * An arm never seen anywhere in the movement leaves the check standing
+     * aside. The "other hand already dropped" test is applied only when that
+     * hand is seen on the peak frame.
+     */
+    private fun handsPeakTogether(window: RepWindow): Boolean {
+        val frames = AnalyzerSupport.steadyFrames(window.frames)
+        if (Side.entries.any { side -> frames.none { AnalyzerSupport.armObserved(it, side) } }) return true
+        val left = AnalyzerSupport.peakRise(frames, Side.Left) ?: return true
+        val right = AnalyzerSupport.peakRise(frames, Side.Right) ?: return true
+        if (abs(left.frame.timestampMs - right.frame.timestampMs) > MAX_PEAK_GAP_MS) return false
+        val (higher, otherSide) = if (left.rise >= right.rise) left to Side.Right else right to Side.Left
+        if (!AnalyzerSupport.armObserved(higher.frame, otherSide)) return true
+        val otherAtPeak = AnalyzerSupport.wristRise(higher.frame, otherSide) ?: return true
+        return otherAtPeak >= ONE_HAND_BELOW
+    }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
         CueId.BlockArmExtension -> window.frameFor(RepPhase.Contact)?.let { meanElbowAngle(it) }
@@ -219,6 +506,30 @@ class BlockAnalyzer : SkillAnalyzer {
             frame.world(BodyPoint.RIGHT_WRIST),
         )
         return Angles.alongForward(frame, Angles.shoulderCentre(frame), wrists)
+    }
+
+    private companion object {
+        /** Torso lengths. A blocker starts with the hands already up and ready. */
+        const val MIN_EXCURSION = 0.30f
+
+        /** Each hand must finish clear of the top of the head. */
+        const val MIN_HAND_RISE = 0.60f
+
+        /** A hand left below this while the other reached is a one-handed reach. */
+        const val ONE_HAND_BELOW = 0.25f
+
+        /**
+         * Well under the extension cue's target, on purpose. This decides whether
+         * it was a block at all; how straight the arms were is still the cue's job.
+         */
+        const val MIN_ELBOW_ANGLE = 120f
+
+        /**
+         * The most the two hands' peaks may be apart on one block. Blocks on
+         * public footage peaked 0 to 67 ms apart and spikes 300 ms or more, so
+         * this sits between them with room for a slower camera.
+         */
+        const val MAX_PEAK_GAP_MS = 250L
     }
 }
 

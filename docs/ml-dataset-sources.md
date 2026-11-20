@@ -90,6 +90,14 @@ training data. [ExAct project coverage](https://texaser.github.io/exact_project_
 
 ## How these leads may be used
 
+Additional first-party checks on 3 November 2026 did not establish a new
+correct/faulty body-mechanics dataset. [VREN's authors](https://sites.cs.ucsb.edu/~yfwang/papers/icgm2022.pdf)
+describe rally outcomes, set/hit types and tactical notation. These do not label
+individual biomechanical faults. [Shanes Workspace's dataset](https://universe.roboflow.com/shanes-workspace-tagvj/volleyball-action-recognition-k6tqv-bkuvk)
+lists action-detection classes for casual play, including block, serve, hit,
+receive and set; it does not list correct/faulty technique classes or complete
+temporal actions. Neither was admitted as form ground truth in the new sweep.
+
 Download accessible source material, preserve source IDs and label provenance,
 visually isolate the demonstrated movement, and discard clips with unreliable
 landmarks. A source-authored wrong/right demonstration can provide provisional

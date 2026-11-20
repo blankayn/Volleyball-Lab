@@ -1,0 +1,296 @@
+{
+  "created_at_utc": "2026-09-23T17:15:41.687714+00:00",
+  "purpose": "fresh source-disjoint external validation of the deployed v29 classifier before any further training; v35 corrects timestamp/framing defects found in v34 before pose or classifier inference",
+  "scope": "insufficient knee bend / too-upright forearm-pass ready posture",
+  "labeling_order": "Coaching narration/on-screen before-after labels and timestamped raw-video frames were reviewed first. Exact labels and intervals were then hash-locked before MediaPipe extraction or classifier scoring.",
+  "separation": "All source IDs are absent from pass-ready-v29-development-descriptors.csv. v35 is validation-only and must not be used for training or threshold selection.",
+  "source_group_rule": "Segments from one YouTube video share one source group; multiple clips from a source are correlated and are not independent evidence.",
+  "sources": [
+    {
+      "id": "HtTuI_iDifA",
+      "source_group": "HtTuI_iDifA",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\HtTuI_iDifA.mp4",
+      "video_sha256": "aa84dd37dfdc7b3032dc32db3b70a57deb0ad85c9bb332c13bd06d2771ec6a51",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\HtTuI_iDifA.info.json",
+      "info_json_sha256": "ea53ac934399778f65e65853845dbf16e6751289b49b30348f25bc140710eb51",
+      "url": "https://www.youtube.com/watch?v=HtTuI_iDifA",
+      "title": "How to Improve your Dig feat. Rachael Adams | Olympians' Tips",
+      "captions": null,
+      "captions_sha256": null
+    },
+    {
+      "id": "Nfy5Wbdjp1E",
+      "source_group": "Nfy5Wbdjp1E",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Nfy5Wbdjp1E.mp4",
+      "video_sha256": "a16c9cb4101bb3d520cc7b335f5de2ef2e4ee25a7011af30333727786086f477",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Nfy5Wbdjp1E.info.json",
+      "info_json_sha256": "9dd55b435a1b5de9ff2b33d6da8c2dc3604ef422dc4517e849e8182d81fad2c9",
+      "url": "https://www.youtube.com/watch?v=Nfy5Wbdjp1E",
+      "title": "STOP doing these 15 BIG Mistakes When Passing (Bumping) Volleyball",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Nfy5Wbdjp1E.en-orig.vtt",
+      "captions_sha256": "86c213361f5a53b441accedf0bf689320271041da392aee211943def6b1c0df2"
+    },
+    {
+      "id": "RRplCSfQjtg",
+      "source_group": "RRplCSfQjtg",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\RRplCSfQjtg.mp4",
+      "video_sha256": "4f2d4e99389743299539562101671a7ab4c4c395d8957e09671bfe0b1b24e857",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\RRplCSfQjtg.info.json",
+      "info_json_sha256": "6871dac8bb0cd21caad049d6188125065abd6eec5177ade1d2d04aa5add05358",
+      "url": "https://www.youtube.com/watch?v=RRplCSfQjtg",
+      "title": "How to pass a volleyball - Terry Liskevych - The Art of Coaching Volleyball",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\RRplCSfQjtg.en-orig.vtt",
+      "captions_sha256": "8dc1d69b725b9a6affdc7498c2eeb4a97a9ac3321ada538cd374c22549867a22"
+    },
+    {
+      "id": "SfUAjdk3yjo",
+      "source_group": "SfUAjdk3yjo",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\SfUAjdk3yjo.mp4",
+      "video_sha256": "88609c6df41905dc028a73694c4eb94e451988087e4a226154b980ffeed52c83",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\SfUAjdk3yjo.info.json",
+      "info_json_sha256": "37c009d93ffff38d8ba7fca9ced2bd131243ecbcc364868d5c7b5ff6018c64d2",
+      "url": "https://www.youtube.com/watch?v=SfUAjdk3yjo",
+      "title": "KPE327: I Can Teach Anyone To Pass a Volleyball",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\SfUAjdk3yjo.en-orig.vtt",
+      "captions_sha256": "6c1384b627273797df76221195c31b37076744c9ee89b844451ed10094674c36"
+    },
+    {
+      "id": "Zhrrqa-n3_Y",
+      "source_group": "Zhrrqa-n3_Y",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Zhrrqa-n3_Y.mp4",
+      "video_sha256": "292c1751dea5d622a8e7bf826003b41e03edbb2db790aa2cb9a41478c62e686d",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Zhrrqa-n3_Y.info.json",
+      "info_json_sha256": "04fe000305a77382fa1361020b9817b2aa893fa39c607fbca0cdd49d8fcf4c72",
+      "url": "https://www.youtube.com/watch?v=Zhrrqa-n3_Y",
+      "title": "Volleyball  Passing Posture and Technique--Coach Suzie Fritz",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\Zhrrqa-n3_Y.en-orig.vtt",
+      "captions_sha256": "35549dae5957dbd218def7b97485ba5353ce6358179bf0082b55054792caac16"
+    },
+    {
+      "id": "dormU35WHLc",
+      "source_group": "dormU35WHLc",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\dormU35WHLc.mp4",
+      "video_sha256": "0ce9589c9380cb4c1bac77ff6ce84066e8d98b5e0c84d242f5000f6f25acfd3b",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\dormU35WHLc.info.json",
+      "info_json_sha256": "6e86fd33780a3472207ae4218dca9806820f53c769b65b174cadb691f06fa682",
+      "url": "https://www.youtube.com/watch?v=dormU35WHLc",
+      "title": "How to Pass a Volleyball for Beginners",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\dormU35WHLc.en-orig.vtt",
+      "captions_sha256": "6067cbb57536b155a7417172b4960779fc3d3b92f845782bb6214ffa0c87a6d3"
+    },
+    {
+      "id": "unjx6NArCag",
+      "source_group": "unjx6NArCag",
+      "video": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\unjx6NArCag.mp4",
+      "video_sha256": "3f40027534498268ada23dec40ce0c85686e4d58e70a3d1e4aca5d413f55de08",
+      "info_json": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\unjx6NArCag.info.json",
+      "info_json_sha256": "c090aecde0a43b39691d0b86f4c39e2199b9231b91222aa50cfc1d55fc74e967",
+      "url": "https://www.youtube.com/watch?v=unjx6NArCag",
+      "title": "4 common mistakes volleyball players make",
+      "captions": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v34-release-validation\\candidates\\unjx6NArCag.en-orig.vtt",
+      "captions_sha256": "425877f7f2f44ccb3f031de80d942e2fea769205127c1ef9ffa234737e7ff213"
+    }
+  ],
+  "segments": [
+    {
+      "name": "goldmedal_fault_rises_from_legs_01",
+      "source_id": "unjx6NArCag",
+      "start_s": 9.0,
+      "end_s": 14.0,
+      "label": "fault",
+      "basis": "Coach introduces the first common error as coming up from the legs and shows the passer rising/jumping during the pass (captioned 00:09-00:14).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\goldmedal_fault_rises_from_legs_01.jpg",
+      "prelabel_contact_sheet_sha256": "885f398e7225c4c36862c60d9f34055818b38bd8fc53ace185e720f87dd93670"
+    },
+    {
+      "name": "goldmedal_fault_rises_from_back_02",
+      "source_id": "unjx6NArCag",
+      "start_s": 14.0,
+      "end_s": 21.5,
+      "label": "fault",
+      "basis": "Continuation of the explicitly identified passing error: the coach demonstrates lifting from the legs/back and says this is what players should not do (captioned 00:14-00:22).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\goldmedal_fault_rises_from_back_02.jpg",
+      "prelabel_contact_sheet_sha256": "791a8933ff02ceb9908c8afcdc6c9bba2d11f36735f00be724f8dfd130c65c66"
+    },
+    {
+      "name": "mollyking_fault_before_upright",
+      "source_id": "SfUAjdk3yjo",
+      "start_s": 2.0,
+      "end_s": 6.0,
+      "label": "fault",
+      "basis": "The source itself marks this demonstration 'Before'; the athlete remains visibly higher and straighter than the later 'After' posture.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\mollyking_fault_before_upright.jpg",
+      "prelabel_contact_sheet_sha256": "91a168192182c09f2503f3a57848ffdf1c132db773b7f4f83b61c31eefe97a9d"
+    },
+    {
+      "name": "fritz_fault_straight_legged",
+      "source_id": "Zhrrqa-n3_Y",
+      "start_s": 302.5,
+      "end_s": 306.8,
+      "label": "fault",
+      "basis": "Coach says not to be straight up and straight-legged while demonstrating that posture (captioned 05:03-05:07).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\fritz_fault_straight_legged.jpg",
+      "prelabel_contact_sheet_sha256": "66d1dfe4dcbdf3a5679f8a5db8fa5f9033212d2f7974edf03a9d86b0a646cfd0"
+    },
+    {
+      "name": "popelka_fault_stretched_legs_01",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 89.4,
+      "end_s": 93.6,
+      "label": "fault",
+      "basis": "Coach introduces passing on stretched legs as an error; knees do not loosen when the ball is contacted (captioned 01:29-01:36).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_stretched_legs_01.jpg",
+      "prelabel_contact_sheet_sha256": "fd9d137586b5a5b0624fcad38b2b2efd1a487666173ed90c049767e108da3dec"
+    },
+    {
+      "name": "popelka_fault_stretched_legs_02",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 93.6,
+      "end_s": 97.8,
+      "label": "fault",
+      "basis": "Same continuous, explicitly narrated stretched-leg mistake demonstration (captioned 01:29-01:39).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_stretched_legs_02.jpg",
+      "prelabel_contact_sheet_sha256": "b1760e379bde68a538903741ae3350763332816d70e00db4a0df38fadaa8d20b"
+    },
+    {
+      "name": "popelka_fault_stretched_legs_03",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 96.3,
+      "end_s": 100.4,
+      "label": "fault",
+      "basis": "Tail of the stretched-leg mistake example, stopped before the presenter cut; the coach states that bumping on stretched legs is a mistake (captioned through 01:39).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_stretched_legs_03.jpg",
+      "prelabel_contact_sheet_sha256": "e026acae6d9459985e3b2927fd77d3a3a6d21a033327df1dfad4c8e817119f51"
+    },
+    {
+      "name": "popelka_fault_vertical_body_01",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 103.9,
+      "end_s": 108.1,
+      "label": "fault",
+      "basis": "Coach introduces the next mistake as playing the bump with the body vertical to the ground (captioned from 01:44).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_vertical_body_01.jpg",
+      "prelabel_contact_sheet_sha256": "2c603f4d3ad6cb9a6157661cf372b196becb736d81333c605e65a911e644b920"
+    },
+    {
+      "name": "popelka_fault_vertical_body_02",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 108.1,
+      "end_s": 112.3,
+      "label": "fault",
+      "basis": "Continuation of the explicitly narrated vertical-body mistake demonstration.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_vertical_body_02.jpg",
+      "prelabel_contact_sheet_sha256": "ed014b0b87b4f8c41233cabe5e9661d9dac0f31cd02f155eabfb8a4af4d8adb1"
+    },
+    {
+      "name": "popelka_fault_vertical_body_03",
+      "source_id": "Nfy5Wbdjp1E",
+      "start_s": 112.3,
+      "end_s": 116.5,
+      "label": "fault",
+      "basis": "Continuation of the vertical-body mistake; the coach says the player's back is straight and vertical (captioned 01:52-01:58).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\popelka_fault_vertical_body_03.jpg",
+      "prelabel_contact_sheet_sha256": "0f6dd3e0a08cef0c410945fcc5d29b7aaa0a5d42fccf3206436fff7a95044bf7"
+    },
+    {
+      "name": "mollyking_ok_after_lower",
+      "source_id": "SfUAjdk3yjo",
+      "start_s": 9.0,
+      "end_s": 12.7,
+      "label": "ok",
+      "basis": "The source itself marks this demonstration 'After'; the athlete holds the corrected lower, bent-knee posture. The interval stops before she stands up.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\mollyking_ok_after_lower.jpg",
+      "prelabel_contact_sheet_sha256": "bb07d6c3ed972d971c555063f8bded329231db695c54b999efaddaff913b2c3b"
+    },
+    {
+      "name": "fritz_ok_athletic_posture",
+      "source_id": "Zhrrqa-n3_Y",
+      "start_s": 308.0,
+      "end_s": 312.0,
+      "label": "ok",
+      "basis": "Immediately after rejecting straight legs, the coach demonstrates and names good athletic posture (captioned 05:07-05:12).",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\fritz_ok_athletic_posture.jpg",
+      "prelabel_contact_sheet_sha256": "8cf8f26a533a701448059c67c2bd87c7ef764168631916cf18e9fb60f9841cc1"
+    },
+    {
+      "name": "olympian_ok_dig_stance_01",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 44.0,
+      "end_s": 48.4,
+      "label": "ok",
+      "basis": "Full-body coached digging-position demonstration with feet wide, knees bent, and torso forward; fixed from the timestamped source frames.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_01.jpg",
+      "prelabel_contact_sheet_sha256": "30cc472ad837c7e8607d78b288649666d69a75bc5a09b77027f5b63ce0443237"
+    },
+    {
+      "name": "olympian_ok_dig_stance_02",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 53.5,
+      "end_s": 57.6,
+      "label": "ok",
+      "basis": "Full-body repetition of the instructed digging stance; fixed from the timestamped source frames.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_02.jpg",
+      "prelabel_contact_sheet_sha256": "5b2dc7f8c28e242db27e1f508cf99d7e6e8d4c8d6e3ea7c3a94cab51c5d4eb23"
+    },
+    {
+      "name": "olympian_ok_dig_stance_03",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 65.0,
+      "end_s": 71.8,
+      "label": "ok",
+      "basis": "Athlete demonstrates the coached low defensive/forearm platform position with full body visible.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_03.jpg",
+      "prelabel_contact_sheet_sha256": "b2574e5e773a2c3630e88af2531493d3615652ed6dce53435b4efccf9612d2a5"
+    },
+    {
+      "name": "olympian_ok_dig_stance_04",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 77.7,
+      "end_s": 82.9,
+      "label": "ok",
+      "basis": "Another continuous full-body demonstration of the instructed balanced, bent-knee stance.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_04.jpg",
+      "prelabel_contact_sheet_sha256": "eb52f1e2d69fc4e02e4efff34b5704ae9b9134957b4b91205be6655f4fab2323"
+    },
+    {
+      "name": "olympian_ok_dig_stance_05",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 117.0,
+      "end_s": 122.0,
+      "label": "ok",
+      "basis": "Full-body coached dig-to-self stance with stable knee bend and forward torso.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_05.jpg",
+      "prelabel_contact_sheet_sha256": "56b68dc4e2946049e90e5db83430ddaf47e4d41cd8f28070bb13084b9bd1e9e3"
+    },
+    {
+      "name": "olympian_ok_dig_stance_06",
+      "source_id": "HtTuI_iDifA",
+      "start_s": 143.0,
+      "end_s": 157.0,
+      "label": "ok",
+      "basis": "Continuous full-body drill demonstration in the instructed defensive stance; fixed before pose extraction.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\olympian_ok_dig_stance_06.jpg",
+      "prelabel_contact_sheet_sha256": "2a3674c086d93976958383804e5b9c37e1d2490ecaa97ff717631d997e3985d7"
+    },
+    {
+      "name": "aoc_ok_live_receive_sequence",
+      "source_id": "RRplCSfQjtg",
+      "start_s": 76.0,
+      "end_s": 81.5,
+      "label": "ok",
+      "basis": "Instructional passing example shows one athlete receiving in a balanced bent-knee forearm-pass position; the interval ends before the next close-up cut.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\aoc_ok_live_receive_sequence.jpg",
+      "prelabel_contact_sheet_sha256": "6088b8df77b28950cd32ae19f57346c1e3ad9e51b3cf4607d618c47d8579d256"
+    },
+    {
+      "name": "pavan_ok_move_then_platform",
+      "source_id": "dormU35WHLc",
+      "start_s": 198.0,
+      "end_s": 206.5,
+      "label": "ok",
+      "basis": "Coach-led full-body forearm-pass drill: the athlete moves first and then holds the platform in a bent-knee receiving posture.",
+      "prelabel_contact_sheet": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\acquisition-v35-release-validation\\prelabel-segment-sheets\\pavan_ok_move_then_platform.jpg",
+      "prelabel_contact_sheet_sha256": "256abeac9a4209590b878170ab265789a6a8f43c46133f6a2bc79610ab6be230"
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+clip,n,skill,label,verdict,form_score,view,start_ms,contact_ms,end_ms,evidence
+block_fundamentals_fadS1Cjg58k,1,Blocking,exclude,Counted,92,Unknown,23067,25400,26833,not covered by a label
+block_fundamentals_fadS1Cjg58k,2,Blocking,exclude,Counted,72,Unknown,26867,29100,29833,not covered by a label
+block_fundamentals_fadS1Cjg58k,3,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Side,30833,31567,32233,not covered by a label
+block_fundamentals_fadS1Cjg58k,4,Blocking,exclude,Counted,91,Unknown,32800,33633,34700,not covered by a label
+block_fundamentals_fadS1Cjg58k,5,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Unknown,39567,40233,40433,not covered by a label
+block_fundamentals_fadS1Cjg58k,6,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Unknown,44167,45800,46400,not covered by a label
+block_fundamentals_fadS1Cjg58k,7,Blocking,exclude,Counted,82,Side,46433,47733,49333,not covered by a label
+block_fundamentals_fadS1Cjg58k,8,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Front,49367,50033,50933,not covered by a label
+block_fundamentals_fadS1Cjg58k,9,Blocking,exclude,NotCounted:ArmsNotVisible,,Unknown,50967,51167,51367,not covered by a label
+block_fundamentals_fadS1Cjg58k,10,Blocking,exclude,NotCounted:ArmsNotVisible,,Unknown,51400,52100,52633,not covered by a label
+block_fundamentals_fadS1Cjg58k,11,Blocking,exclude,NotCounted:ArmsNotVisible,,Unknown,55900,57400,57667,not covered by a label
+block_fundamentals_fadS1Cjg58k,12,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Front,60100,61033,61433,not covered by a label
+block_fundamentals_fadS1Cjg58k,13,Blocking,exclude,TooSmall,,Front,61467,61800,62033,not covered by a label
+block_fundamentals_fadS1Cjg58k,14,Blocking,exclude,TooSmall,,Unknown,62067,62333,62467,not covered by a label
+block_hits_progress_wcQEnd_RKh0,1,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Side,0,867,1400,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,2,Blocking,wrong_skill,NotCounted:UseBothHands,,Front,1467,3800,5933,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,3,Blocking,wrong_skill,NotCounted:UseBothHands,,Side,6000,8600,9333,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,4,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Front,10600,11667,12400,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,5,Blocking,wrong_skill,NotCounted:UseBothHands,,Unknown,12467,14467,16867,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,6,Blocking,wrong_skill,NotCounted:UseBothHands,,Side,16933,17733,18667,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,7,Blocking,wrong_skill,NotCounted:UseBothHands,,Unknown,18733,20333,21800,the tracked person is the hitter attacking a block pad
+block_hits_progress_wcQEnd_RKh0,8,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Side,22200,22867,23533,the tracked person is the hitter attacking a block pad
+block_middle_4steps__ful_6hcw-w,1,Blocking,exclude,TooSmall,,Front,18500,19917,21000,not covered by a label
+block_no_waterfalls_kK2ugeGI_qs,1,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Front,8008,9743,10210,not covered by a label
+block_no_waterfalls_kK2ugeGI_qs,2,Blocking,exclude,Counted,75,Unknown,10277,11411,12746,not covered by a label
+block_no_waterfalls_kK2ugeGI_qs,3,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Unknown,18151,19019,19286,not covered by a label
+block_no_waterfalls_kK2ugeGI_qs,4,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Unknown,27828,30230,30697,not covered by a label
+block_pads_tips_gpPlv9aVx70,1,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Unknown,67,533,1067,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,2,Blocking,wrong_skill,NotCounted:UseBothHands,,Unknown,1133,2467,4600,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,3,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Unknown,5333,7333,9133,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,4,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Side,10800,11867,14000,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,5,Blocking,wrong_skill,Counted,82,Side,14733,15800,16733,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,6,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Unknown,16800,17600,18133,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,7,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Front,19533,20267,20733,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,8,Blocking,wrong_skill,NotCounted:UseBothHands,,Unknown,21667,23067,27400,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,9,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Side,27467,28067,28667,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,10,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Unknown,28733,29600,30333,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,11,Blocking,wrong_skill,NotCounted:ReachBothHandsHigh,,Unknown,30400,31067,31667,the tracked person is the hitter attacking a block pad
+block_pins_crossover_ACK65FtyK8g,1,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Front,14750,15917,16667,not covered by a label
+block_pins_crossover_ACK65FtyK8g,2,Blocking,exclude,NotCounted:ReachBothHandsHigh,,Unknown,35167,35833,36167,not covered by a label
+block_time_jump_7EcxrjwIxGc,1,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,267,2469,2736,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,2,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,2803,4071,5339,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,3,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,6874,10944,12012,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,4,Blocking,not_a_rep,TooSmall,,Front,18619,20821,23156,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,5,Blocking,not_a_rep,TooSmall,,Front,36303,37170,37437,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,6,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,37771,40173,41575,coach talking and gesturing on sand
+block_time_jump_7EcxrjwIxGc,7,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,46046,48782,50784,coach talking and gesturing on sand
+block_too_short_DxMCo3uJJ3I,1,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,16016,16817,17217,coach demonstrating footwork without a block jump
+block_too_short_DxMCo3uJJ3I,2,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Side,17885,20087,23357,coach demonstrating footwork without a block jump
+block_too_short_DxMCo3uJJ3I,3,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Front,23423,27427,28962,coach demonstrating footwork without a block jump
+block_too_short_DxMCo3uJJ3I,4,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Side,55923,56857,57190,coach demonstrating footwork without a block jump
+block_too_short_DxMCo3uJJ3I,5,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Side,59927,61194,61795,coach demonstrating footwork without a block jump
+block_too_short_DxMCo3uJJ3I,6,Blocking,not_a_rep,NotCounted:ReachBothHandsHigh,,Unknown,61862,64598,66667,coach demonstrating footwork without a block jump
+serve_aim_basics_o-7UwxE0Zh8,1,Serving,exclude,NotCounted:ReachOverhead,,Unknown,0,1535,1935,talking shot cut into the serve
+serve_aim_basics_o-7UwxE0Zh8,2,Serving,exclude,TooSmall,,Unknown,2002,3604,4004,talking shot cut into the serve
+serve_aim_basics_o-7UwxE0Zh8,3,Serving,not_a_rep,NotCounted:ArmsNotVisible,,Side,10410,11478,12346,coach talking
+serve_aim_basics_o-7UwxE0Zh8,4,Serving,correct,Counted,19,Unknown,12412,13146,13547,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,5,Serving,not_a_rep,NotCounted:ReachOverhead,,Side,16216,16950,17618,coach talking
+serve_aim_basics_o-7UwxE0Zh8,6,Serving,not_a_rep,TooSmall,,Side,25692,26360,26560,coach talking
+serve_aim_basics_o-7UwxE0Zh8,7,Serving,not_a_rep,TooSmall,,Unknown,27828,29429,29763,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,8,Serving,correct,Counted,32,Unknown,30297,32633,33033,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,9,Serving,not_a_rep,TooSmall,,Front,44645,45445,45712,coach talking
+serve_aim_basics_o-7UwxE0Zh8,10,Serving,not_a_rep,TooSmall,,Side,47314,48115,48982,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,11,Serving,not_a_rep,TooSmall,,Side,49316,50517,50851,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,12,Serving,not_a_rep,NotCounted:ArmsNotVisible,,Unknown,50918,51251,53053,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,13,Serving,correct,Counted,20,Unknown,53120,55989,56523,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,14,Serving,correct,Counted,35,Unknown,65132,66266,66667,coach demonstration serve in an aiming tutorial
+serve_beginner_tips,1,Serving,correct,Counted,98,Side,867,2000,3200,green tick over the serve
+serve_master_d9jvFhp40xU,1,Serving,exclude,Counted,85,Front,0,933,1533,title card cut into the rep
+serve_master_d9jvFhp40xU,2,Serving,exclude,Counted,20,Unknown,1600,3000,3333,filmed from behind and far; no mark
+serve_master_d9jvFhp40xU,3,Serving,not_a_rep,TooSmall,,Front,15067,15800,16133,standing holding the ball (Step 3 approaching)
+serve_master_d9jvFhp40xU,4,Serving,not_a_rep,TooSmall,,Front,16200,16867,17333,standing holding the ball; cross for the approach stance
+serve_master_d9jvFhp40xU,5,Serving,not_a_rep,NotCounted:ReachOverhead,,Front,19267,20067,20467,standing holding the ball; tick for the approach stance
+serve_master_d9jvFhp40xU,6,Serving,faulty,Counted,40,Front,20733,21867,22333,Step 4 timing serve followed by a red cross
+serve_master_d9jvFhp40xU,7,Serving,not_a_rep,NotCounted:ReachOverhead,,Front,22400,22933,23400,landing and walking after the serve
+serve_master_d9jvFhp40xU,8,Serving,correct,Counted,50,Front,23667,24800,25267,Step 4 timing serve followed by a green tick
+serve_master_d9jvFhp40xU,9,Serving,exclude,Counted,18,Unknown,25733,26667,27000,The End; from behind; no mark
+serve_mistake_jzTkgrKTy44,1,Serving,exclude,Counted,22,Unknown,0,533,2467,arm swing demonstration from behind; no mark
+serve_mistake_jzTkgrKTy44,2,Serving,exclude,NotCounted:ReachOverhead,,Unknown,2533,2867,5200,arm swing without the ball; no mark
+serve_mistake_jzTkgrKTy44,3,Serving,not_a_rep,NotCounted:ReachOverhead,,Front,5267,6000,7267,toss demonstration without a swing
+serve_mistake_jzTkgrKTy44,4,Serving,not_a_rep,TooSmall,,Front,7333,7933,8200,holding the ball at the hip
+serve_mistake_jzTkgrKTy44,5,Serving,not_a_rep,TooSmall,,Front,8533,10467,11933,toss-hand hold with a tick; no swing
+serve_mistake_jzTkgrKTy44,6,Serving,correct,NotCounted:ArmsNotVisible,,Unknown,19800,20533,23400,full serve from behind followed by a green tick
+serve_mistake_jzTkgrKTy44,7,Serving,not_a_rep,TooSmall,,Front,23800,24533,25600,wrist and hand demonstration
+serve_mistake_jzTkgrKTy44,8,Serving,not_a_rep,TooSmall,,Front,26200,27133,28133,wrist and hand demonstration
+serve_no_shot_put_LxCE7z_RdmA,1,Serving,drill,NotCounted:ArmsNotVisible,,Side,1502,2085,2836,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,2,Serving,drill,NotCounted:ReachOverhead,,Side,2920,3670,4504,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,3,Serving,drill,Counted,54,Side,4588,8425,8842,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,4,Serving,drill,NotCounted:ArmsNotVisible,,Side,8926,11178,12512,wall drill shown as the fix for the shot-put serve
+serve_spin_tip_fl0EMpCtDW8,1,Serving,not_a_rep,NotCounted:ReachOverhead,,Front,17467,18400,19800,coach talking to a group
+serve_spin_tip_fl0EMpCtDW8,2,Serving,not_a_rep,NotCounted:ReachOverhead,,Front,20000,21000,21333,coach talking to a group
+serve_spin_tip_fl0EMpCtDW8,3,Serving,not_a_rep,TooSmall,,Front,22600,23867,24667,coach talking to a group
+serve_spin_tip_fl0EMpCtDW8,4,Serving,not_a_rep,TooSmall,,Side,33933,34667,34933,coach talking to a group
+set_accidental_backset_-KCkQOIIXII,1,Setting,not_a_rep,NotCounted:HandsAboveForehead,,Front,1733,4333,5267,coach talking
+set_accidental_backset_-KCkQOIIXII,2,Setting,not_a_rep,NotCounted:HandsAboveForehead,,Front,13333,14333,16400,coach talking
+set_accidental_backset_-KCkQOIIXII,3,Setting,not_a_rep,NotCounted:HandsAboveForehead,,Side,56200,56867,57200,coach talking
+set_do_this_instead_NJPJXUjqM6o,1,Setting,faulty,Counted,78,Side,33,1507,3082,caption: Do not set like this
+set_do_this_instead_NJPJXUjqM6o,2,Setting,correct,Counted,85,Side,4790,6164,7001,caption: Set like this
+set_do_this_instead_NJPJXUjqM6o,3,Setting,correct,Counted,91,Unknown,7236,8576,8743,caption: Set like this with a green tick
+set_feet_hand_pos_uO_gA7nfyYc,1,Setting,not_a_rep,NotCounted:ArmsNotVisible,,Unknown,2533,3267,3733,coach talking to camera
+set_feet_hand_pos_uO_gA7nfyYc,2,Setting,not_a_rep,NotCounted:ArmsNotVisible,,Unknown,8733,9467,10400,coach talking to camera
+set_feet_hand_pos_uO_gA7nfyYc,3,Setting,exclude,Counted,80,Unknown,18400,19667,20667,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,4,Setting,exclude,Counted,58,Side,22733,24733,25467,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,5,Setting,exclude,Counted,69,Side,26667,29133,29933,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,6,Setting,not_a_rep,NotCounted:ArmsNotVisible,,Unknown,34733,35533,36067,coach talking
+set_posture_drill_NdNe5eam9mg,1,Setting,exclude,Counted,55,Unknown,9600,10267,12867,title shot cut into the rep
+set_posture_drill_NdNe5eam9mg,2,Setting,correct,Counted,79,Side,12900,14233,18967,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,3,Setting,exclude,Counted,60,Unknown,21167,22700,23067,two people overlap
+set_posture_drill_NdNe5eam9mg,4,Setting,exclude,Counted,74,Side,23267,24500,25000,two people overlap
+set_posture_drill_NdNe5eam9mg,5,Setting,correct,Counted,66,Side,25333,26733,27267,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,6,Setting,correct,Counted,52,Side,27300,27867,30767,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,7,Setting,correct,Counted,60,Side,30800,31467,32633,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,8,Setting,correct,Counted,57,Side,43767,45167,45600,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,9,Setting,correct,Counted,60,Side,45633,46433,47100,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,10,Setting,correct,Counted,59,Side,47133,47767,48167,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,11,Setting,correct,Counted,85,Side,48200,48933,49933,coach-led posture drill demonstration
+set_stop_like_this_a2n_2sf0PEw,1,Setting,exclude,NotCounted:UseBothHands,,Unknown,67,267,800,from behind; the fault is finger shape
+spike_3_mistakes_tcBOv8l4tNY,1,Spiking,exclude,TooSmall,,Unknown,67,867,1200,not covered by a label
+spike_3_mistakes_tcBOv8l4tNY,2,Spiking,exclude,NotCounted:ArmsNotVisible,,Unknown,2667,4467,4867,not covered by a label
+spike_3_mistakes_tcBOv8l4tNY,3,Spiking,exclude,TooSmall,,Unknown,4933,5800,8333,not covered by a label
+spike_arm_swing__3fuUY1QUWc,1,Spiking,exclude,Counted,56,Unknown,0,543,1120,not covered by a label
+spike_arm_swing__3fuUY1QUWc,2,Spiking,exclude,Counted,94,Unknown,1596,2750,4855,not covered by a label
+spike_drill,1,Spiking,not_a_rep,NotCounted:ArmsNotVisible,,Unknown,0,267,600,holding the ball
+spike_drill,2,Spiking,correct,Counted,67,Front,667,1467,2467,coach spiking-drill demonstration
+spike_drill,3,Spiking,correct,Counted,75,Front,4467,5333,8600,coach spiking-drill demonstration
+spike_drill,4,Spiking,drill,Counted,60,Front,8667,9667,12467,kneeling ground drill
+spike_drill,5,Spiking,correct,Counted,67,Front,12533,14000,15000,coach spiking-drill demonstration
+spike_drill,6,Spiking,correct,Counted,67,Front,15267,16933,18000,coach spiking-drill demonstration
+spike_drill,7,Spiking,correct,Counted,67,Front,18067,19067,19800,coach spiking-drill demonstration
+spike_drill,8,Spiking,exclude,Counted,77,Unknown,20333,24200,24667,cut to other footage
+spike_drill,9,Spiking,correct,Counted,67,Front,26200,27133,27933,coach spiking-drill demonstration
+spike_drill,10,Spiking,exclude,Counted,56,Side,29000,29733,29933,cut between scenes
+spike_drill,11,Spiking,correct,Counted,71,Side,30533,32067,32533,coach spiking-drill demonstration
+spike_drill,12,Spiking,drill,NotCounted:ArmsNotVisible,,Side,32600,33133,33333,arm swing only without a jump
+spike_drill,13,Spiking,correct,Counted,67,Front,40933,42600,43533,coach spiking-drill demonstration
+spike_drill,14,Spiking,not_a_rep,TooSmall,,Front,50867,51467,51733,holding the ball overhead while talking
+spike_drill,15,Spiking,correct,Counted,73,Front,51800,52667,54267,caption: swing like this
+spike_drill,16,Spiking,exclude,Counted,37,Side,54733,55400,55667,cut between scenes
+spike_drill_OTie-mYhSeI,1,Spiking,exclude,NotCounted:ReachOverhead,,Unknown,0,1800,2200,intro with both cross and tick on screen
+spike_drill_OTie-mYhSeI,2,Spiking,faulty,Counted,89,Unknown,3200,4067,4467,caption: Do not spike like this
+spike_drill_OTie-mYhSeI,3,Spiking,not_a_rep,NotCounted:ReachOverhead,,Front,4600,5467,6333,arms crossed under a red cross
+spike_drill_OTie-mYhSeI,4,Spiking,faulty,NotCounted:ArmsNotVisible,,Unknown,6867,8067,8533,caption: Do not spike like this
+spike_drill_OTie-mYhSeI,5,Spiking,correct,Counted,93,Unknown,8600,12267,12600,caption: the second step should be like this with a tick
+spike_drill_OTie-mYhSeI,6,Spiking,correct,Counted,60,Front,12867,14333,17067,caption: both hands should swing back with a tick
+spike_goofy_foot_A7OR6w_jkHo,1,Spiking,faulty,Counted,60,Unknown,0,800,2067,red cross; caption goofy footed approach
+spike_goofy_foot_A7OR6w_jkHo,2,Spiking,faulty,NotCounted:ArmsNotVisible,,Side,2133,7000,7400,caption goofy footed approach
+spike_goofy_foot_A7OR6w_jkHo,3,Spiking,not_a_rep,TooSmall,,Side,7733,8333,9000,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,4,Spiking,not_a_rep,TooSmall,,Unknown,9067,9800,10067,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,5,Spiking,not_a_rep,TooSmall,,Front,10133,11200,11600,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,6,Spiking,not_a_rep,TooSmall,,Front,12200,13067,13400,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,7,Spiking,not_a_rep,TooSmall,,Front,13467,14067,14733,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,8,Spiking,exclude,Counted,60,Unknown,14800,15867,16200,cut between scenes; no mark
+spike_goofy_foot_A7OR6w_jkHo,9,Spiking,exclude,NotCounted:ReachOverhead,,Unknown,16267,17267,17467,no mark
+spike_hitting_mistake_XFhTsivo-AE,1,Spiking,exclude,Counted,100,Unknown,67,1247,2393,not covered by a label
+spike_low_elbow_fix_ezjyU7qE2d4,1,Spiking,faulty,NotCounted:ReachOverhead,,Side,0,200,667,red cross; caption elbow leading low
+spike_low_elbow_fix_ezjyU7qE2d4,2,Spiking,exclude,TooSmall,,Unknown,7800,8333,8667,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,3,Spiking,exclude,NotCounted:ArmsNotVisible,,Side,8733,9667,9800,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,4,Spiking,exclude,Counted,78,Unknown,9867,12133,12733,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,5,Spiking,drill,Counted,96,Front,24200,24867,26400,kneeling wall spiking drill
+spike_low_elbow_fix_ezjyU7qE2d4,6,Spiking,drill,Counted,88,Unknown,26467,26800,28067,kneeling wall spiking drill
+spike_mistake_drill_9eMTwlf6IIs,1,Spiking,exclude,Counted,76,Unknown,1667,2733,4933,not covered by a label
+spike_touch_angles_CHxqsrltxLI,1,Spiking,exclude,Counted,51,Unknown,0,667,933,intro title over the rep
+spike_touch_angles_CHxqsrltxLI,2,Spiking,drill,Counted,67,Front,28200,29067,29733,spike from a box
+spike_touch_angles_CHxqsrltxLI,3,Spiking,drill,Counted,67,Front,46933,47933,48667,spike from a box
+spike_touch_angles_CHxqsrltxLI,4,Spiking,drill,Counted,62,Unknown,52733,53600,56867,spike from a box
+spike_touch_angles_CHxqsrltxLI,5,Spiking,not_a_rep,TooSmall,,Unknown,58600,59800,60067,climbing onto the box
+spike_touch_angles_CHxqsrltxLI,6,Spiking,drill,Counted,37,Front,60133,60867,62000,spike from a box
+spike_wrong_right_4GlweC-yf7I,1,Spiking,exclude,NotCounted:ReachOverhead,,Side,0,640,1200,not covered by a label
+spike_wrong_right_4GlweC-yf7I,2,Spiking,exclude,TooSmall,,Front,1280,2080,2640,not covered by a label
+spike_wrong_right_4GlweC-yf7I,3,Spiking,exclude,NotCounted:ArmsNotVisible,,Front,13040,13280,13760,not covered by a label

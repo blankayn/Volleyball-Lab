@@ -1,0 +1,107 @@
+clip,n,label,evidence
+serve_beginner_tips,1,correct,green tick over the serve
+serve_master_d9jvFhp40xU,1,exclude,title card cut into the rep
+serve_master_d9jvFhp40xU,2,exclude,filmed from behind and far; no mark
+serve_master_d9jvFhp40xU,3,not_a_rep,standing holding the ball (Step 3 approaching)
+serve_master_d9jvFhp40xU,4,not_a_rep,standing holding the ball; cross for the approach stance
+serve_master_d9jvFhp40xU,5,not_a_rep,standing holding the ball; tick for the approach stance
+serve_master_d9jvFhp40xU,6,faulty,Step 4 timing serve followed by a red cross
+serve_master_d9jvFhp40xU,7,not_a_rep,landing and walking after the serve
+serve_master_d9jvFhp40xU,8,correct,Step 4 timing serve followed by a green tick
+serve_master_d9jvFhp40xU,9,exclude,The End; from behind; no mark
+serve_mistake_jzTkgrKTy44,1,exclude,arm swing demonstration from behind; no mark
+serve_mistake_jzTkgrKTy44,2,exclude,arm swing without the ball; no mark
+serve_mistake_jzTkgrKTy44,3,not_a_rep,toss demonstration without a swing
+serve_mistake_jzTkgrKTy44,4,not_a_rep,holding the ball at the hip
+serve_mistake_jzTkgrKTy44,5,not_a_rep,toss-hand hold with a tick; no swing
+serve_mistake_jzTkgrKTy44,6,correct,full serve from behind followed by a green tick
+serve_mistake_jzTkgrKTy44,7,not_a_rep,wrist and hand demonstration
+serve_mistake_jzTkgrKTy44,8,not_a_rep,wrist and hand demonstration
+serve_no_shot_put_LxCE7z_RdmA,1,drill,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,2,drill,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,3,drill,wall drill shown as the fix for the shot-put serve
+serve_no_shot_put_LxCE7z_RdmA,4,drill,wall drill shown as the fix for the shot-put serve
+serve_aim_basics_o-7UwxE0Zh8,1,exclude,talking shot cut into the serve
+serve_aim_basics_o-7UwxE0Zh8,2,exclude,talking shot cut into the serve
+serve_aim_basics_o-7UwxE0Zh8,3,not_a_rep,coach talking
+serve_aim_basics_o-7UwxE0Zh8,4,correct,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,5,not_a_rep,coach talking
+serve_aim_basics_o-7UwxE0Zh8,6,not_a_rep,coach talking
+serve_aim_basics_o-7UwxE0Zh8,7,not_a_rep,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,8,correct,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,9,not_a_rep,coach talking
+serve_aim_basics_o-7UwxE0Zh8,10,not_a_rep,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,11,not_a_rep,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,12,not_a_rep,standing with the ball
+serve_aim_basics_o-7UwxE0Zh8,13,correct,coach demonstration serve in an aiming tutorial
+serve_aim_basics_o-7UwxE0Zh8,14,correct,coach demonstration serve in an aiming tutorial
+serve_spin_tip_fl0EMpCtDW8,*,not_a_rep,coach talking to a group
+set_posture_drill_NdNe5eam9mg,1,exclude,title shot cut into the rep
+set_posture_drill_NdNe5eam9mg,2,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,3,exclude,two people overlap
+set_posture_drill_NdNe5eam9mg,4,exclude,two people overlap
+set_posture_drill_NdNe5eam9mg,5,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,6,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,7,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,8,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,9,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,10,correct,coach-led posture drill demonstration
+set_posture_drill_NdNe5eam9mg,11,correct,coach-led posture drill demonstration
+set_feet_hand_pos_uO_gA7nfyYc,1,not_a_rep,coach talking to camera
+set_feet_hand_pos_uO_gA7nfyYc,2,not_a_rep,coach talking to camera
+set_feet_hand_pos_uO_gA7nfyYc,3,exclude,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,4,exclude,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,5,exclude,group of children practising; no mark
+set_feet_hand_pos_uO_gA7nfyYc,6,not_a_rep,coach talking
+set_do_this_instead_NJPJXUjqM6o,1,faulty,caption: Do not set like this
+set_do_this_instead_NJPJXUjqM6o,2,correct,caption: Set like this
+set_do_this_instead_NJPJXUjqM6o,3,correct,caption: Set like this with a green tick
+set_accidental_backset_-KCkQOIIXII,*,not_a_rep,coach talking
+set_stop_like_this_a2n_2sf0PEw,1,exclude,from behind; the fault is finger shape
+spike_drill,1,not_a_rep,holding the ball
+spike_drill,2,correct,coach spiking-drill demonstration
+spike_drill,3,correct,coach spiking-drill demonstration
+spike_drill,4,drill,kneeling ground drill
+spike_drill,5,correct,coach spiking-drill demonstration
+spike_drill,6,correct,coach spiking-drill demonstration
+spike_drill,7,correct,coach spiking-drill demonstration
+spike_drill,8,exclude,cut to other footage
+spike_drill,9,correct,coach spiking-drill demonstration
+spike_drill,10,exclude,cut between scenes
+spike_drill,11,correct,coach spiking-drill demonstration
+spike_drill,12,drill,arm swing only without a jump
+spike_drill,13,correct,coach spiking-drill demonstration
+spike_drill,14,not_a_rep,holding the ball overhead while talking
+spike_drill,15,correct,caption: swing like this
+spike_drill,16,exclude,cut between scenes
+spike_drill_OTie-mYhSeI,1,exclude,intro with both cross and tick on screen
+spike_drill_OTie-mYhSeI,2,faulty,caption: Do not spike like this
+spike_drill_OTie-mYhSeI,3,not_a_rep,arms crossed under a red cross
+spike_drill_OTie-mYhSeI,4,faulty,caption: Do not spike like this
+spike_drill_OTie-mYhSeI,5,correct,caption: the second step should be like this with a tick
+spike_drill_OTie-mYhSeI,6,correct,caption: both hands should swing back with a tick
+spike_goofy_foot_A7OR6w_jkHo,1,faulty,red cross; caption goofy footed approach
+spike_goofy_foot_A7OR6w_jkHo,2,faulty,caption goofy footed approach
+spike_goofy_foot_A7OR6w_jkHo,3,not_a_rep,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,4,not_a_rep,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,5,not_a_rep,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,6,not_a_rep,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,7,not_a_rep,footwork drill without a hit
+spike_goofy_foot_A7OR6w_jkHo,8,exclude,cut between scenes; no mark
+spike_goofy_foot_A7OR6w_jkHo,9,exclude,no mark
+spike_touch_angles_CHxqsrltxLI,1,exclude,intro title over the rep
+spike_touch_angles_CHxqsrltxLI,2,drill,spike from a box
+spike_touch_angles_CHxqsrltxLI,3,drill,spike from a box
+spike_touch_angles_CHxqsrltxLI,4,drill,spike from a box
+spike_touch_angles_CHxqsrltxLI,5,not_a_rep,climbing onto the box
+spike_touch_angles_CHxqsrltxLI,6,drill,spike from a box
+spike_low_elbow_fix_ezjyU7qE2d4,1,faulty,red cross; caption elbow leading low
+spike_low_elbow_fix_ezjyU7qE2d4,2,exclude,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,3,exclude,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,4,exclude,match footage with many players
+spike_low_elbow_fix_ezjyU7qE2d4,5,drill,kneeling wall spiking drill
+spike_low_elbow_fix_ezjyU7qE2d4,6,drill,kneeling wall spiking drill
+block_hits_progress_wcQEnd_RKh0,*,wrong_skill,the tracked person is the hitter attacking a block pad
+block_pads_tips_gpPlv9aVx70,*,wrong_skill,the tracked person is the hitter attacking a block pad
+block_time_jump_7EcxrjwIxGc,*,not_a_rep,coach talking and gesturing on sand
+block_too_short_DxMCo3uJJ3I,*,not_a_rep,coach demonstrating footwork without a block jump

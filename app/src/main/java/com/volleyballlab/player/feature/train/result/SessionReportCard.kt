@@ -30,10 +30,9 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CoachAssessment
 import com.volleyballlab.player.domain.model.CoachAssessmentEngine
 import com.volleyballlab.player.domain.model.CueId
-import com.volleyballlab.player.domain.model.CueUnit
+import com.volleyballlab.player.pose.analysis.CuePlainWords
 import com.volleyballlab.player.domain.model.ObservedCue
 import com.volleyballlab.player.ui.theme.vbColors
-import java.util.Locale
 
 /**
  * The report in three plain parts: what went well, what to practice next, and
@@ -101,10 +100,17 @@ internal fun SessionReportCard(repCount: Int, assessment: CoachAssessment, modif
                 tint = MaterialTheme.colorScheme.tertiary,
                 title = stringResource(R.string.session_report_progress),
             ) {
-                Text(stringResource(R.string.session_report_closer, stringResource(change.cue.label),
-                    formatMeasurement(change.previousMedian, change.cue.unit),
-                    formatMeasurement(change.currentMedian, change.cue.unit)),
-                    style = MaterialTheme.typography.bodyMedium)
+                // Plain words, not "from 142° to 151°": the zone each side of the change.
+                val before = CuePlainWords.read(change.cue, change.previousMedian)
+                val now = CuePlainWords.read(change.cue, change.currentMedian)
+                Text(
+                    if (before.zone != now.zone) {
+                        stringResource(R.string.session_report_closer, stringResource(change.cue.label), before.verdict, now.verdict)
+                    } else {
+                        stringResource(R.string.session_report_closer_still, stringResource(change.cue.label), now.verdict)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
 
@@ -130,9 +136,3 @@ private fun ReportPart(icon: ImageVector, tint: Color, title: String, content: @
 
 private val ObservedCue.inRange: Int
     get() = measuredReps - belowReference - aboveReference
-
-private fun formatMeasurement(value: Float, unit: CueUnit): String = when (unit) {
-    CueUnit.Degrees -> String.format(Locale.getDefault(), "%.0f°", value)
-    CueUnit.Metres -> String.format(Locale.getDefault(), "%.2f m", value)
-    CueUnit.Ratio -> String.format(Locale.getDefault(), "%.0f%%", value * 100)
-}

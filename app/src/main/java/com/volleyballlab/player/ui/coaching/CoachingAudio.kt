@@ -134,11 +134,12 @@ class CoachingAudio(
         priority: SpeechPriority = SpeechPriority.Correction,
         expiresInMs: Long = 5_000,
         style: SpeechStyle = SpeechStyle.Guidance,
+        repeatText: String = text,
     ) = onMain {
         if (!canPlay() || guidance.active) { onDropped(key); return@onMain }
         if (_status.value == CoachingAudioStatus.Degraded) initializeEngine()
         val now = SystemClock.elapsedRealtime()
-        if (pacer.offer(CoachingSpeech(text, key, priority, now, expiresInMs, style), now)) pump()
+        if (pacer.offer(CoachingSpeech(text, key, priority, now, expiresInMs, style, repeatText), now)) pump()
     }
 
     fun setCorrectionWindow(open: Boolean) = onMain {
@@ -319,7 +320,7 @@ class CoachingAudio(
         val result = engine?.speak(message.text, id, true, message.style)
         if (result == true) {
             pacer.markSpoken(message, now)
-            if (message.style == SpeechStyle.Correction) lastCorrection = message.text
+            if (message.style == SpeechStyle.Correction) lastCorrection = message.repeatText
             watch(id, SpeechTiming.watchdogMs(message.text) + 2_000)
         } else {
             utteranceFailed(id)

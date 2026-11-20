@@ -42,6 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.pose.analysis.CoachPhrasebook
+import com.volleyballlab.player.pose.analysis.Facing
+import com.volleyballlab.player.pose.analysis.FacingGuide
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
 import com.volleyballlab.player.pose.analysis.LiveRepFeedback
@@ -81,8 +84,6 @@ internal fun CaptureControls(
     onRetrySave: () -> Unit = {},
     modifier: Modifier = Modifier,
     cameraContent: @Composable () -> Unit = {},
-    onTestVoice: () -> Unit = {},
-    voiceTesting: Boolean = false,
     voiceStatus: String = "",
     onEndEarly: () -> Unit = onStop,
     coachingPlan: LiveCoachingPlan? = null,
@@ -90,6 +91,8 @@ internal fun CaptureControls(
     /** A coach line that is not about one rep, shown beside the rep verdict. */
     coachLine: String? = null,
     onSayAgain: () -> Unit = {},
+    /** Why the movement that just ended was not counted as a rep, while that is still current. */
+    notCounted: String? = null,
 ) {
     var confirmEarly by remember { mutableStateOf(false) }
     if (confirmEarly) AlertDialog(
@@ -131,14 +134,17 @@ internal fun CaptureControls(
                         Box(Modifier.size(cameraWidth, cameraWidth / 0.75f).testTag("capture-camera-content")) { cameraContent() }
                     }
                     val recording = state as? CaptureUiState.Recording
-                    val view = recording?.displayedProgress(guidedOptions)?.angle ?: CameraAngle.Front
+                    val progress = recording?.displayedProgress(guidedOptions)
+                    val view = progress?.angle ?: CameraAngle.Front
+                    // The view and which way to face for it, so "Side view" is never a guess.
+                    val facing = FacingGuide.label(progress?.facing ?: Facing.Forward)
                     Surface(
-                        modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                        modifier = Modifier.align(Alignment.TopStart).padding(12.dp).testTag("capture-view-label"),
                         shape = RoundedCornerShape(12.dp), color = Color(0xBB111821),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                     ) {
                         Text(
-                            if (guidedOptions.enabled) viewLabel(view) else stringResource(R.string.capture_free_practice),
+                            if (guidedOptions.enabled) "${viewLabel(view)} · $facing" else stringResource(R.string.capture_free_practice),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                             style = MaterialTheme.typography.labelLarge, color = Color.White,
                         )
@@ -176,6 +182,9 @@ internal fun CaptureControls(
                             SessionClosing(state, coachingPlan)
                         } else if (state.rotation != null) {
                             SessionRotationGuidance(state.rotation, onRetryAngle, onSkipAngle)
+                        } else if (notCounted != null && !livePosture.trackingLost) {
+                            // Ahead of the last rep's verdict, which does not describe this movement.
+                            SessionNotCounted(notCounted, coachingPlan)
                         } else if (repFeedback != null && !livePosture.trackingLost) {
                             SessionRepFeedback(repFeedback, coachingPlan, coachLine)
                         } else {
@@ -218,11 +227,6 @@ internal fun CaptureControls(
                         }
                         FramingGuidance(state.quality, state.autoStartArmed)
                         if (voiceStatus.isNotEmpty()) Text(voiceStatus, color = Color.White, style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = onTestVoice, enabled = !voiceTesting) {
-                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, null, Modifier.size(18.dp), tint = LiveSessionProgress)
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(if (voiceTesting) R.string.coaching_test_voice_loading else R.string.coaching_test_voice), color = Color.White)
-                        }
                         if (audioUnavailable) TextButton(onClick = onSpeechSettings) {
                             Text(stringResource(R.string.capture_speech_settings), color = Color.White)
                         }
@@ -253,6 +257,23 @@ private fun SessionRepFeedback(feedback: LiveRepFeedback, plan: LiveCoachingPlan
                 Text("Coach says: $it", style = MaterialTheme.typography.bodySmall, color = LiveSessionProgress)
             }
             plan?.let { Text(it.focusLabel, style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted) }
+        }
+    }
+}
+
+/**
+ * A movement that finished but was not the skill. It shows what was missing and
+ * deliberately no rep number, verdict or score: nothing was earned.
+ */
+@Composable
+private fun SessionNotCounted(text: String, plan: LiveCoachingPlan?) {
+    Surface(Modifier.fillMaxWidth().testTag("live-not-counted"), shape = RoundedCornerShape(20.dp), color = LiveSessionPanel) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(plan?.title ?: "Your live coach", style = MaterialTheme.typography.labelMedium, color = LiveSessionMuted)
+            Text("Not counted", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFFD166),
+                fontWeight = FontWeight.SemiBold)
+            Text(text.removePrefix(CoachPhrasebook.NOT_COUNTED_PREFIX), style = MaterialTheme.typography.bodyMedium,
+                color = Color.White)
         }
     }
 }

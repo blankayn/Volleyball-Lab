@@ -1,4 +1,4 @@
-# Mobile replay performance investigation — 31 October 2026
+# Mobile replay performance investigation — 3 November 2026
 
 The v2 Blocking candidate has been tested on a physical Infinix X6833B running
 Android 14. These are software compatibility/performance measurements on a
@@ -77,10 +77,38 @@ retains the platform reader as an initial fallback. It never switches decoders
 mid-action after emitting frames. `RecordedVideoAnalyzer` uses this shared
 reader; the pose model and coaching thresholds remain unchanged.
 
-Before calling this optimization verified, rerun all rotation/color/scale and
-timestamp device tests, the 100-inference replay with the 150 ms assertion,
-Python recomputation and the exact-model deployment audit. The wireless phone
-disconnected during the color-fix update; the earlier installed version remains
-intact. The integrated final build is under verification locally. Independent
-coach labels, separated-player calibration/test data and whole-skill validation
-remain separate release requirements even if the timing budget passes.
+## Full-run correction and physical acceptance
+
+The first bound-model full sequential run failed at **195.27 ms p95**. It also
+exposed a one-pixel scaled-width mismatch (479 versus 480); destination dimensions
+now round rather than truncate. That run constructed seven GPU detectors and
+retained input bitmaps across rounds. It is preserved in
+`outputs/blocking-bound-sequential-full-raw.json` and its instrumentation log.
+
+The final harness uses one detector per session, matching capture lifetime,
+while resetting action feature windows between replays. The actual detector now
+closes copied bitmap inputs after submission, and capture also releases inputs
+when the detector is unavailable. The physical test asserts input release and
+checks actual asynchronous pose outputs. Because detector lifetime and input
+ownership also changed, the final speed difference cannot be attributed solely
+to the decoder.
+
+On 3 November the final physical run passed **all six device tests**, including
+four decoder checks and the 150 ms full-pipeline assertion. It completed 100
+inferences over the replay with zero invalid outputs: p50 **108.41 ms**, p95
+**132.20 ms**, decode p95 **45.21 ms**, pose p95 **89.06 ms**. The single detector's
+construction took **7.13 seconds**, reported separately and still a startup cost.
+This measures the public replay path, not live-camera throughput or accuracy.
+Artifacts: `outputs/blocking-sustained-phone-instrumentation.log` (`OK (6 tests)`)
+and `outputs/blocking-sustained-phone-pipeline-raw.json`.
+
+Desktop recomputation passed for the exact model and pose-asset hashes:
+maximum feature difference 0.000015259, normalized-input difference 8.35e-7,
+and probability difference 5.96e-8. Verified evidence is in
+`outputs/blocking-sustained-phone-pipeline-verified.json`. The subsequent
+`outputs/blocking-sustained-deployment-readiness.json` remains false because
+locked player-separated evaluation, calibrated acceptance and independent
+review evidence are missing; its blocking reasons contain no phone timing gate.
+
+Independent coach labels, separated-player calibration/test data and whole-skill
+validation remain release requirements despite passing this timing budget.

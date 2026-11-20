@@ -27,7 +27,7 @@
 
     <!-- Skill selection -->
     <string name="skill_select_title">Choose a skill</string>
-    <string name="skill_select_subtitle">Five fundamentals. Practice each skill in one spot.</string>
+    <string name="skill_select_subtitle">Five fundamentals. Each one is a three-step path scored by the camera.</string>
     <string name="skill_serving">Serving</string>
     <string name="skill_receiving">Receiving</string>
     <string name="skill_setting">Setting</string>
@@ -158,8 +158,6 @@
     <string name="position_middle">Middle blocker</string>
     <string name="position_opposite">Opposite</string>
     <string name="position_libero">Libero</string>
-    <string name="hand_left">Left</string>
-    <string name="hand_right">Right</string>
     <string name="profile_name_unset">Add your name</string>
     <string name="profile_position_unset">Position not set</string>
     <string name="profile_edit_name">Edit name</string>
@@ -167,7 +165,6 @@
     <string name="profile_save">Save</string>
     <string name="profile_section_play">How you play</string>
     <string name="profile_position_label">Position</string>
-    <string name="profile_hand_label">Dominant hand</string>
     <string name="profile_details_note">Both optional. Tap a selected chip again to clear it.</string>
     <string name="profile_section_totals">Training totals</string>
     <string name="profile_total_sessions">Sessions</string>
@@ -281,6 +278,10 @@
         <item quantity="one">%1$d rep</item>
         <item quantity="other">%1$d reps</item>
     </plurals>
+    <plurals name="drill_library_count">
+        <item quantity="one">%1$d drill</item>
+        <item quantity="other">%1$d drills</item>
+    </plurals>
     <plurals name="result_reps_detected">
         <item quantity="one">%1$d rep detected</item>
         <item quantity="other">%1$d reps detected</item>
@@ -375,7 +376,7 @@
     <string name="home_focus_suggestion">Focus suggestion</string>
     <string name="home_focus_improve">Improve your</string>
     <string name="home_focus_source_assessment">From your assessment</string>
-    <string name="home_focus_source_measured">From your recorded sets</string>
+    <string name="home_focus_source_measured">From your recent sets</string>
     <string name="home_assessment_title">Take the quick assessment</string>
     <string name="home_assessment_body">Three short questions. It is what tells the app which skill to suggest first.</string>
     <string name="home_skill_level">Level %1$d · %2$s</string>

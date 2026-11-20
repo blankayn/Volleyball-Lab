@@ -1,0 +1,68 @@
+{
+  "created_at_utc": "2026-09-19T12:18:53.705533+00:00",
+  "metric": "2-D MPJPE on 12 directly matched LSP/MediaPipe joints",
+  "why_12_not_14": "MediaPipe has no direct neck or head-top landmarks; they are not fabricated.",
+  "classification_accuracy_is_separate": true,
+  "dataset": "Leeds Sports Pose (LSP)",
+  "split": "test",
+  "selected_images": 1000,
+  "detected_images": 894,
+  "image_detection_rate": 0.894,
+  "coordinate_convention": "LSP MATLAB annotations converted from one-based pixel centres to OpenCV/MediaPipe zero-based coordinates by subtracting 1 from x and y.",
+  "app_model_hash_verified": true,
+  "app_model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "selected_visible_ground_truth_joints": 10957,
+  "visible_ground_truth_joints": 9850,
+  "reliable_predicted_joints": 9388,
+  "reliable_joint_coverage": 0.9530964467005076,
+  "detection_inclusive_reliable_joint_coverage": 0.8568038696723556,
+  "all_detected_joint_metrics": {
+    "mpjpe_pixels": 7.183652990022482,
+    "mpjpe_pixels_image_cluster_bootstrap_95": [
+      6.157511430806051,
+      8.447212497459132
+    ],
+    "unshifted_coordinate_sensitivity_mpjpe_pixels": 7.027694908472801,
+    "median_pixels": 3.1197176818815504,
+    "p90_pixels": 12.745420580476964,
+    "mpjpe_fraction_image_diagonal": 0.03469605793444952,
+    "mpjpe_torso_normalized": 0.15525906110957843,
+    "pck_at_0_2_torso": 0.8768691903543042,
+    "detection_inclusive_pck_at_0_2_torso": 0.8058685155379472
+  },
+  "app_quality_gated_metrics": {
+    "minimum_visibility": 0.4,
+    "mpjpe_pixels": 5.872150466190898,
+    "mpjpe_pixels_image_cluster_bootstrap_95": [
+      5.3766159210813145,
+      6.388897147205988
+    ],
+    "mpjpe_torso_normalized": 0.1246696416129518
+  },
+  "per_joint_mpjpe_pixels": {
+    "right_ankle": 9.135442072541643,
+    "right_knee": 7.555023926799591,
+    "right_hip": 6.362030414814741,
+    "left_hip": 6.2408310915281895,
+    "left_knee": 7.1371444683773655,
+    "left_ankle": 9.123602608489337,
+    "right_wrist": 7.783704363554813,
+    "right_elbow": 7.061700767941475,
+    "right_shoulder": 5.509979133024045,
+    "left_shoulder": 5.118613744367052,
+    "left_elbow": 7.050916065545976,
+    "left_wrist": 7.783596568234041
+  },
+  "model": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\pose_landmarker_full.task",
+  "model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "joints_sha256": "ebc25f87d09ffff9843e31352aaf1553ee3bdca3b60b6c28f64d2b3ec1b2ed72",
+  "per_image_csv": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\lsp_test_per_image.csv",
+  "per_joint_csv": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\lsp_test_per_joint.csv",
+  "overlay_audit": "C:\\Users\\Rotchelle\\Documents\\Codex\\2026-09-08\\files-mentioned-by-the-user-to\\outputs\\volleyball-training\\mpjpe\\results\\lsp_test_overlay_audit",
+  "limitations": [
+    "LSP is a general sports image benchmark, not Volleyball Lab footage.",
+    "LSP provides 2-D annotations, so this is 2-D MPJPE rather than 3-D millimetres.",
+    "MPJPE evaluates landmark placement; it does not measure proper/fault classification.",
+    "MPJPE is conditional on successful pose detection; detection-inclusive coverage and PCK are reported separately."
+  ]
+}

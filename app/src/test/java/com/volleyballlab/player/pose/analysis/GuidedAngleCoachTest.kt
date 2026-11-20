@@ -98,6 +98,70 @@ class GuidedAngleCoachTest {
         assertFalse(gate.update(side.copy(fullBodyVisible = false), CameraAngle.Side, 2400, Side.Left))
     }
 
+    /** The side fixture, with the model's depth guess making the shoulders look [square] (0 edge-on, 1 square-on). */
+    private fun sideWithDepth(square: Float, hipSquare: Float): PoseFrame {
+        val side = GuidedPoseFixtures.side()
+        val world = side.world.toMutableList()
+        fun put(left: BodyPoint, right: BodyPoint, sq: Float, width: Float) {
+            val x = width * sq / 2f
+            val z = width * kotlin.math.sqrt(1f - sq * sq) / 2f
+            world[left.ordinal] = world[left.ordinal].copy(x = -x, z = -z)
+            world[right.ordinal] = world[right.ordinal].copy(x = x, z = z)
+        }
+        put(BodyPoint.LEFT_SHOULDER, BodyPoint.RIGHT_SHOULDER, square, 0.36f)
+        put(BodyPoint.LEFT_HIP, BodyPoint.RIGHT_HIP, hipSquare, 0.20f)
+        return side.copy(world = world)
+    }
+
+    @Test fun `overlapping shoulders and hips on screen confirm side when the depth guess looks square`() {
+        // Depth alone (0.6) would refuse this; the picture shows a clear side view.
+        val estimate = detector.detect(sideWithDepth(square = 0.6f, hipSquare = 0.4f))
+        assertEquals(CameraAngle.Side, estimate.angle)
+        assertTrue(estimate.confidence >= 0.70f)
+        // Depth that flatly says square-on still wins.
+        assertEquals(CameraAngle.Unknown, detector.detect(sideWithDepth(square = 0.9f, hipSquare = 0.4f)).angle)
+    }
+
+    @Test fun `side confidence grows with how clearly the frame is side on`() {
+        val wideOnScreen = sideWithDepth(square = 0.10f, hipSquare = 0.10f).let { frame ->
+            val image = frame.image.toMutableList()
+            listOf(BodyPoint.LEFT_SHOULDER, BodyPoint.LEFT_HIP).forEach { image[it.ordinal] = image[it.ordinal].copy(x = 0.40f) }
+            listOf(BodyPoint.RIGHT_SHOULDER, BodyPoint.RIGHT_HIP).forEach { image[it.ordinal] = image[it.ordinal].copy(x = 0.60f) }
+            frame.copy(image = image)
+        }
+        val clear = detector.detect(wideOnScreen)
+        val borderline = detector.detect(sideWithDepth(square = 0.43f, hipSquare = 0.43f).let { frame ->
+            frame.copy(image = wideOnScreen.image)
+        })
+        assertEquals(CameraAngle.Side, clear.angle)
+        assertEquals(CameraAngle.Side, borderline.angle)
+        assertTrue(clear.confidence >= 0.70f)
+        assertTrue(borderline.confidence < clear.confidence)
+    }
+
+    @Test fun `one noisy frame inside a held second does not restart the gate`() {
+        val gate = OrientationStabilityGate()
+        val side = detector.detect(GuidedPoseFixtures.side())
+        val results = (0L..1000L step 50L).map { t ->
+            gate.update(if (t == 500L) OrientationEstimate() else side, CameraAngle.Side, t, Side.Left)
+        }
+        assertFalse(results.dropLast(1).any { it })
+        assertTrue(results.last())
+    }
+
+    @Test fun `mostly refused frames or a tracking gap never open the gate`() {
+        val side = detector.detect(GuidedPoseFixtures.side())
+        val flickering = OrientationStabilityGate()
+        val flicker = (0L..2000L step 50L).map { t ->
+            flickering.update(if ((t / 50L) % 3L == 0L) OrientationEstimate() else side, CameraAngle.Side, t, Side.Left)
+        }
+        assertFalse(flicker.any { it })
+        val gapped = OrientationStabilityGate()
+        (0L..600L step 50L).forEach { gapped.update(side, CameraAngle.Side, it, Side.Left) }
+        assertFalse(gapped.update(side, CameraAngle.Side, 1200L, Side.Left))
+        assertFalse(gapped.update(side, CameraAngle.Side, 1600L, Side.Left))
+    }
+
     @Test fun `all skills mask face dependent cues on rear and all cues on unknown`() {
         val rear = GuidedPoseFixtures.rear()
         val faceCues = setOf(CueId.ServeTrunkLean, CueId.PassTrunkAngle, CueId.SpikeTrunkDrive, CueId.BlockPenetration, CueId.SetHandsAboveForehead)

@@ -30,10 +30,24 @@ class DrillLibraryViewModel(
     private val drills: DrillRepository,
     private val practice: DrillPracticeRepository,
     private val access: DrillAccessController,
+    profiles: ProfileRepository,
+    sessions: SessionRepository,
+    assessments: AssessmentRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DrillLibraryState())
     val state = _state.asStateFlow()
     private var loadJob: Job? = null
+
+    /** "Recommended for you": only computed while the library is on screen. */
+    val picks: StateFlow<List<DrillPick>> =
+        combine(state, profiles.profile, sessions.sessions, assessments.assessment) { library, profile, camera, assessment ->
+            if (!library.loaded) emptyList()
+            else DrillRecommendations.pick(library.drills, library.entitlement::canStart,
+                SkillRecommendation.from(assessment, profile, camera), profile.position, camera, library.history)
+        }.catch { failure ->
+            if (failure is CancellationException) throw failure
+            emit(emptyList())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     init { refresh() }
     fun refresh() {
         loadJob?.cancel()
@@ -66,7 +80,10 @@ class DrillLibraryViewModel(
     }
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer { DrillLibraryViewModel(appContainer.drillRepository, appContainer.drillPracticeRepository, appContainer.drillAccessController) }
+            initializer {
+                DrillLibraryViewModel(appContainer.drillRepository, appContainer.drillPracticeRepository, appContainer.drillAccessController,
+                    appContainer.profileRepository, appContainer.sessionRepository, appContainer.assessmentRepository)
+            }
         }
     }
 }

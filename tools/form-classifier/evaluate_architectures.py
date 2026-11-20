@@ -14,31 +14,8 @@ from tensorflow import keras
 import train
 
 
-def build(name: str, timesteps: int, features: int, classes: int) -> keras.Model:
-    regularizer = keras.regularizers.l2(1e-3)
-    inputs = keras.Input((timesteps, features))
-    if name == "gap-linear":
-        x = keras.layers.GlobalAveragePooling1D()(inputs)
-    elif name == "gap-dense8":
-        x = keras.layers.GlobalAveragePooling1D()(inputs)
-        x = keras.layers.Dense(8, activation="relu", kernel_regularizer=regularizer)(x)
-        x = keras.layers.Dropout(0.15)(x)
-    elif name == "conv8":
-        x = keras.layers.Conv1D(8, 5, padding="same", activation="relu", kernel_regularizer=regularizer)(inputs)
-        x = keras.layers.GlobalAveragePooling1D()(x)
-    elif name == "conv12x8":
-        x = keras.layers.Conv1D(12, 5, padding="same", activation="relu", kernel_regularizer=regularizer)(inputs)
-        x = keras.layers.MaxPooling1D(2)(x)
-        x = keras.layers.Conv1D(8, 3, padding="same", activation="relu", kernel_regularizer=regularizer)(x)
-        x = keras.layers.GlobalAveragePooling1D()(x)
-    elif name == "flat-dense16":
-        x = keras.layers.Flatten()(inputs)
-        x = keras.layers.Dense(16, activation="relu", kernel_regularizer=regularizer)(x)
-        x = keras.layers.Dropout(0.3)(x)
-    else:
-        raise ValueError(f"Unknown architecture: {name}")
-    outputs = keras.layers.Dense(classes, activation="softmax", kernel_regularizer=regularizer)(x)
-    return keras.Model(inputs, outputs, name=name)
+# Defined in train.py so train.py --architecture exports exactly what is compared here.
+build = train.build_named
 
 
 def main() -> int:

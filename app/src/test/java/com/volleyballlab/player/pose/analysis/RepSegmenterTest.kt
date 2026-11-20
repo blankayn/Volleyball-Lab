@@ -38,6 +38,48 @@ class RepSegmenterTest {
         assertTrue(reps.single().endMs > reps.single().contactMs)
     }
 
+    /**
+     * A block set as filmed on a phone (20 Nov groupmate recording): arms down while
+     * setting up and while walking to the phone at the end, hands resting at the
+     * chest between jumps. The arms-down seconds set the session's low percentile,
+     * so the hands-at-chest rest never reaches the release line. Before the
+     * rep-floor release this saved zero reps while the live counter counted them.
+     */
+    @Test
+    fun `a set that rests above the session release line still saves every rep`() {
+        val armsDown = -0.9f
+        val rest = -0.3f
+        val top = 0.85f
+        fun ramp(from: Float, to: Float, frames: Int) = (1..frames).map { from + (to - from) * it / frames }
+        val signal = buildList {
+            repeat(45) { add(armsDown) }                       // 1.5 s setting up
+            addAll(ramp(armsDown, rest, 10))
+            repeat(6) {
+                repeat(24) { add(rest) }                       // hands at the chest
+                addAll(ramp(rest, top, 12)); repeat(6) { add(top) }
+                addAll(ramp(top, rest, 15))
+            }
+            addAll(ramp(rest, armsDown, 10))
+            repeat(60) { add(armsDown) }                       // 2 s walking to the phone
+        }
+        val frames = signal.indices.map { TestPoses.wellFramedStanding(it * 33L) }
+        val analyzer = object : SkillAnalyzer {
+            override val skill = Skill.Blocking
+            override fun segmentationSignal(frame: PoseFrame) = signal[(frame.timestampMs / 33L).toInt()]
+            override fun measure(cue: FormCue, window: RepWindow): Float? = null
+        }
+
+        val reps = segmenter.segment(frames, analyzer)
+
+        assertEquals(6, reps.size)
+        reps.forEach { rep ->
+            assertEquals(top, signal[(rep.contactMs / 33L).toInt()], 0.05f)
+            assertTrue(rep.endMs > rep.contactMs)
+        }
+        // No two reps share a frame.
+        reps.zipWithNext().forEach { (a, b) -> assertTrue(a.endMs < b.startMs) }
+    }
+
     @Test
     fun `tracking gaps do not stitch two partial actions into one repetition`() {
         val original = syntheticFrames(cycles = 4)

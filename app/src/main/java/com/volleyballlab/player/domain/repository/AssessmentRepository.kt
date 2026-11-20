@@ -1,6 +1,9 @@
 package com.volleyballlab.player.domain.repository
 
 import com.volleyballlab.player.domain.model.SkillAssessment
+import com.volleyballlab.player.domain.model.TrainingSetup
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,6 +22,10 @@ import kotlinx.coroutines.flow.Flow
  * out.
  */
 interface AssessmentRepository {
+
+    val trainingSetup: Flow<TrainingSetup?> get() = flowOf(null)
+    suspend fun saveTrainingSetup(setup: TrainingSetup) { error("Training setup is unavailable.") }
+    suspend fun currentHasOnboarded(): Boolean = hasOnboarded.first()
 
     /** The stored answers. [SkillAssessment.Unanswered] when there are none. */
     val assessment: Flow<SkillAssessment>

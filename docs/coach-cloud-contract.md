@@ -326,3 +326,22 @@ Android and the coach portal publish newly chosen pictures here. Opening an
 account or saving unrelated profile edits does not publish an older private
 picture. A published empty picture marks removal. Importing an existing private
 portrait requires explicit approval from its owner.
+
+### Progress, Coach Reel, and session feedback
+
+The Android Home overview shows Progress from saved sessions: latest form score,
+valid repetitions and a measured cue comparison when the same drill and known
+camera views are available. It no longer displays period selectors or a weekly
+activity strip. The Progress tab retains per-skill summaries and session history.
+
+The coach web viewer derives Coach Reel clip selections from the existing private
+`review.json` and plays their ranges from `video.mp4`. Selection follows Android's
+six-clip limit, visible-joint checks, severity ordering, required-view reservation
+and overlap exclusion. Legacy reviews without rep boundaries use the same bounded
+issue-based fallback. No new public video URL or extra upload is required.
+
+The web UI calls session notes **Coach Feedback**, shows **Awaiting Coach Feedback**
+or **Feedback Provided**, and displays feedback inside its matching session.
+Storage remains in `notes`; sending feedback retains the existing atomic queue
+acknowledgement. Android session details subscribe to that session's feedback.
+Automated reel guidance is separate from the professional coach's assessment.

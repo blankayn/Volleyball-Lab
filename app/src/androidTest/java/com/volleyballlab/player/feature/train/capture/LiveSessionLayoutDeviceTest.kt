@@ -55,7 +55,6 @@ class LiveSessionLayoutDeviceTest {
     private var finishes = 0
     private var mutes = 0
     private var switches = 0
-    private var voiceTests = 0
     private val repFeedback = mutableStateOf<LiveRepFeedback?>(null)
 
     @Test fun personalizedRepFeedbackStaysBelowTheCamera() {
@@ -133,13 +132,6 @@ class LiveSessionLayoutDeviceTest {
         screenshot("live-session-detailed-coaching.png")
     }
 
-    @Test fun setupOffersAVoiceTestBeforeSteppingAway() {
-        state.value = CaptureUiState.Framing(PoseQuality.NotYetKnown)
-        show()
-        compose.onNodeWithText("Test coach voice").performScrollTo().assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(1, voiceTests) }
-    }
-
     @Test fun stateChangesDoNotRemountCameraAndFramingRetainsLensControl() {
         state.value = CaptureUiState.Framing(PoseQuality.NotYetKnown)
         show()
@@ -173,7 +165,6 @@ class LiveSessionLayoutDeviceTest {
                             onRetryAngle = { retries++ }, onSkipAngle = { skips++ },
                             onStart = {}, onStop = { finishes++ }, onCancelCountdown = {},
                             onRetry = {}, onUseDemo = {}, onSwitchCamera = { switches++ }, onBack = {},
-                            onTestVoice = { voiceTests++ },
                             modifier = (if (compact) Modifier.size(320.dp, 640.dp) else Modifier.fillMaxSize()).testTag("live-session-root"),
                             cameraContent = {
                                 DisposableEffect(Unit) { cameraMounts++; onDispose { cameraDisposals++ } }
