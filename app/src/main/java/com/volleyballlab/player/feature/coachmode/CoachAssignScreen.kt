@@ -719,7 +719,7 @@ private fun Stepper(
                 Text(
                     text = value.toString(),
                     style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
-                    fontWeight = FontWeight.ExtraBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 1,

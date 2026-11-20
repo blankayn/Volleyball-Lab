@@ -211,7 +211,7 @@ enum class CoachTabDestination(
         CoachDashboardRoute,
         CoachDashboardRoute::class,
         R.string.nav_coach_dashboard,
-        Icons.Rounded.Dashboard,
+        Icons.Rounded.Home,
     ),
     Roster(
         CoachRosterRoute,

@@ -38,9 +38,9 @@ internal fun Modifier.coachWorkspaceBackground(): Modifier = background(
 )
 
 @Composable
-internal fun WorkspaceEyebrow(label: String, color: Color = MaterialTheme.colorScheme.primary) {
-    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, letterSpacing = 1.3.sp,
-        fontWeight = FontWeight.SemiBold, color = color)
+internal fun WorkspaceEyebrow(label: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    // Sentence case and normal tracking: a quiet context line, not a shouted label.
+    Text(label, style = MaterialTheme.typography.bodyMedium, color = color)
 }
 
 /** Scrolls at narrow widths and large text sizes instead of compressing labels. */

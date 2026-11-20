@@ -454,7 +454,7 @@
     <string name="role_coach_blurb">Review your team\'s sessions and set them drills.</string>
 
     <!-- Coach tabs -->
-    <string name="nav_coach_dashboard">Team</string>
+    <string name="nav_coach_dashboard">Home</string>
     <string name="nav_coach_roster">Players</string>
     <string name="nav_coach_assign">Assign</string>
     <string name="nav_coach_account">Account</string>

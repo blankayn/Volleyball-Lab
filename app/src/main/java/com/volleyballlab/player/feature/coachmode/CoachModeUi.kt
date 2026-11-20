@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +52,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
@@ -262,22 +264,26 @@ fun CoachRowCard(
 // Hero
 // ---------------------------------------------------------------------------
 
-/** Compact dashboard greeting with the team name as context. */
+/** Dashboard greeting: who this is for, the team name under it, and an optional action on the right. */
 @Composable
 fun CoachHero(
     lead: String,
     body: String?,
     modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-    Column(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        WorkspaceEyebrow(body?.takeIf { it.isNotBlank() } ?: "Coach workspace")
-        Text(lead.trimEnd(',', ' ') + ", coach", style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-        Text("Your team, ready for the next step.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(modifier.fillMaxWidth().padding(start = CoachGutter, end = 8.dp, top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(lead.trimEnd(',', ' ') + ", coach", style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            body?.takeIf { it.isNotBlank() }?.let { WorkspaceEyebrow(it) }
+        }
+        trailing?.invoke()
     }
 }
 
-/** Consistent tab heading with a quiet eyebrow and optional action. */
+/** A tab's heading: the title, a short muted line under it, and an optional action. */
 @Composable
 fun CoachPageHeader(
     title: String,
@@ -285,10 +291,10 @@ fun CoachPageHeader(
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            WorkspaceEyebrow(subtitle?.takeIf { it.isNotBlank() } ?: "Coach workspace")
-            Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+    Row(modifier.fillMaxWidth().padding(horizontal = CoachGutter, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            subtitle?.takeIf { it.isNotBlank() }?.let { WorkspaceEyebrow(it) }
         }
         trailing?.invoke()
     }
@@ -306,11 +312,8 @@ fun CoachDetailHeader(
 ) {
     val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
     val back: @Composable () -> Unit = {
-        Surface(shape = CoachChipShape, color = MaterialTheme.colorScheme.surfaceContainerLowest,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back), Modifier.size(21.dp))
-            }
+        IconButton(onClick = onBack, modifier = Modifier.size(48.dp).offset(x = (-12).dp)) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.cd_back))
         }
     }
     val identity: @Composable (Modifier) -> Unit = { textModifier ->
@@ -362,19 +365,28 @@ data class CoachStat(
     val onAction: (() -> Unit)? = null,
 )
 
-/** A two-column summary that stays readable on narrow screens. */
+/**
+ * The team's headline numbers in one card: a single row of four when there is room,
+ * two rows of two on a narrow phone or with large text.
+ */
 @Composable
 fun CoachStatStrip(
     stats: List<CoachStat>,
     modifier: Modifier = Modifier,
 ) {
     if (stats.isEmpty()) return
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
     CoachCard(modifier, padding = 0.dp) {
-        stats.chunked(2).forEachIndexed { index, pair ->
-            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
-            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { stat -> StatColumn(stat, Modifier.weight(1f)) }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val perRow = if (maxWidth / fontScale >= 330.dp) stats.size.coerceAtMost(4) else 2
+            Column {
+                stats.chunked(perRow).forEachIndexed { index, row ->
+                    if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
+                    Row(Modifier.fillMaxWidth().padding(6.dp)) {
+                        row.forEach { stat -> StatColumn(stat, Modifier.weight(1f)) }
+                        repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
@@ -382,14 +394,11 @@ fun CoachStatStrip(
 
 @Composable
 private fun StatColumn(stat: CoachStat, modifier: Modifier = Modifier) {
-    Column(modifier.clip(CoachInnerShape).tappable(stat.onAction).padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stat.value, style = MaterialTheme.typography.headlineMedium.merge(VbTabularNumerals),
-                fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            Icon(stat.icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text(stat.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (stat.onAction != null && stat.actionLabel != null) Text(stat.actionLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+    Column(modifier.clip(CoachInnerShape).tappable(stat.onAction).padding(horizontal = 10.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(stat.value, style = MaterialTheme.typography.titleLarge.merge(VbTabularNumerals), fontWeight = FontWeight.SemiBold)
+        Text(stat.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (stat.onAction != null && stat.actionLabel != null) Text(stat.actionLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -564,7 +573,7 @@ fun CoachSectionCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
@@ -591,7 +600,7 @@ fun CoachSectionTitle(
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
@@ -647,7 +656,7 @@ fun CoachDashedEmpty(
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
@@ -774,7 +783,7 @@ fun CoachInfoRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -822,7 +831,7 @@ fun InitialsAvatar(
         Text(
             text = initials ?: "·",
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = colors.ink,
         )
     }

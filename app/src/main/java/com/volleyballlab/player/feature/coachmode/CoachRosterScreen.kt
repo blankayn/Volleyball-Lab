@@ -278,7 +278,7 @@ private fun RequestRow(
                     text = member.playerName.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.coach_unnamed),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -338,7 +338,7 @@ private fun PlayerRow(
                     text = snapshot.member.playerName.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.coach_unnamed),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 // Beside the name rather than at the end of the row, because the end
@@ -363,7 +363,7 @@ private fun PlayerRow(
             Text(
                 text = score.toString(),
                 style = MaterialTheme.typography.titleMedium.merge(VbTabularNumerals),
-                fontWeight = FontWeight.ExtraBold,
+                fontWeight = FontWeight.SemiBold,
                 color = scoreColor(score),
             )
         }
