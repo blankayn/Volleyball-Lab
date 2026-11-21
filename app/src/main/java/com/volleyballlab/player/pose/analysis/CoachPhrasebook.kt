@@ -46,8 +46,8 @@ object CoachPhrasebook {
             }
             LiveRepVerdict.Partial -> listOf("Only part of that one was in view.",
                 "Counted. Only part of your form was visible.")
-            LiveRepVerdict.Unrated -> listOf("Counted. I couldn't judge that one from here.",
-                "I couldn't judge that one. Keep going.")
+            LiveRepVerdict.Unrated -> listOf("Keep your hands and feet in frame for the next rep.",
+                "Leave enough room for the camera to see your full reach.")
         }
         val start = Math.floorMod(index, variants.size)
         return variants.indices.map { variants[(start + it) % variants.size] }.first { it != previous || variants.size == 1 }

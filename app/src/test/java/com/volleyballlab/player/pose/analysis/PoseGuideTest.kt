@@ -49,7 +49,10 @@ class PoseGuideTest {
         assertTrue(PoseGuide.limbs(frame, posture, Skill.Receiving, CameraAngle.Unknown).isEmpty())
         assertTrue(PoseGuide.limbs(frame, posture.copy(trackingLost = true), Skill.Receiving, CameraAngle.Front).isEmpty())
         assertTrue(PoseGuide.limbs(frame, posture.copy(modelUncertain = true), Skill.Receiving, CameraAngle.Front).isEmpty())
+        // A hidden arm gets no guide; the arm in view still can, as it is the one measured.
         val hidden = frame.copy(image = frame.image.mapIndexed { index, point -> if (index == BodyPoint.LEFT_WRIST.ordinal) point.copy(visibility = .1f) else point })
-        assertTrue(PoseGuide.limbs(hidden, posture, Skill.Receiving, CameraAngle.Front).isEmpty())
+        val shown = PoseGuide.limbs(hidden, posture, Skill.Receiving, CameraAngle.Front)
+        assertTrue(shown.size < PoseGuide.limbs(frame, posture, Skill.Receiving, CameraAngle.Front).size)
+        assertTrue(shown.none { it.anchor == hidden.image(BodyPoint.LEFT_SHOULDER) })
     }
 }

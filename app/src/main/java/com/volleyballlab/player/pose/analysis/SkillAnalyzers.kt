@@ -7,7 +7,6 @@ import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.elbowAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.hittingSide
-import com.volleyballlab.player.pose.analysis.AnalyzerSupport.meanElbowAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.meanKneeAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.shoulderAngle
 import com.volleyballlab.player.pose.model.BodyPoint
@@ -264,9 +263,9 @@ class ReceiveAnalyzer : SkillAnalyzer {
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         return when (cue.id) {
-            CueId.PassPlatformStraight -> meanElbowAngle(contact)
+            CueId.PassPlatformStraight -> AnalyzerSupport.visibleElbowAngle(contact)
             CueId.PassPlatformHeight -> platformBelowHorizontal(contact)
-            CueId.PassKneeFlexion -> meanKneeAngle(contact)
+            CueId.PassKneeFlexion -> AnalyzerSupport.visibleKneeAngle(contact)
             CueId.PassTrunkAngle -> Angles.trunkForwardLean(contact)
             CueId.PassShouldersLevel -> Angles.shoulderTilt(contact)
             else -> null
@@ -372,7 +371,7 @@ class SetAnalyzer : SkillAnalyzer {
         // Measured during loading, not contact: the leg drive that powers a set
         // happens before the hands touch the ball, and by contact the athlete is
         // already extending.
-        CueId.SetKneeFlexion -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.SetKneeFlexion -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
 
         else -> null
     }
@@ -448,7 +447,7 @@ class SetAnalyzer : SkillAnalyzer {
      * against 161° from the front.
      */
     private fun setElbowAngle(frame: PoseFrame): Float? =
-        AnalyzerSupport.observedElbowAngle(frame) ?: meanElbowAngle(frame)
+        AnalyzerSupport.observedElbowAngle(frame) ?: AnalyzerSupport.visibleElbowAngle(frame)
 
     /** The frame of most bent or straightest elbows among [frames] with both hands up at the face. */
     private fun extremeElbow(frames: List<PoseFrame>, straightest: Boolean, elbow: (PoseFrame) -> Float?): PoseFrame? {
@@ -472,10 +471,8 @@ class SetAnalyzer : SkillAnalyzer {
      */
     private fun handsAboveNoseMetres(frame: PoseFrame): Float {
         val nose = frame.world(BodyPoint.NOSE)
-        val wrists = Angles.midpoint(
-            frame.world(BodyPoint.LEFT_WRIST),
-            frame.world(BodyPoint.RIGHT_WRIST),
-        )
+        // The wrists the camera saw: side-on the far hand is behind the head.
+        val wrists = AnalyzerSupport.visibleWrists(frame)
         // World y increases downward, so "above" is the nose's y minus the wrists'.
         return nose.y - wrists.y
     }
@@ -537,7 +534,7 @@ class SpikeAnalyzer : SkillAnalyzer {
         OverheadSwing.hitIndex(frames, signalPeak)
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
-        CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
         CueId.SpikeArmExtension -> window.frameFor(RepPhase.Contact)
             ?.let { elbowAngle(it, hittingSide(it)) }
 
@@ -697,13 +694,13 @@ class BlockAnalyzer : SkillAnalyzer {
     }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
-        CueId.BlockArmExtension -> window.frameFor(RepPhase.Contact)?.let { meanElbowAngle(it) }
+        CueId.BlockArmExtension -> window.frameFor(RepPhase.Contact)?.let { AnalyzerSupport.visibleElbowAngle(it) }
         CueId.BlockHandSeparation -> window.frameFor(RepPhase.Contact)?.let {
             Angles.distance(it.world(BodyPoint.LEFT_WRIST), it.world(BodyPoint.RIGHT_WRIST))
         }
 
         CueId.BlockPenetration -> window.frameFor(RepPhase.Contact)?.let { penetrationMetres(it) }
-        CueId.BlockKneeLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.BlockKneeLoad -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
         else -> null
     }
 
@@ -741,10 +738,7 @@ class BlockAnalyzer : SkillAnalyzer {
      * faces, which is the honest reason to decline.
      */
     private fun penetrationMetres(frame: PoseFrame): Float? {
-        val wrists = Angles.midpoint(
-            frame.world(BodyPoint.LEFT_WRIST),
-            frame.world(BodyPoint.RIGHT_WRIST),
-        )
+        val wrists = AnalyzerSupport.visibleWrists(frame)
         return Angles.alongForward(frame, Angles.shoulderCentre(frame), wrists)
     }
 

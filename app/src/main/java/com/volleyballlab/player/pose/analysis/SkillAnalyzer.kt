@@ -289,6 +289,24 @@ internal object AnalyzerSupport {
         bilateralMean { side -> elbowAngle(frame, side) }
 
     /**
+     * Mean knee angle over the legs the camera saw ([AngleCuePolicy.visibleSides]),
+     * for scored cues. Side-on the far leg is behind the body and its estimated
+     * angle is a guess; with both legs seen this equals [meanKneeAngle].
+     */
+    fun visibleKneeAngle(frame: PoseFrame): Float? = AngleCuePolicy.visibleSides(frame) { listOf(hip(it), knee(it), ankle(it)) }
+        .mapNotNull { kneeAngle(frame, it) }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+
+    /** Mean elbow angle over the arms the camera saw; [meanElbowAngle] when both were. */
+    fun visibleElbowAngle(frame: PoseFrame): Float? = AngleCuePolicy.visibleSides(frame) { listOf(shoulder(it), elbow(it), wrist(it)) }
+        .mapNotNull { elbowAngle(frame, it) }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+
+    /** Mean world position of the wrists the camera saw; both when it saw neither. */
+    fun visibleWrists(frame: PoseFrame): com.volleyballlab.player.pose.model.Landmark {
+        val wrists = AngleCuePolicy.visibleSides(frame) { listOf(wrist(it)) }.map { frame.world(wrist(it)) }
+        return if (wrists.size == 1) wrists.single() else Angles.midpoint(wrists[0], wrists[1])
+    }
+
+    /**
      * Height of the higher wrist above the shoulder line, in normalised image
      * units. Positive means above.
      *
