@@ -278,7 +278,8 @@ class CoachDirectorTest {
             CueId.SetHandsAboveForehead to ("above your forehead" to "closer"), CueId.BlockHandSeparation to ("apart" to "closer"),
             CueId.ServeTossArmLift to ("higher" to "Lower"), CueId.BlockPenetration to ("farther forward" to "back"),
         )
-        val sided = setOf(CueId.ServeContactArmExtension, CueId.ServeReachHeight, CueId.SpikeArmExtension, CueId.ServeTossArmLift)
+        val sided = setOf(CueId.ServeContactArmExtension, CueId.ServeReachHeight, CueId.SpikeArmExtension,
+            CueId.SpikeElbowHeight, CueId.ServeTossArmLift)
         Skill.All.flatMap { FormCueCatalog.forSkill(it) }.forEach { cue ->
             val below = CoachPhrasebook.instructions(cue.id, cue.target.start - 1).first()
             val above = CoachPhrasebook.instructions(cue.id, cue.target.endInclusive + 1).first()

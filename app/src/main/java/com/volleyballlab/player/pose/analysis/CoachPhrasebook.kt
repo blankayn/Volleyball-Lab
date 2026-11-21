@@ -93,6 +93,7 @@ object CoachPhrasebook {
             CueId.PassShouldersLevel -> "Keep your shoulders level above your forearm platform"
             CueId.PassPlatformStraight -> "Straighten both elbows and join your forearms"
             CueId.ServeReachHeight -> "Lift your hitting elbow and reach upward"
+            CueId.SpikeElbowHeight -> "Keep your hitting elbow at shoulder height or higher"
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Extend your raised arm above your shoulder"
             CueId.SetExtensionFollowThrough -> "Extend your arms through the finish"
             CueId.BlockArmExtension -> "Reach upward with both arms straighter"
@@ -111,6 +112,7 @@ object CoachPhrasebook {
         CueId.SetElbowFlexion -> "elbow bend"
         CueId.SetExtensionFollowThrough -> "arm finish"
         CueId.ServeReachHeight -> "overhead reach"
+        CueId.SpikeElbowHeight -> "elbow height"
         CueId.BlockPenetration -> "forward reach"
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.BlockArmExtension -> "arm extension"
         CueId.SpikeJumpHeight -> "knee bend and reach"
@@ -144,6 +146,7 @@ object CoachPhrasebook {
                 if (below) "Your hands are staying back a bit. Reach a little farther forward."
                 else "Your hands are reaching a bit far forward. Bring them slightly back."
             CueId.ServeReachHeight -> "Your ${arm}hitting elbow is staying a bit low. Lift it and reach upward."
+            CueId.SpikeElbowHeight -> "Your ${arm}hitting elbow is dropping as you draw back. Keep it up at shoulder height."
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
                 "Your ${arm}arm is staying a bit bent overhead. Extend it above your shoulder."
             CueId.SetExtensionFollowThrough -> "Your arms are stopping short at the finish. Extend them through."
@@ -166,6 +169,7 @@ object CoachPhrasebook {
         CueId.ServeTossArmLift -> if (below) "guiding arm higher" else "guiding arm lower"
         CueId.BlockPenetration -> if (below) "hands forward" else "hands back"
         CueId.ServeReachHeight -> "elbow up, then reach"
+        CueId.SpikeElbowHeight -> "elbow up, then swing"
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "long arm overhead"
         CueId.SetExtensionFollowThrough -> "finish long"
         CueId.BlockArmExtension -> "long arms up"
@@ -198,6 +202,7 @@ object CoachPhrasebook {
             if (below) "Feel like you're reaching over a fence in front of you."
             else "Feel your arms stack up over your shoulders."
         CueId.ServeReachHeight -> "Feel your elbow climb past your ear before you reach."
+        CueId.SpikeElbowHeight -> "Feel your elbow pulled back high, like drawing a bow."
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Feel long from your hip to your fingertips."
         CueId.SetExtensionFollowThrough -> "Feel your arms finish long, like pushing the ceiling away."
         CueId.BlockArmExtension -> "Feel both arms grow long, pressing up to the ceiling."
@@ -277,6 +282,9 @@ object CoachPhrasebook {
             CueId.ServeReachHeight ->
                 "Slowly lift your raised elbow, then reach upward from your shoulder." to
                     "Reset your arm, raise your elbow, then rehearse the overhead reach."
+            CueId.SpikeElbowHeight ->
+                "Slowly draw your hitting arm back, keeping the elbow level with your shoulder or above." to
+                    "Reset your arm, lift your elbow high and back, then swing."
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
                 "Slowly straighten your raised elbow as you reach above your shoulder." to
                     "Reset your arm, lift your elbow, then extend through the overhead reach."

@@ -463,6 +463,8 @@ class SpikeAnalyzer : SkillAnalyzer {
         CueId.SpikeArmExtension -> window.frameFor(RepPhase.Contact)
             ?.let { elbowAngle(it, hittingSide(it)) }
 
+        CueId.SpikeElbowHeight -> cockedArm(window)?.let { (frame, side) -> upperArmAboveHorizontal(frame, side) }
+
         CueId.SpikeJumpHeight -> window.frameFor(RepPhase.Contact)
             ?.let { Angles.hipRiseMetres(it, window.baselineHipImageY) }
 
@@ -470,6 +472,76 @@ class SpikeAnalyzer : SkillAnalyzer {
             ?.let { Angles.trunkForwardLean(it) }
 
         else -> null
+    }
+
+    /**
+     * A dropped elbow happens before contact, so the elbow-height cue is read at
+     * the cocked arm, not on a phase frame. At contact a dropped-elbow swing still
+     * finishes straight: a groupmate's 15 dropped-elbow swings measured 160-173°
+     * of arm extension there and passed it every time.
+     */
+    override fun cueFrame(cue: FormCue, window: RepWindow): PoseFrame? =
+        if (cue.id == CueId.SpikeElbowHeight) cockedArm(window)?.first else super.cueFrame(cue, window)
+
+    /**
+     * The cocked arm: in the second before contact, with the hitting hand above
+     * the shoulder line and that arm seen by the camera, the frame where its elbow
+     * is most bent (a 3-frame mean, so one jittery frame cannot win).
+     *
+     * Side-on only. From the side the upper arm swings across the picture and its
+     * angle reads true; from the front it swings toward the camera. On public
+     * clips the side-on reading told correct from dropped-elbow spikes (AUC 0.69,
+     * 36 correct, 32 dropped) and the front-on one did not (14 clips). The
+     * hitting side is the higher hand at contact, as for the arm-extension cue.
+     *
+     * The view is the rep's majority, not the contact frame's: a hitter's
+     * shoulders turn to the camera as the arm comes through, so a side-on swing
+     * read Front at contact on 6 of a groupmate's first 8 reps while most of each
+     * rep read Side.
+     */
+    private fun cockedArm(window: RepWindow): Pair<PoseFrame, Side>? {
+        val contact = window.frameFor(RepPhase.Contact) ?: return null
+        val views = window.frames.map { CameraOrientationDetector().detect(it).angle }
+        if (views.count { it == CameraAngle.Side } <= views.count { it == CameraAngle.Front || it == CameraAngle.Rear }) return null
+        val side = hittingSide(contact)
+        val raised = window.frames.filter {
+            // Not limited to frames where the arm is clearly seen: a dropped elbow
+            // sits behind the body, partly hidden, and a visibility filter kept
+            // only the high positions (a groupmate's dropped swings read +42 to
+            // +59° with it). The tracker's image estimate there is what is read.
+            it.timestampMs <= contact.timestampMs && contact.timestampMs - it.timestampMs <= COCK_SEARCH_MS &&
+                (AnalyzerSupport.wristRise(it, side) ?: return@filter false) > 0f
+        }
+        val bends = raised.map { imageElbowAngle(it, side) }
+        val cocked = bends.indices.mapNotNull { i ->
+            val near = (maxOf(0, i - 1)..minOf(bends.lastIndex, i + 1)).mapNotNull { bends[it] }
+            if (bends[i] == null || near.isEmpty()) null else i to near.average()
+        }.minByOrNull { it.second } ?: return null
+        return raised[cocked.first] to side
+    }
+
+    private fun pixels(frame: PoseFrame, point: BodyPoint) = frame.image(point).let {
+        it.copy(x = it.x * frame.imageWidth, y = it.y * frame.imageHeight, z = 0f)
+    }
+
+    private fun imageElbowAngle(frame: PoseFrame, side: Side): Float? = Angles.at(
+        pixels(frame, AnalyzerSupport.shoulder(side)), pixels(frame, AnalyzerSupport.elbow(side)),
+        pixels(frame, AnalyzerSupport.wrist(side)),
+    )
+
+    /** Degrees the upper arm points above horizontal in the picture: 0 with the elbow level with the shoulder. */
+    private fun upperArmAboveHorizontal(frame: PoseFrame, side: Side): Float? {
+        val shoulder = pixels(frame, AnalyzerSupport.shoulder(side))
+        val elbow = pixels(frame, AnalyzerSupport.elbow(side))
+        val dx = abs(elbow.x - shoulder.x)
+        val up = shoulder.y - elbow.y
+        if (dx < 1e-3f && abs(up) < 1e-3f) return null
+        return Math.toDegrees(kotlin.math.atan2(up, dx).toDouble()).toFloat()
+    }
+
+    private companion object {
+        /** How far before contact the cocked arm is looked for. */
+        const val COCK_SEARCH_MS = 1_000L
     }
 }
 

@@ -246,6 +246,8 @@
     <string name="cue_spike_load_tip">Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.</string>
     <string name="cue_spike_arm">Swing through full extension</string>
     <string name="cue_spike_arm_tip">Extend the raised arm above your shoulder within a comfortable range.</string>
+    <string name="cue_spike_elbow">Keep the hitting elbow high</string>
+    <string name="cue_spike_elbow_tip">As you draw the hitting arm back, keep the elbow at or above shoulder height.</string>
     <string name="cue_spike_jump">Get off the floor</string>
     <string name="cue_spike_jump_tip">Drive the hips upward. Measured against your own standing hip height.</string>
     <string name="cue_spike_trunk">Control the trunk</string>

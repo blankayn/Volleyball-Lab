@@ -382,6 +382,7 @@ class CoachDerivationsTest {
         val SPIKE_CUES = listOf(
             CueId.SpikeApproachLoad,
             CueId.SpikeArmExtension,
+            CueId.SpikeElbowHeight,
             CueId.SpikeJumpHeight,
             CueId.SpikeTrunkDrive,
         )

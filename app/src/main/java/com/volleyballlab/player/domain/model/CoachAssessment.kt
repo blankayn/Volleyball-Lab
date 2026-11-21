@@ -172,6 +172,7 @@ object CoachAssessmentEngine {
             CueId.SetExtensionFollowThrough, CueId.BlockArmExtension ->
                 "Rehearse extending the elbows through the indicated phase, using slow controlled repetitions first."
             CueId.ServeReachHeight -> "Rehearse reaching higher with the hitting arm while keeping your trunk controlled."
+            CueId.SpikeElbowHeight -> "Rehearse drawing the hitting arm back with the elbow at or above shoulder height, slowly first."
             CueId.ServeTossArmLift -> if (low) "Lift the guiding arm a little higher from the same ready position."
                 else "Use a slightly lower guiding-arm lift and repeat it from the same ready position."
             CueId.PassShouldersLevel -> "Reset with level shoulders and keep the forearm platform steady."
@@ -187,6 +188,7 @@ object CoachAssessmentEngine {
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
             "An extended elbow supports a longer reach through the observed overhead position."
         CueId.ServeReachHeight -> "The shoulder angle describes how high the hitting arm reaches relative to the trunk."
+        CueId.SpikeElbowHeight -> "Elbow height as the hitting arm draws back sets up a high, fast swing; a dropped elbow pulls the swing down."
         CueId.ServeTrunkLean, CueId.SpikeTrunkDrive -> "Trunk position changes the alignment of the reaching arm and body."
         CueId.ServeTossArmLift -> "A repeatable guiding-arm preparation gives you a consistent position to rehearse."
         CueId.PassPlatformStraight -> "Straighter elbows help form a stable forearm platform."

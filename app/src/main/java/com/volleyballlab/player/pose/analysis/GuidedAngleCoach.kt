@@ -199,7 +199,7 @@ object AngleCuePolicy {
     }
 
     fun measuredSide(cueId: CueId, frame: PoseFrame): Side? {
-        if (cueId !in setOf(CueId.ServeContactArmExtension, CueId.ServeReachHeight, CueId.SpikeArmExtension)) return null
+        if (cueId !in setOf(CueId.ServeContactArmExtension, CueId.ServeReachHeight, CueId.SpikeArmExtension, CueId.SpikeElbowHeight)) return null
         if (!isReliable(frame, BodyPoint.LEFT_WRIST) || !isReliable(frame, BodyPoint.RIGHT_WRIST)) return null
         if (abs(frame.image(BodyPoint.LEFT_WRIST).y - frame.image(BodyPoint.RIGHT_WRIST).y) < 0.03f) return null
         val hitting = AnalyzerSupport.hittingSide(frame)
@@ -226,7 +226,7 @@ object AngleCuePolicy {
         val legs = setOf(BodyPoint.LEFT_HIP, BodyPoint.RIGHT_HIP, BodyPoint.LEFT_KNEE, BodyPoint.RIGHT_KNEE, BodyPoint.LEFT_ANKLE, BodyPoint.RIGHT_ANKLE)
         val torso = setOf(BodyPoint.LEFT_SHOULDER, BodyPoint.RIGHT_SHOULDER, BodyPoint.LEFT_HIP, BodyPoint.RIGHT_HIP)
         return when (cueId) {
-            CueId.ServeContactArmExtension, CueId.SpikeArmExtension,
+            CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.SpikeElbowHeight,
             CueId.PassPlatformStraight, CueId.SetElbowFlexion,
             CueId.SetExtensionFollowThrough, CueId.BlockArmExtension -> arms()
             CueId.ServeReachHeight, CueId.ServeTossArmLift -> arms(withHips = true)

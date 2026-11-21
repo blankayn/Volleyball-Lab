@@ -37,7 +37,8 @@ class ReferencePoseTest {
                 val rep = SessionScorer().scoreRep(window, skill, angle = CameraAngle.Front)
                 // The figure draws a start and a finish. Whatever is read after
                 // the finish, on the way back down, it does not claim to show.
-                FormCueCatalog.poseCues(skill).filter { it.phase != RepPhase.FollowThrough }.forEach { cue ->
+                // Elbow height is read side-on only, and this figure faces the camera.
+                FormCueCatalog.poseCues(skill).filter { it.phase != RepPhase.FollowThrough && it.id != CueId.SpikeElbowHeight }.forEach { cue ->
                     val scored = rep.cueScores.first { it.cueId == cue.id }
                     assertNotNull("$skill ${cue.id} could not be measured on the figure ($hitting-handed)", scored.measured)
                     assertTrue("$skill ${cue.id} measured ${scored.measured} on the figure, outside ${cue.target}",

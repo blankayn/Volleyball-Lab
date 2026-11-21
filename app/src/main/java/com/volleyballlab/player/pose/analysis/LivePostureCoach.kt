@@ -210,5 +210,5 @@ class LivePostureCoach(
         return lastEmitted
     }
 
-    companion object { val NON_LIVE_CUES: Set<CueId> = setOf(CueId.SpikeJumpHeight) }
+    companion object { val NON_LIVE_CUES: Set<CueId> = setOf(CueId.SpikeJumpHeight, CueId.SpikeElbowHeight) }
 }

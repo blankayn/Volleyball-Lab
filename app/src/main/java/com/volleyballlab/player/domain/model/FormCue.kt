@@ -62,6 +62,7 @@ enum class CueId {
     // Spiking
     SpikeApproachLoad,
     SpikeArmExtension,
+    SpikeElbowHeight,
     SpikeJumpHeight,
     SpikeTrunkDrive,
 
@@ -268,7 +269,7 @@ object FormCueCatalog {
             unit = CueUnit.Degrees,
             target = 80f..115f,
             warnTolerance = 35f,
-            weight = 0.25f,
+            weight = 0.20f,
             label = R.string.cue_spike_load,
             coachingTip = R.string.cue_spike_load_tip,
         ),
@@ -278,9 +279,22 @@ object FormCueCatalog {
             unit = CueUnit.Degrees,
             target = 155f..180f,
             warnTolerance = 30f,
-            weight = 0.30f,
+            weight = 0.25f,
             label = R.string.cue_spike_arm,
             coachingTip = R.string.cue_spike_arm_tip,
+        ),
+        // Upper arm above horizontal at the cocked arm, side-on only. Correct
+        // side-on spikes in public clips held it at a median 26 degrees,
+        // dropped-elbow demonstrations at 9.
+        FormCue(
+            id = CueId.SpikeElbowHeight,
+            phase = RepPhase.Contact,
+            unit = CueUnit.Degrees,
+            target = 0f..90f,
+            warnTolerance = 20f,
+            weight = 0.20f,
+            label = R.string.cue_spike_elbow,
+            coachingTip = R.string.cue_spike_elbow_tip,
         ),
         FormCue(
             id = CueId.SpikeJumpHeight,
@@ -288,7 +302,7 @@ object FormCueCatalog {
             unit = CueUnit.Metres,
             target = 0.30f..1.00f,
             warnTolerance = 0.20f,
-            weight = 0.25f,
+            weight = 0.20f,
             label = R.string.cue_spike_jump,
             coachingTip = R.string.cue_spike_jump_tip,
         ),
@@ -298,7 +312,7 @@ object FormCueCatalog {
             unit = CueUnit.Degrees,
             target = -5f..25f,
             warnTolerance = 25f,
-            weight = 0.20f,
+            weight = 0.15f,
             label = R.string.cue_spike_trunk,
             coachingTip = R.string.cue_spike_trunk_tip,
         ),

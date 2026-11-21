@@ -73,6 +73,7 @@ object CuePlainWords {
         CueId.SetHandsAboveForehead -> "Hand height"
         CueId.SetElbowFlexion -> "Elbow bend"
         CueId.SetExtensionFollowThrough -> "Arm finish"
+        CueId.SpikeElbowHeight -> "Elbow height"
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.BlockArmExtension -> "Arm extension"
         CueId.ServeReachHeight -> "Overhead reach"
         CueId.ServeTossArmLift -> "Guiding arm"
@@ -100,6 +101,7 @@ object CuePlainWords {
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.BlockArmExtension ->
             pick(zone, "a bit bent", "straight", "straight")
         CueId.ServeReachHeight -> pick(zone, "elbow a bit low", "reaching high", "reaching high")
+        CueId.SpikeElbowHeight -> pick(zone, "elbow dropping", "elbow high", "elbow high")
         CueId.ServeTossArmLift -> pick(zone, "a bit low", "good height", "a bit high")
         CueId.SpikeJumpHeight -> pick(zone, "a bit low", "good height", "great height")
         CueId.BlockHandSeparation -> pick(zone, "a bit close", "good spacing", "a bit wide")

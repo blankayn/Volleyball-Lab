@@ -161,6 +161,7 @@ class ReactiveCoachingEngine(
         val tip = when (id) {
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Reach upward with your $arm straighter."
             CueId.ServeReachHeight -> "Lift your raised elbow and reach upward."
+            CueId.SpikeElbowHeight -> "Keep your hitting elbow at shoulder height or higher as you draw back."
             CueId.ServeTrunkLean -> "Keep your trunk tall as you raise your arm."
             CueId.ServeTossArmLift -> "Raise your guiding arm steadily before the swing."
             CueId.PassPlatformStraight -> "Straighten both elbows and keep your platform together."
@@ -188,6 +189,7 @@ class ReactiveCoachingEngine(
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad -> "Better. Your knee loading improved."
         CueId.ServeTrunkLean, CueId.PassTrunkAngle, CueId.SpikeTrunkDrive -> "Better. Your trunk position improved."
         CueId.ServeReachHeight -> "Better. You reached higher above your shoulder."
+        CueId.SpikeElbowHeight -> "Better. Your hitting elbow stayed higher."
         CueId.ServeTossArmLift -> "Better. Your guiding arm is lifting steadily."
         CueId.SetHandsAboveForehead -> "Better. Your hands were positioned above your forehead."
         CueId.BlockHandSeparation -> "Better. Your hand spacing improved."
