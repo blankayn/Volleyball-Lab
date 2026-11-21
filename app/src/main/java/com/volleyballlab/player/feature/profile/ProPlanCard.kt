@@ -5,6 +5,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.Icons
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.plan.FirestorePlanRepository
 import com.volleyballlab.player.data.plan.GcashCheckoutException
@@ -53,6 +55,7 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                     else "${ReportAllowance.FREE_WEEKLY_LIMIT} detailed AI reports per week. The allowance resets every Monday.")
                 PlanLine("Automatic session summaries are included with both plans after each live session.")
             }
+            val testCheckoutUrl = BuildConfig.XENDIT_TEST_CHECKOUT_URL
             val offer = checkout
             if (!plan.isPro && offer?.enabled == true) {
                 val price = BigDecimal.valueOf(offer.priceCentavos, 2).toPlainString()
@@ -93,15 +96,31 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                         }
                     }
                 }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
-            } else if (!plan.isPro && offer != null) {
+            } else if (!plan.isPro && offer != null && testCheckoutUrl.isEmpty()) {
                 Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
+            }
+            if (testCheckoutUrl.isNotEmpty()) {
+                Text("Simulated payments do not unlock Pro.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(
+                    onClick = {
+                        message = null
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
+                        } catch (_: ActivityNotFoundException) {
+                            message = "Install a browser to open test checkout."
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Test checkout")
+                }
             }
             if (plan.isPro && onBrowseCoaches != null) {
                 OutlinedButton(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth()) {
                     Text("Find a coach")
                 }
             }
-            if (!plan.isPro) {
+            if (!plan.isPro || testCheckoutUrl.isNotEmpty()) {
                 message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
