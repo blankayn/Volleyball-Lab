@@ -15,13 +15,16 @@ function centavos(value) {
   return Number.isSafeInteger(result) && result > 0 ? result : null;
 }
 
-function liveCheckoutUrl(session) {
+// The secret key decides the environment: live keys return the first two hosts,
+// development keys the last two.
+const checkoutOrigins = new Set([
+  "https://checkout.xendit.co", "https://xen.to",
+  "https://checkout-staging.xendit.co", "https://dev.xen.to",
+]);
+
+function checkoutUrl(session) {
   const value = session.payment_link_url;
-  const origin = httpsUrl(value)?.origin;
-  // Test mode has distinct origins. Never expose a test session from this Worker.
-  if (origin !== "https://checkout.xendit.co" && origin !== "https://xen.to") {
-    throw new Error("invalid_live_xendit_checkout_url");
-  }
+  if (!checkoutOrigins.has(httpsUrl(value)?.origin)) throw new Error("invalid_xendit_checkout_url");
   return value;
 }
 
@@ -121,8 +124,8 @@ export async function startXenditCheckout({ db, uid, offer, request }) {
           centavos(session.amount) !== order.priceCentavos || session.status !== "ACTIVE") {
         throw new Error("invalid_xendit_session");
       }
-      const checkoutUrl = liveCheckoutUrl(session);
-      return await orders.attach(orderId, session.payment_session_id) ? { checkoutUrl } : { status: "pro_active" };
+      const url = checkoutUrl(session);
+      return await orders.attach(orderId, session.payment_session_id) ? { checkoutUrl: url } : { status: "pro_active" };
     }
 
     if (!order.checkoutSessionId) throw new BillingError(409, "checkout_retry");
@@ -138,7 +141,7 @@ export async function startXenditCheckout({ db, uid, offer, request }) {
     if (session.status === "ACTIVE") {
       if (order.priceCentavos !== config.priceCentavos || order.durationDays !== config.durationDays ||
           order.returnUrl !== config.returnUrl) throw new BillingError(409, "previous_checkout_open");
-      return { checkoutUrl: liveCheckoutUrl(session) };
+      return { checkoutUrl: checkoutUrl(session) };
     }
     if (!["EXPIRED", "CANCELED"].includes(session.status)) throw new Error("unexpected_xendit_session_status");
 

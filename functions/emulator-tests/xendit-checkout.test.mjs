@@ -14,14 +14,14 @@ const db = getFirestore(app);
 const store = firestoreBillingStore({ projectId, token: "owner", origin: `http://${process.env.FIRESTORE_EMULATOR_HOST}` });
 after(async () => { await db.terminate(); await deleteApp(app); });
 
-const offer = { enabled: true, liveMode: true, priceCentavos: 19900, durationDays: 30,
+const offer = { enabled: true, priceCentavos: 19900, durationDays: 30,
   returnUrl: "https://volleyball-lab.web.app/payment-return.html" };
 const requestId = "pr-1102feb0-bb79-47ae-9d1e-e69394d3949c";
 const businessId = "5f27a14a9bf05c73dd040bc8";
 const pendingFor = uid => db.doc(`billingPending/${uid}`);
 const entitlementFor = uid => db.doc(`entitlements/${uid}`);
 
-function fixture() {
+function fixture(linkOrigin = "https://xen.to") {
   const paymentId = `py-${crypto.randomUUID()}`;
   let current, payment, paymentRequestStatus, creates = 0;
   const post = [];
@@ -38,7 +38,7 @@ function fixture() {
         reference_id: payload.reference_id,
         session_type: payload.session_type, mode: payload.mode, amount: payload.amount,
         country: payload.country, currency: payload.currency, status: "ACTIVE",
-        payment_link_url: `https://xen.to/test-case-${creates}`, business_id: businessId,
+        payment_link_url: `${linkOrigin}/test-case-${creates}`, business_id: businessId,
       };
       return Response.json(current, { status: 201 });
     }
@@ -120,6 +120,18 @@ test("one checkout is issued and only a matching captured GCash payment grants t
   assert.equal(await callback(), "paid");
   assert.deepEqual((await entitlementFor(uid).get()).data(), entitlement);
   assert.equal((await pendingFor(uid).get()).exists, false);
+});
+
+test("development-key checkout links are issued and unknown hosts are refused", async () => {
+  await db.doc("billingConfig/pro").set(offer);
+  for (const origin of ["https://dev.xen.to", "https://checkout-staging.xendit.co"]) {
+    const xendit = fixture(origin);
+    assert.deepEqual(await startXenditCheckout({ db: store, uid: `xendit-${new URL(origin).hostname}`, offer,
+      request: xendit.request }), { checkoutUrl: `${origin}/test-case-1` });
+  }
+  const other = fixture("https://pay.example.com");
+  await assert.rejects(() => startXenditCheckout({ db: store, uid: "xendit-other-host", offer, request: other.request }),
+    /invalid_xendit_checkout_url/);
 });
 
 test("changed pricing waits for a payable checkout to expire before starting a replacement", async () => {

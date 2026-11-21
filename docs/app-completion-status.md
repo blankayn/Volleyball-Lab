@@ -71,7 +71,7 @@ by Git. Earlier verification records describe earlier builds.
 |---|---|
 | Android hardware acceptance | Connect a physical phone and complete `device-verification.md`, including actual athlete capture, voice/haptics, pickers, account changes and background notification taps. No phone was connected during this pass. |
 | Firebase services | Confirm current project billing/Storage setup and deploy the account, recording and notification services described in `account-and-recording-services.md` and `coach-cloud-contract.md`. Historical activation records are not proof of current production readiness. |
-| Paid checkout | Supply verified merchant credentials, price and access period, then deploy and test payment, renewal and revocation per `gcash-checkout-setup.md`. Checkout remains disabled. |
+| Paid checkout | Set Xendit keys, price and access period, then deploy and test payment, renewal and revocation per `gcash-checkout-setup.md`. A development key runs the full flow without merchant verification; real payments need a verified merchant and a production key. |
 | Distribution | Supply the release signing configuration and verify the signed release on the target devices and distribution channel. |
 | Coaching validation | Obtain coach-reviewed movement labels and review the cue thresholds and illustrations. Automated tests do not validate coaching quality. |
 | Five-skill 3D accuracy benchmark | MADS volleyball video measured at 172.716 mm on 969 valid frames, without individual skill labels. General-pose pilot: 143.274 mm. Both exceed 50 mm; five-skill coverage remains incomplete. |

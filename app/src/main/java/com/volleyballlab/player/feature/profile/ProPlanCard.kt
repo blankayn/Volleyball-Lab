@@ -5,7 +5,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.Icons
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
@@ -15,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.plan.FirestorePlanRepository
 import com.volleyballlab.player.data.plan.GcashCheckoutException
@@ -94,30 +92,16 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                             busy = false
                         }
                     }
-                }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Pay with GCash") }
+                }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
             } else if (!plan.isPro && offer != null) {
                 Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
-            }
-            val testCheckoutUrl = BuildConfig.XENDIT_TEST_CHECKOUT_URL
-            if (testCheckoutUrl.isNotEmpty()) {
-                Text("Simulated payments won't unlock Pro.", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = {
-                    message = null
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
-                    } catch (_: ActivityNotFoundException) {
-                        message = "Install a browser to open checkout."
-                    }
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Checkout")
-                }
             }
             if (plan.isPro && onBrowseCoaches != null) {
                 OutlinedButton(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth()) {
                     Text("Find a coach")
                 }
             }
-            if (!plan.isPro || testCheckoutUrl.isNotEmpty()) {
+            if (!plan.isPro) {
                 message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }

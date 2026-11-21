@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const OWNER_UID = "4j06UlYqbrbLzujmfi8VW5yEIOq2";
 
 export function validConfig(config) {
-  return config?.enabled === true && config.liveMode === true &&
+  return config?.enabled === true &&
     Number.isSafeInteger(config.priceCentavos) && config.priceCentavos >= 100 && config.priceCentavos <= 10_000_000 &&
     Number.isInteger(config.durationDays) && config.durationDays >= 0 && config.durationDays <= 365 &&
     httpsUrl(config.returnUrl) !== null;

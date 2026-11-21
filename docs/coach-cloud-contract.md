@@ -224,9 +224,8 @@ legacy local demo flags.
 `billingConfig/pro` contains public purchase settings and is signed-in read
 only. `billingOrders/{id}` is read only to its owner. Internal checkout and
 payment mappings deny client access. Merchant secrets belong in Secret Manager.
-The prepared GCash flow grants access only after a verified live payment
-webhook; browser return is not payment proof. Merchant activation remains
-pending; see `docs/gcash-checkout-setup.md`.
+The GCash flow grants access only after a verified payment webhook; browser
+return is not payment proof. See `docs/gcash-checkout-setup.md`.
 
 Daily plans, photos, report history and the five-per-week Free report allowance
 are account-scoped local app data. They are not a server API spending limit.

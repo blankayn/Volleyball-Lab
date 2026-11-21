@@ -29,7 +29,7 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
         val price = fields["priceCentavos"] as? Long ?: 0
         val days = fields["durationDays"] as? Long ?: -1
         ProCheckoutConfiguration(
-            enabled = fields["enabled"] == true && fields["liveMode"] == true &&
+            enabled = fields["enabled"] == true &&
                 price in 100L..10_000_000L && days in 0L..365L && httpsUri(fields["returnUrl"] as? String) != null,
             priceCentavos = price,
             durationDays = days,
@@ -89,7 +89,7 @@ class FirestorePlanRepository(private val db: FirebaseFirestore, private val aut
 
     private companion object {
         const val CHECKOUT_ENDPOINT = "https://volleyball-lab-payments.volleyball-lab-session-ai.workers.dev/createGcashCheckout"
-        val XENDIT_CHECKOUT_HOSTS = setOf("checkout.xendit.co", "xen.to")
+        val XENDIT_CHECKOUT_HOSTS = setOf("checkout.xendit.co", "xen.to", "checkout-staging.xendit.co", "dev.xen.to")
 
         fun httpsUri(value: String?): URI? = value?.let {
             runCatching { URI(it) }.getOrNull()?.takeIf { uri ->
