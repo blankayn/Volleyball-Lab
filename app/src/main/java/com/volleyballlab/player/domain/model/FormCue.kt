@@ -49,6 +49,7 @@ enum class CueId {
 
     // Receiving (forearm passing)
     PassPlatformStraight,
+    PassPlatformHeight,
     PassKneeFlexion,
     PassTrunkAngle,
     PassShouldersLevel,
@@ -183,9 +184,25 @@ object FormCueCatalog {
             unit = CueUnit.Degrees,
             target = 165f..180f,
             warnTolerance = 25f,
-            weight = 0.35f,
+            weight = 0.30f,
             label = R.string.cue_pass_platform,
             coachingTip = R.string.cue_pass_platform_tip,
+        ),
+        // The forearm platform's slope at contact: shoulder-to-wrist line below
+        // horizontal, over the arms the camera saw. The reference figure holds
+        // it 40-50 degrees down; arms near shoulder height read close to 0. No
+        // upper limit short of straight down: a platform cannot be too low here.
+        // Weighted lightly so the long-standing arm, knee and trunk cues still
+        // make up the 75% a rep needs to count as measured.
+        FormCue(
+            id = CueId.PassPlatformHeight,
+            phase = RepPhase.Contact,
+            unit = CueUnit.Degrees,
+            target = 25f..90f,
+            warnTolerance = 15f,
+            weight = 0.10f,
+            label = R.string.cue_pass_platform_height,
+            coachingTip = R.string.cue_pass_platform_height_tip,
         ),
         FormCue(
             id = CueId.PassKneeFlexion,
@@ -203,7 +220,7 @@ object FormCueCatalog {
             unit = CueUnit.Degrees,
             target = 15f..40f,
             warnTolerance = 20f,
-            weight = 0.20f,
+            weight = 0.15f,
             label = R.string.cue_pass_trunk,
             coachingTip = R.string.cue_pass_trunk_tip,
         ),

@@ -92,6 +92,7 @@ object CoachPhrasebook {
             CueId.BlockPenetration -> if (below) "Reach your hands a little farther forward" else "Bring your hands slightly back toward you"
             CueId.PassShouldersLevel -> "Keep your shoulders level above your forearm platform"
             CueId.PassPlatformStraight -> "Straighten both elbows and join your forearms"
+            CueId.PassPlatformHeight -> if (below) "Angle your platform down, below your chest" else "Bring your platform up a little"
             CueId.ServeReachHeight -> "Lift your hitting elbow and reach upward"
             CueId.SpikeElbowHeight -> "Keep your hitting elbow at shoulder height or higher"
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension -> "Extend your raised arm above your shoulder"
@@ -104,6 +105,7 @@ object CoachPhrasebook {
     fun focusName(id: CueId): String = when (id) {
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad -> "knee bend"
         CueId.PassPlatformStraight -> "forearm platform"
+        CueId.PassPlatformHeight -> "platform height"
         CueId.PassShouldersLevel -> "shoulder position"
         CueId.PassTrunkAngle, CueId.ServeTrunkLean, CueId.SpikeTrunkDrive -> "trunk position"
         CueId.BlockHandSeparation -> "hand spacing"
@@ -146,6 +148,9 @@ object CoachPhrasebook {
                 if (below) "Your hands are staying back a bit. Reach a little farther forward."
                 else "Your hands are reaching a bit far forward. Bring them slightly back."
             CueId.ServeReachHeight -> "Your ${arm}hitting elbow is staying a bit low. Lift it and reach upward."
+            CueId.PassPlatformHeight ->
+                if (below) "Your platform is coming up near your shoulders. Angle it down below your chest."
+                else "Your platform is pointing a bit steeply down. Bring it up a little."
             CueId.SpikeElbowHeight -> "Your ${arm}hitting elbow is dropping as you draw back. Keep it up at shoulder height."
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
                 "Your ${arm}arm is staying a bit bent overhead. Extend it above your shoulder."
@@ -160,6 +165,7 @@ object CoachPhrasebook {
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad ->
             if (below) "stand a little taller" else "sit a little lower"
         CueId.PassPlatformStraight -> "long, straight arms"
+        CueId.PassPlatformHeight -> if (below) "platform down" else "platform up a little"
         CueId.PassShouldersLevel -> "level shoulders"
         CueId.PassTrunkAngle, CueId.ServeTrunkLean, CueId.SpikeTrunkDrive ->
             if (below) "chest slightly forward" else "chest slightly up"
@@ -182,6 +188,7 @@ object CoachPhrasebook {
             if (below) "Feel light on your feet, like you could hop straight up."
             else "Feel like you're sitting back onto a tall stool."
         CueId.PassPlatformStraight -> "Feel your arms lock into one long, flat board."
+        CueId.PassPlatformHeight -> if (below) "Feel your forearms point at the floor a few steps ahead." else "Feel your forearms settle just above your knees."
         CueId.PassShouldersLevel -> "Feel both shoulders resting on the same shelf."
         CueId.PassTrunkAngle, CueId.ServeTrunkLean, CueId.SpikeTrunkDrive ->
             if (below) "Feel your chest come forward over your toes."
@@ -230,6 +237,13 @@ object CoachPhrasebook {
                     "From your ready stance, slowly bend your knees a little more." to
                         "Reset your stance, then use a slightly deeper knee bend."
                 }
+            CueId.PassPlatformHeight -> if (below) {
+                "Slowly lower your joined forearms until they point down in front of your knees." to
+                    "Reset your stance, join your forearms low, then sit into the pass without lifting them."
+            } else {
+                "Slowly raise your joined forearms a little, keeping them below your chest." to
+                    "Reset your stance, then hold the platform in front of your waist."
+            }
             CueId.PassPlatformStraight ->
                 "Slowly extend both elbows while keeping your forearms together." to
                     "Reset your arms, join your forearms, then straighten your elbows."

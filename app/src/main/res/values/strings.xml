@@ -224,6 +224,8 @@
     <!-- Receiving -->
     <string name="cue_pass_platform">Steady the platform</string>
     <string name="cue_pass_platform_tip">Join your forearms and extend both elbows comfortably to form a steady platform.</string>
+    <string name="cue_pass_platform_height">Keep the platform below the chest</string>
+    <string name="cue_pass_platform_height_tip">Angle your joined forearms down toward the floor instead of lifting them to shoulder height.</string>
     <string name="cue_pass_knees">Bend the knees</string>
     <string name="cue_pass_knees_tip">Bend your knees comfortably while keeping a balanced stance.</string>
     <string name="cue_pass_trunk">Lean from the hips</string>

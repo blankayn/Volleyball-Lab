@@ -227,7 +227,7 @@ object AngleCuePolicy {
         val torso = setOf(BodyPoint.LEFT_SHOULDER, BodyPoint.RIGHT_SHOULDER, BodyPoint.LEFT_HIP, BodyPoint.RIGHT_HIP)
         return when (cueId) {
             CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.SpikeElbowHeight,
-            CueId.PassPlatformStraight, CueId.SetElbowFlexion,
+            CueId.PassPlatformStraight, CueId.PassPlatformHeight, CueId.SetElbowFlexion,
             CueId.SetExtensionFollowThrough, CueId.BlockArmExtension -> arms()
             CueId.ServeReachHeight, CueId.ServeTossArmLift -> arms(withHips = true)
             CueId.PassKneeFlexion, CueId.SetKneeFlexion,

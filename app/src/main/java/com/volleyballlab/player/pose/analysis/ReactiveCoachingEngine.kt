@@ -165,6 +165,7 @@ class ReactiveCoachingEngine(
             CueId.ServeTrunkLean -> "Keep your trunk tall as you raise your arm."
             CueId.ServeTossArmLift -> "Raise your guiding arm steadily before the swing."
             CueId.PassPlatformStraight -> "Straighten both elbows and keep your platform together."
+            CueId.PassPlatformHeight -> "Keep your platform angled down, below your chest."
             CueId.PassKneeFlexion -> if (measured != null && measured < 110f) "Rise a little from your crouch in your passing stance." else "Bend your knees more in your passing stance."
             CueId.PassTrunkAngle -> "Lean slightly from your hips while keeping a balanced stance."
             CueId.PassShouldersLevel -> "Keep your shoulders level above your forearm platform."
@@ -185,6 +186,7 @@ class ReactiveCoachingEngine(
 
     private fun improvement(id: CueId): String = when (id) {
         CueId.PassPlatformStraight -> "Better. Your platform is straighter."
+        CueId.PassPlatformHeight -> "Better. Your platform stayed lower."
         CueId.PassShouldersLevel -> "Better. Your shoulders look level."
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad -> "Better. Your knee loading improved."
         CueId.ServeTrunkLean, CueId.PassTrunkAngle, CueId.SpikeTrunkDrive -> "Better. Your trunk position improved."

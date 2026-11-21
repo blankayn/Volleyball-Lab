@@ -73,6 +73,7 @@ object CuePlainWords {
         CueId.SetHandsAboveForehead -> "Hand height"
         CueId.SetElbowFlexion -> "Elbow bend"
         CueId.SetExtensionFollowThrough -> "Arm finish"
+        CueId.PassPlatformHeight -> "Platform height"
         CueId.SpikeElbowHeight -> "Elbow height"
         CueId.ServeContactArmExtension, CueId.SpikeArmExtension, CueId.BlockArmExtension -> "Arm extension"
         CueId.ServeReachHeight -> "Overhead reach"
@@ -92,6 +93,7 @@ object CuePlainWords {
         CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad ->
             pick(zone, "a bit deep", "good bend", "a bit straight")
         CueId.PassPlatformStraight -> pick(zone, "elbows bending", "straight", "straight")
+        CueId.PassPlatformHeight -> pick(zone, "too high", "angled down", "very low")
         CueId.PassShouldersLevel -> pick(zone, "level", "level", "tilting")
         CueId.PassTrunkAngle, CueId.ServeTrunkLean, CueId.SpikeTrunkDrive ->
             pick(zone, "a bit upright", "good position", "leaning a bit far")

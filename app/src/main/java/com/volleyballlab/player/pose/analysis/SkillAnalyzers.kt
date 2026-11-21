@@ -212,12 +212,33 @@ class ReceiveAnalyzer : SkillAnalyzer {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         return when (cue.id) {
             CueId.PassPlatformStraight -> meanElbowAngle(contact)
+            CueId.PassPlatformHeight -> platformBelowHorizontal(contact)
             CueId.PassKneeFlexion -> meanKneeAngle(contact)
             CueId.PassTrunkAngle -> Angles.trunkForwardLean(contact)
             CueId.PassShouldersLevel -> Angles.shoulderTilt(contact)
             else -> null
         }
     }
+
+    /**
+     * Degrees the shoulder-to-wrist line points below horizontal, averaged over
+     * the arms the camera saw; null when it saw neither.
+     *
+     * The verdict's [MovementFault.PlatformTooHigh] only refuses hands above the
+     * shoulder line, which is not a pass at all. A pass made with the arms lifted
+     * to about shoulder height is still a pass, with the platform too high: a
+     * groupmate's 15 such passes read 7-15° here and all were counted with no word
+     * about it. World space, so the slope reads the same from the front, where
+     * the arms point at the camera, as from the side.
+     */
+    private fun platformBelowHorizontal(frame: PoseFrame): Float? =
+        AnalyzerSupport.observedArms(frame).mapNotNull { side ->
+            val shoulder = frame.world(AnalyzerSupport.shoulder(side))
+            val wrist = frame.world(AnalyzerSupport.wrist(side))
+            val length = Angles.distance(shoulder, wrist)
+            // World y points down, so a wrist below the shoulder has the larger y.
+            if (length < 1e-3f) null else Math.toDegrees(kotlin.math.asin(((wrist.y - shoulder.y) / length).coerceIn(-1f, 1f)).toDouble()).toFloat()
+        }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
 
     private companion object {
         const val STRAIGHT_LEG_DEGREES = 180f
