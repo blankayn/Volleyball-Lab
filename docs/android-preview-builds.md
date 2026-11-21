@@ -3,8 +3,8 @@
 Use `./gradlew.bat :app:assemblePreview` for Android sideload previews. The APK is
 written to `app/build/outputs/apk/preview/app-preview.apk`.
 
-Debug and preview APKs also show **Test checkout** on the Pro plan screen. It
-opens the hosted Xendit staging demo, available through November 30, 2026.
+When account-linked checkout is unavailable, debug and preview APKs show
+**Checkout** for the hosted Xendit staging demo through November 30, 2026.
 Simulated payments do not unlock Pro. Account-linked purchases use the
 [server-controlled GCash checkout](gcash-checkout-setup.md).
 

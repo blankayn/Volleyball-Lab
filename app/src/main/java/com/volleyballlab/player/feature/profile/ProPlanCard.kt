@@ -96,24 +96,22 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                         }
                     }
                 }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
-            } else if (!plan.isPro && offer != null && testCheckoutUrl.isEmpty()) {
-                Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
-            }
-            if (testCheckoutUrl.isNotEmpty()) {
-                Text("Simulated payments do not unlock Pro.", style = MaterialTheme.typography.bodySmall)
+            } else if (testCheckoutUrl.isNotEmpty()) {
                 OutlinedButton(
                     onClick = {
                         message = null
                         try {
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
                         } catch (_: ActivityNotFoundException) {
-                            message = "Install a browser to open test checkout."
+                            message = "Install a browser to open checkout."
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Test checkout")
+                    Text("Checkout")
                 }
+            } else if (!plan.isPro && offer != null) {
+                Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
             }
             if (plan.isPro && onBrowseCoaches != null) {
                 OutlinedButton(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth()) {
