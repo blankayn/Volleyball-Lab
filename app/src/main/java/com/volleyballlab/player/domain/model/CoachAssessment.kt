@@ -73,7 +73,9 @@ object CoachAssessmentEngine {
             evidence.referenceScore < 80 &&
                 maxOf(evidence.belowReference, evidence.aboveReference) >= MIN_REPS &&
                 maxOf(evidence.belowReference, evidence.aboveReference).toFloat() / evidence.measuredReps >= 0.6f
-        }.sortedBy { it.referenceScore }.take(3).map { evidence ->
+        // Of the checks that are clearly off, the drill's own come first (see [DrillFocus]).
+        }.sortedWith(compareByDescending<ObservedCue> { it.cue.id in DrillFocus.cues(session.drillId) }
+            .thenBy { it.referenceScore }).take(3).map { evidence ->
             val drill = drillFor(session.skill)
             TechniqueCorrection(evidence, why(evidence.cue.id), instruction(evidence), drill.first, drill.second)
         }

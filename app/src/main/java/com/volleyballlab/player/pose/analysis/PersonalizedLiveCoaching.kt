@@ -2,6 +2,7 @@ package com.volleyballlab.player.pose.analysis
 
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.domain.model.DrillFocus
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.ExperienceLevel
 import com.volleyballlab.player.domain.model.SessionResult
@@ -61,6 +62,16 @@ data class LiveCoachingPlan(
             lastTotalReps = last.repCount)
     }
 
+    /**
+     * Puts the drill's own checks ([DrillFocus]) first in the focus, ahead of any
+     * focus from the athlete's training setup, which stays in the set.
+     */
+    fun withDrill(drillId: String): LiveCoachingPlan {
+        val drill = DrillFocus.cues(drillId).takeIf { it.isNotEmpty() } ?: return this
+        return copy(focusCueIds = LinkedHashSet(drill + focusCueIds),
+            focusLabel = "Your focus: ${CoachPhrasebook.focusName(drill.first())}")
+    }
+
     /** Only a short, speakable drill title and a first name come from the linked coach. */
     fun withCoach(coachName: String?, assignmentTitle: String?): LiveCoachingPlan = copy(
         humanCoachName = coachName?.let(::speakableName)?.takeIf { it.isNotEmpty() },
@@ -80,11 +91,11 @@ data class LiveCoachingPlan(
                 Skill.Serving to "toss" -> setOf(CueId.ServeTossArmLift)
                 Skill.Serving to "contact" -> setOf(CueId.ServeContactArmExtension, CueId.ServeReachHeight)
                 Skill.Receiving to "ready_position" -> setOf(CueId.PassKneeFlexion, CueId.PassTrunkAngle)
-                Skill.Receiving to "platform" -> setOf(CueId.PassPlatformStraight, CueId.PassShouldersLevel)
+                Skill.Receiving to "platform" -> setOf(CueId.PassPlatformStraight, CueId.PassPlatformHeight, CueId.PassShouldersLevel)
                 Skill.Setting to "hand_position" -> setOf(CueId.SetHandsAboveForehead, CueId.SetElbowFlexion)
                 Skill.Setting to "contact" -> setOf(CueId.SetElbowFlexion, CueId.SetExtensionFollowThrough)
                 Skill.Spiking to "approach" -> setOf(CueId.SpikeApproachLoad)
-                Skill.Spiking to "contact" -> setOf(CueId.SpikeArmExtension)
+                Skill.Spiking to "contact" -> setOf(CueId.SpikeArmExtension, CueId.SpikeElbowHeight)
                 Skill.Blocking to "ready_position" -> setOf(CueId.BlockKneeLoad)
                 Skill.Blocking to "hand_position" -> setOf(CueId.BlockHandSeparation, CueId.BlockArmExtension)
                 else -> emptySet()

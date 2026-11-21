@@ -405,6 +405,7 @@ class CaptureViewModel(
                 _coachContext,
             ) { profile, sessions, coach ->
                 LiveCoachingPlan.forAthlete(skill, profile)
+                    .withDrill(drillId)
                     .withHistory(sessions, skill, drillId)
                     .withCoach(coach.coachName, coach.assignment?.takeIf { it.skill == skill }?.title)
             }.collect { plan ->

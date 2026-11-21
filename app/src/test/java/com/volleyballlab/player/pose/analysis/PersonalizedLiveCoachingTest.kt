@@ -83,7 +83,7 @@ class PersonalizedLiveCoachingTest {
 
     @Test fun confirmedFocusAndNamePersonalizeTheOpeningWithoutChangingEvidence() {
         val plan = LiveCoachingPlan.forAthlete(Skill.Receiving, profile(Skill.Receiving, "receiving_focus", "platform"))
-        assertEquals(setOf(CueId.PassPlatformStraight, CueId.PassShouldersLevel), plan.focusCueIds)
+        assertEquals(setOf(CueId.PassPlatformStraight, CueId.PassPlatformHeight, CueId.PassShouldersLevel), plan.focusCueIds)
         assertEquals("Maya’s live coach", plan.title)
         val opening = plan.opening(Skill.Receiving)
         assertEquals("Hi Maya.", opening.first())
