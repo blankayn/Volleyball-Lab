@@ -372,6 +372,12 @@ class RepSegmenter(private val config: Config = Config()) {
         // Recording or tracking can resume after the action has already peaked.
         // A falling tail has no observed preparation; do not score it as a full rep.
         if (contactIndex == startIndex || contactIndex == endIndex) return null
+        // The skill may name another frame of the rep as contact (see
+        // [SkillAnalyzer.contactIndex]); never the rep's first or last frame.
+        val refined = startIndex + analyzer.contactIndex(
+            samples.subList(startIndex, endIndex + 1).map { it.frame }, contactIndex - startIndex,
+        )
+        if (refined in (startIndex + 1) until endIndex) contactIndex = refined
 
         // The window opens a short lead-in before the first rise, exactly as the
         // live counter keeps half a second of preparation. Two things live in

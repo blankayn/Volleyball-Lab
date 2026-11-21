@@ -43,6 +43,35 @@ private object OverheadSwing {
      */
     const val MIN_TRAVEL = 0.35f
 
+    /** How far below the rep's highest hand another hand's peak may sit and still be the hit (torso lengths). */
+    private const val HIT_PEAK_TOLERANCE = 0.15f
+
+    /**
+     * The hit among the rep's frames: of each hand's own highest moment that
+     * comes within [HIT_PEAK_TOLERANCE] of the highest hand overall, the one
+     * whose arm is straightest; at nearly equal straightness (within 10°), the
+     * later one, since the hit follows the toss.
+     *
+     * The signal peak alone is not enough. A groupmate's side-on serves hit with
+     * the left arm straight up (elbow 160-167°) and then turned, lifting the
+     * right arm almost as high with the elbow bent (123-138°). On 6 of 14 serves
+     * the bent arm's moment was the higher by a few pixels and became contact,
+     * so the arm checks measured the wrong arm.
+     */
+    fun hitIndex(frames: List<PoseFrame>, signalPeak: Int): Int {
+        val top = frames.getOrNull(signalPeak)?.let { AnalyzerSupport.higherWristRise(it) } ?: return signalPeak
+        val peaks = Side.entries.mapNotNull { side ->
+            val best = frames.indices.mapNotNull { i -> AnalyzerSupport.wristRise(frames[i], side)?.let { i to it } }
+                .maxByOrNull { it.second } ?: return@mapNotNull null
+            if (best.second < top - HIT_PEAK_TOLERANCE) return@mapNotNull null
+            val elbow = elbowAngle(frames[best.first], side) ?: return@mapNotNull null
+            best.first to elbow
+        }
+        if (peaks.isEmpty()) return signalPeak
+        val straightest = peaks.maxOf { it.second }
+        return peaks.filter { it.second >= straightest - 10f }.maxOf { it.first }
+    }
+
     /**
      * Where the hitting hand must finish: clear of the top of the head. An
      * overhead contact with a bent arm still reaches it; a hand raised to the
@@ -121,6 +150,10 @@ class ServeAnalyzer : SkillAnalyzer {
     override fun verdict(window: RepWindow): MovementVerdict =
         OverheadSwing.verdict(window)
 
+    /** The hit, not a later moment when the other hand rises as the body turns. */
+    override fun contactIndex(frames: List<PoseFrame>, signalPeak: Int): Int =
+        OverheadSwing.hitIndex(frames, signalPeak)
+
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         val hitting = hittingSide(contact)
@@ -128,13 +161,33 @@ class ServeAnalyzer : SkillAnalyzer {
             CueId.ServeContactArmExtension -> elbowAngle(contact, hitting)
             CueId.ServeReachHeight -> shoulderAngle(contact, hitting)
             CueId.ServeTrunkLean -> Angles.trunkForwardLean(contact)
-            // Measured on the non-hitting arm during preparation: the tossing arm
-            // is by definition the one that is not about to strike the ball.
-            CueId.ServeTossArmLift -> window.frameFor(RepPhase.Preparation)
-                ?.let { shoulderAngle(it, hitting.opposite()) }
+            // Measured on the non-hitting arm: the tossing arm is by definition the
+            // one that is not about to strike the ball.
+            CueId.ServeTossArmLift -> cueFrame(cue, window)?.let { shoulderAngle(it, hitting.opposite()) }
 
             else -> null
         }
+    }
+
+    /**
+     * The guiding-arm lift is read where the arm is highest before contact, not on
+     * the preparation frame. Preparation is the window's first frame, before the
+     * arm has moved: a groupmate's 14 serves read 17-52° there against the
+     * 90-160° target, and only 7 of 29 correct side-on public serves passed.
+     * The arm's shoulder angle is averaged over three frames before picking, so
+     * one jittery frame cannot become the highest.
+     */
+    override fun cueFrame(cue: FormCue, window: RepWindow): PoseFrame? {
+        if (cue.id != CueId.ServeTossArmLift) return super.cueFrame(cue, window)
+        val contact = window.frameFor(RepPhase.Contact) ?: return super.cueFrame(cue, window)
+        val guiding = hittingSide(contact).opposite()
+        val before = window.frames.filter { it.timestampMs <= contact.timestampMs }
+        val lifts = before.map { shoulderAngle(it, guiding) }
+        val highest = lifts.indices.mapNotNull { i ->
+            val near = (maxOf(0, i - 1)..minOf(lifts.lastIndex, i + 1)).mapNotNull { lifts[it] }
+            if (lifts[i] == null || near.isEmpty()) null else i to near.average()
+        }.maxByOrNull { it.second } ?: return super.cueFrame(cue, window)
+        return before[highest.first]
     }
 }
 
@@ -478,6 +531,10 @@ class SpikeAnalyzer : SkillAnalyzer {
 
     override fun verdict(window: RepWindow): MovementVerdict =
         OverheadSwing.verdict(window)
+
+    /** The hit, not a later moment when the other hand rises as the body turns. */
+    override fun contactIndex(frames: List<PoseFrame>, signalPeak: Int): Int =
+        OverheadSwing.hitIndex(frames, signalPeak)
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
         CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }

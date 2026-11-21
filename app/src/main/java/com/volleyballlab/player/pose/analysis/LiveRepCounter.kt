@@ -207,8 +207,10 @@ class LiveRepCounter(
     private fun buildWindow(): RepWindow? {
         if (activeFrames.size < 3) return null
         val signals = activeFrames.map { analyzer.segmentationSignal(it) ?: return null }
-        val contactIndex = signals.indices.maxByOrNull { signals[it] } ?: return null
-        if (contactIndex == 0 || contactIndex == activeFrames.lastIndex) return null
+        val peak = signals.indices.maxByOrNull { signals[it] } ?: return null
+        if (peak == 0 || peak == activeFrames.lastIndex) return null
+        // The skill may name another frame as contact; never the first or last.
+        val contactIndex = analyzer.contactIndex(activeFrames, peak).takeIf { it in 1 until activeFrames.lastIndex } ?: peak
         val loadingIndex = (0..contactIndex).minByOrNull { signals[it] } ?: 0
         val loading = analyzer.loadingFrame(activeFrames.subList(0, contactIndex + 1))
             ?: activeFrames[loadingIndex]

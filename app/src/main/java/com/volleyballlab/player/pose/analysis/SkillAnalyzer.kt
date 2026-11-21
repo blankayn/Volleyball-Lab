@@ -167,6 +167,16 @@ interface SkillAnalyzer {
     fun cueFrame(cue: FormCue, window: RepWindow): PoseFrame? = window.frameFor(cue.phase)
 
     /**
+     * Which of [frames] (one rep, start to end) is contact, given [signalPeak],
+     * the index where [segmentationSignal] peaks. Usually that peak.
+     *
+     * A one-armed swing's signal follows whichever hand is higher, and after the
+     * hit the body can turn and lift the other hand nearly as high. A skill
+     * overrides this to pick the hit itself.
+     */
+    fun contactIndex(frames: List<PoseFrame>, signalPeak: Int): Int = signalPeak
+
+    /**
      * Whether [window] is one complete repetition of this skill.
      *
      * Checked on every candidate before it is counted, live and in the final
