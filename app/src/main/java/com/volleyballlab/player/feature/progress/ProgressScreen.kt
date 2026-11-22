@@ -32,7 +32,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -594,13 +593,10 @@ private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modif
                 }
                 if (progress.meanScore != null) {
                     Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { progress.meanScore / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp),
+                    com.volleyballlab.player.feature.home.ScoreBar(
+                        fraction = progress.meanScore / 100f,
                         color = scoreColor(progress.meanScore),
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        height = 6.dp,
                     )
                 }
             }

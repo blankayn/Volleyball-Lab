@@ -1,21 +1,22 @@
 package com.volleyballlab.player.feature.profile
 
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.Icons
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.plan.FirestorePlanRepository
 import com.volleyballlab.player.data.plan.GcashCheckoutException
@@ -35,100 +36,159 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
     val scope = rememberCoroutineScope()
     var busy by remember(account?.uid) { mutableStateOf(false) }
     var message by remember(account?.uid) { mutableStateOf<String?>(null) }
+    val colors = MaterialTheme.colorScheme
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = AccountMenuSurface) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (plan.isPro) "Pro account" else "Free account", style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Surface(shape = RoundedCornerShape(50), color = if (plan.isPro) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceContainerHighest) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Your plan", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                    Text(if (plan.isPro) "Pro" else "Free", style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold)
+                }
+                Surface(shape = RoundedCornerShape(50), color = if (plan.isPro) colors.primary else colors.surfaceContainerHighest) {
                     Text(if (plan.isPro) "PRO" else "FREE", Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                        color = if (plan.isPro) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = if (plan.isPro) colors.onPrimary else colors.onSurfaceVariant)
                 }
             }
-            if (ProEntitlement.isGranted(account?.uid)) Text(if (account?.uid == ProEntitlement.OWNER_UID) "Owner Pro access" else "Pro access granted by the owner", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PlanLine("Pro includes all 15 drills and coach connection. Free includes five starter drills.")
-                PlanLine(if (plan.isPro) "Unlimited detailed AI reports."
-                    else "${ReportAllowance.FREE_WEEKLY_LIMIT} detailed AI reports per week. The allowance resets every Monday.")
-                PlanLine("Automatic session summaries are included with both plans after each live session.")
+            if (ProEntitlement.isGranted(account?.uid)) {
+                Text(if (account?.uid == ProEntitlement.OWNER_UID) "Owner Pro access" else "Pro access granted by the owner",
+                    style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
-            val testCheckoutUrl = BuildConfig.XENDIT_TEST_CHECKOUT_URL
+
+            PlanComparison(isPro = plan.isPro)
+            if (!plan.isPro) {
+                Text("Free reports reset every Monday.", style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant)
+            }
+
             val offer = checkout
-            if (!plan.isPro && offer?.enabled == true) {
-                val price = BigDecimal.valueOf(offer.priceCentavos, 2).toPlainString()
-                val access = if (offer.durationDays == 0L) "permanent Pro access" else "${offer.durationDays} days of Pro access"
-                Text("₱$price for $access. One-time payment.", style = MaterialTheme.typography.bodySmall)
-                if (account?.emailVerified == false) {
-                    Text("Verify your email before paying.", style = MaterialTheme.typography.bodySmall)
-                }
-                Button(enabled = account?.emailVerified == true && !busy, onClick = {
-                    busy = true
-                    message = null
-                    scope.launch {
-                        try {
-                            val url = repository.createGcashCheckout(offer)
-                            if (url == null) {
-                                message = "Your Pro status is updating."
-                            } else {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                message = "After you pay in GCash, return here to see your Pro status."
+            if (!plan.isPro && offer != null) {
+                Surface(shape = RoundedCornerShape(18.dp), color = colors.primary.copy(alpha = .08f),
+                    border = BorderStroke(1.dp, colors.primary.copy(alpha = .25f))) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Upgrade to Pro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        if (offer.enabled) {
+                            val price = if (offer.priceCentavos % 100 == 0L) (offer.priceCentavos / 100).toString()
+                                else BigDecimal.valueOf(offer.priceCentavos, 2).toPlainString()
+                            val access = if (offer.durationDays == 0L) "lifetime access" else "${offer.durationDays} days"
+                            Text("₱$price · $access · one-time GCash payment", style = MaterialTheme.typography.bodyMedium)
+                            if (account?.emailVerified == false) {
+                                Text("Verify your email before paying.", style = MaterialTheme.typography.bodySmall,
+                                    color = colors.onSurfaceVariant)
                             }
-                        } catch (failure: CancellationException) {
-                            throw failure
-                        } catch (failure: GcashCheckoutException) {
-                            message = when (failure.code) {
-                                "offer_changed" -> "The Pro offer changed. Review the updated price and try again."
-                                "payment_processing" -> "Xendit is still confirming your previous checkout. Check again shortly."
-                                "previous_checkout_open" -> "The offer changed while your previous checkout was open. Try again after it expires."
-                                "checkout_needs_review" -> "Your previous checkout needs review. Contact support before trying to pay again."
-                                "verify_email_required" -> "Verify your email before paying."
-                                "invalid_session", "sign_in_required", "account_changed" -> "Sign in again to continue."
-                                "checkout_not_configured" -> "GCash checkout is currently unavailable."
-                                else -> "Could not open GCash checkout. Please try again."
-                            }
-                        } catch (_: Exception) {
-                            message = "Could not open GCash checkout. Please try again."
-                        } finally {
-                            busy = false
+                            Button(enabled = account?.emailVerified == true && !busy, onClick = {
+                                busy = true
+                                message = null
+                                scope.launch {
+                                    try {
+                                        val url = repository.createGcashCheckout(offer)
+                                        if (url == null) {
+                                            message = "Your Pro status is updating."
+                                        } else {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                            message = "After you pay in GCash, return here to see your Pro status."
+                                        }
+                                    } catch (failure: CancellationException) {
+                                        throw failure
+                                    } catch (failure: GcashCheckoutException) {
+                                        message = when (failure.code) {
+                                            "offer_changed" -> "The Pro offer changed. Review the updated price and try again."
+                                            "payment_processing" -> "Xendit is still confirming your previous checkout. Check again shortly."
+                                            "previous_checkout_open" -> "The offer changed while your previous checkout was open. Try again after it expires."
+                                            "checkout_needs_review" -> "Your previous checkout needs review. Contact support before trying to pay again."
+                                            "verify_email_required" -> "Verify your email before paying."
+                                            "invalid_session", "sign_in_required", "account_changed" -> "Sign in again to continue."
+                                            "checkout_not_configured" -> "GCash checkout is currently unavailable."
+                                            else -> "Could not open GCash checkout. Please try again."
+                                        }
+                                    } catch (_: Exception) {
+                                        message = "Could not open GCash checkout. Please try again."
+                                    } finally {
+                                        busy = false
+                                    }
+                                }
+                            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
+                        } else {
+                            Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant)
                         }
+                        message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     }
-                }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
-            } else if (testCheckoutUrl.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = {
-                        message = null
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
-                        } catch (_: ActivityNotFoundException) {
-                            message = "Install a browser to open checkout."
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Checkout")
                 }
-            } else if (!plan.isPro && offer != null) {
-                Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall)
             }
             if (plan.isPro && onBrowseCoaches != null) {
                 OutlinedButton(onClick = onBrowseCoaches, modifier = Modifier.fillMaxWidth()) {
                     Text("Find a coach")
                 }
             }
-            if (!plan.isPro || testCheckoutUrl.isNotEmpty()) {
-                message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            }
         }
     }
 }
 
+private sealed interface PlanValue {
+    data class Label(val text: String) : PlanValue
+    data object Included : PlanValue
+    data object NotIncluded : PlanValue
+}
+
+private data class PlanRow(val feature: String, val free: PlanValue, val pro: PlanValue)
+
+private val planRows = listOf(
+    PlanRow("Drills", PlanValue.Label("5"), PlanValue.Label("All 15")),
+    PlanRow("Detailed AI reports", PlanValue.Label("${ReportAllowance.FREE_WEEKLY_LIMIT} a week"), PlanValue.Label("Unlimited")),
+    PlanRow("Session summaries", PlanValue.Included, PlanValue.Included),
+    PlanRow("Coach connection", PlanValue.NotIncluded, PlanValue.Included),
+)
+
+private val HeaderHeight = 44.dp
+private val RowHeight = 42.dp
+
+/** Side-by-side Free and Pro columns; the column for the current plan is highlighted. */
 @Composable
-private fun PlanLine(text: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(Icons.Rounded.CheckCircle, null, Modifier.size(18.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+private fun PlanComparison(isPro: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1.3f)) {
+            Spacer(Modifier.height(HeaderHeight))
+            planRows.forEach { row ->
+                Box(Modifier.height(RowHeight), contentAlignment = Alignment.CenterStart) {
+                    Text(row.feature, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                }
+            }
+        }
+        PlanColumn("Free", current = !isPro, values = planRows.map { it.free }, modifier = Modifier.weight(1f))
+        PlanColumn("Pro", current = isPro, values = planRows.map { it.pro }, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun PlanColumn(title: String, current: Boolean, values: List<PlanValue>, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = if (current) colors.surface else Color.Transparent,
+        border = if (current) BorderStroke(1.5.dp, colors.primary) else null,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.height(HeaderHeight), verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                    color = if (current) colors.primary else colors.onSurface)
+                if (current) Text("Current", style = MaterialTheme.typography.labelSmall, color = colors.primary)
+            }
+            values.forEach { value ->
+                Box(Modifier.height(RowHeight).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    when (value) {
+                        is PlanValue.Label -> Text(value.text, style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 2)
+                        PlanValue.Included -> Icon(Icons.Rounded.CheckCircle, contentDescription = "Included",
+                            Modifier.size(20.dp), tint = colors.primary)
+                        PlanValue.NotIncluded -> Text("—", style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant.copy(alpha = .6f))
+                    }
+                }
+            }
+        }
     }
 }

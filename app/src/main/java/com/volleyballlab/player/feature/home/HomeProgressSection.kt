@@ -233,7 +233,7 @@ private fun WeeklyActivityCard(week: List<DayActivity>) {
 
 /** A rounded progress bar that grows in from zero the first time it is shown. */
 @Composable
-private fun ScoreBar(fraction: Float, color: Color, height: Dp) {
+internal fun ScoreBar(fraction: Float, color: Color, height: Dp) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val animated by animateFloatAsState(if (shown) fraction.coerceIn(0f, 1f) else 0f, label = "scoreBar")
