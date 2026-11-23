@@ -5,16 +5,14 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.volleyballlab.player.VolleyballLabApplication
@@ -141,54 +139,54 @@ private val planRows = listOf(
     PlanRow("Coach connection", PlanValue.NotIncluded, PlanValue.Included),
 )
 
-private val HeaderHeight = 44.dp
-private val RowHeight = 42.dp
-
-/** Side-by-side Free and Pro columns; the column for the current plan is highlighted. */
+/**
+ * Each feature sits above its Free and Pro values, so no label shares a line with them.
+ * Nothing has a fixed height: text wraps and the pair grows together. On a very narrow
+ * screen or with enlarged text the two values stack instead of sharing the width.
+ */
 @Composable
 private fun PlanComparison(isPro: Boolean) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Column(Modifier.weight(1.3f)) {
-            Spacer(Modifier.height(HeaderHeight))
-            planRows.forEach { row ->
-                Box(Modifier.height(RowHeight), contentAlignment = Alignment.CenterStart) {
-                    Text(row.feature, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+    val stacked = LocalDensity.current.fontScale > 1.15f || LocalConfiguration.current.screenWidthDp < 340
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        planRows.forEach { row ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(row.feature, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (stacked) {
+                    PlanCell("Free", row.free, current = !isPro, Modifier.fillMaxWidth())
+                    PlanCell("Pro", row.pro, current = isPro, Modifier.fillMaxWidth())
+                } else {
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlanCell("Free", row.free, current = !isPro, Modifier.weight(1f).fillMaxHeight())
+                        PlanCell("Pro", row.pro, current = isPro, Modifier.weight(1f).fillMaxHeight())
+                    }
                 }
             }
         }
-        PlanColumn("Free", current = !isPro, values = planRows.map { it.free }, modifier = Modifier.weight(1f))
-        PlanColumn("Pro", current = isPro, values = planRows.map { it.pro }, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun PlanColumn(title: String, current: Boolean, values: List<PlanValue>, modifier: Modifier) {
+private fun PlanCell(plan: String, value: PlanValue, current: Boolean, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = if (current) colors.surface else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surface.copy(alpha = if (current) 1f else .45f),
         border = if (current) BorderStroke(1.5.dp, colors.primary) else null,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Column(Modifier.height(HeaderHeight), verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-                    color = if (current) colors.primary else colors.onSurface)
-                if (current) Text("Current", style = MaterialTheme.typography.labelSmall, color = colors.primary)
-            }
-            values.forEach { value ->
-                Box(Modifier.height(RowHeight).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    when (value) {
-                        is PlanValue.Label -> Text(value.text, style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 2)
-                        PlanValue.Included -> Icon(Icons.Rounded.CheckCircle, contentDescription = "Included",
-                            Modifier.size(20.dp), tint = colors.primary)
-                        PlanValue.NotIncluded -> Text("—", style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurfaceVariant.copy(alpha = .6f))
-                    }
-                }
-            }
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(plan, style = MaterialTheme.typography.labelSmall,
+                color = if (current) colors.primary else colors.onSurfaceVariant)
+            Text(
+                when (value) {
+                    is PlanValue.Label -> value.text
+                    PlanValue.Included -> "Included"
+                    PlanValue.NotIncluded -> "Not included"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (value == PlanValue.NotIncluded) colors.onSurfaceVariant else colors.onSurface,
+            )
         }
     }
 }

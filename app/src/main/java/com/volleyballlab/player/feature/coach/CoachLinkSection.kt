@@ -1,6 +1,8 @@
 package com.volleyballlab.player.feature.coach
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -331,10 +333,13 @@ fun CoachLinkSection(
     if (showUpgrade) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { showUpgrade = false },
             title = { Text("Pro access") },
-            text = { com.volleyballlab.player.feature.profile.ProPlanCard(onBrowseCoaches = {
-                showUpgrade = false
-                onBrowseCoaches()
-            }) },
+            text = { com.volleyballlab.player.feature.profile.ProPlanCard(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                onBrowseCoaches = {
+                    showUpgrade = false
+                    onBrowseCoaches()
+                },
+            ) },
             confirmButton = { TextButton(onClick = { showUpgrade = false }) { Text("Close") } })
     }
 }
