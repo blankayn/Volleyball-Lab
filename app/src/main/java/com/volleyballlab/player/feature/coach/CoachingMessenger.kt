@@ -59,66 +59,61 @@ internal fun CoachingInboxRow(conversation: CoachingConversation, name: String, 
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
 }
 
-/** A bounded training exchange, never an unrestricted direct-message composer. */
+/** Open chat for a connected coach and player. Contact details stay blocked. */
 @Composable
-internal fun RestrictedCoachingThread(
-    question: CoachingQuestion, forCoach: Boolean, active: Boolean, busy: Boolean, error: String?,
-    onSend: (String) -> Unit, onResolve: () -> Unit, onRead: () -> Unit,
+internal fun CoachingChatThread(
+    conversation: CoachingConversation, forCoach: Boolean, active: Boolean, busy: Boolean, error: String?,
+    onSend: (String) -> Unit, onRead: () -> Unit,
     onWriting: (Boolean) -> Unit = {}, onInteract: () -> Unit = {},
 ) {
-    var draft by rememberSaveable(question.id) { mutableStateOf("") }
-    val lastAnswer = question.messages.lastOrNull { it.fromCoach == forCoach }?.at
-    var submitted by rememberSaveable(question.id) { mutableStateOf<Long?>(null) }
-    LaunchedEffect(lastAnswer) { if (submitted != null && lastAnswer != submitted) { draft = ""; submitted = null } }
-    LaunchedEffect(question.messages, question.unread(forCoach)) { if (question.unread(forCoach) > 0) onRead() }
-    val canSend = active && question.resolvedAt == null &&
-        (if (forCoach) question.awaitingCoach else !question.awaitingCoach && question.followUpCount < 2)
-    DisposableEffect(question.id, canSend, draft.isNotBlank()) {
-        onWriting(canSend && draft.isNotBlank())
+    val draftKey = conversation.playerUid
+    var draft by rememberSaveable(draftKey) { mutableStateOf("") }
+    val messages = conversation.messages
+    // Only messages the server accepted clear the draft, so a failed send keeps its text.
+    val accepted = messages.count { it.fromCoach == forCoach && it.at > 0L }
+    var submitted by rememberSaveable(draftKey) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(accepted) { submitted?.let { if (accepted > it) { draft = ""; submitted = null } } }
+    val unread = conversation.unread(forCoach)
+    LaunchedEffect(unread, messages.size) { if (unread > 0) onRead() }
+    DisposableEffect(draftKey, active, draft.isNotBlank()) {
+        onWriting(active && draft.isNotBlank())
         onDispose { onWriting(false) }
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("${if (question.sessionId == null) "Getting started" else "Session feedback"} · ${question.topic.label}",
-            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        question.messages.forEach { message ->
-            val own = message.fromCoach == forCoach
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = if (own) Alignment.End else Alignment.Start) {
-                Surface(shape = RoundedCornerShape(18.dp), color = if (own) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(.9f)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(message.text, style = MaterialTheme.typography.bodyLarge)
-                        Text(messageTime(message.at), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (messages.isEmpty()) Text(if (forCoach) "No messages yet. Say hello and share the first thing to work on."
+            else "No messages yet. Ask your coach about your training.",
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        messages.forEach { message ->
+            key(message.id) {
+                val own = message.fromCoach == forCoach
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = if (own) Alignment.End else Alignment.Start) {
+                    Surface(shape = RoundedCornerShape(18.dp), color = if (own) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier.widthIn(max = 320.dp)) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                            Text(messageTime(message.at), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
         }
-        Text(when {
-            !active -> "Connection ended · this conversation is read only."
-            question.resolvedAt != null -> "Resolved · this question is read only."
-            !forCoach && question.awaitingCoach -> "Waiting for your coach’s response."
-            forCoach && !question.awaitingCoach -> "Waiting for the player, or mark this question resolved."
-            !forCoach && question.followUpCount >= 2 -> "Both follow-ups used. Mark this question resolved before starting another."
-            else -> "Training only · ${2 - question.followUpCount} follow-ups remaining."
-        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (canSend) {
-            OutlinedTextField(draft, { draft = it.take(if (forCoach) 1000 else 300); onInteract() },
-                label = { Text(if (forCoach) "Give training guidance…" else "Ask about your training…") },
+        if (!active) Text("Connection ended · this conversation is read only.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else {
+            val blocked = hasCoachingContact(draft)
+            OutlinedTextField(draft, { draft = it.take(1000); onInteract() },
+                label = { Text(if (forCoach) "Message your player" else "Message your coach") },
                 modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(16.dp), enabled = !busy,
-                isError = hasCoachingContact(draft), supportingText = {
-                    Text(if (hasCoachingContact(draft)) "No links, phone numbers, email addresses or social handles."
-                    else "${draft.length}/${if (forCoach) 1000 else 300} · text only")
+                isError = blocked, supportingText = {
+                    Text(if (blocked) "No links, phone numbers, email addresses or social handles." else "${draft.length}/1000 · text only")
                 })
-            Button(onClick = { submitted = lastAnswer ?: 0L; onSend(draft) },
-                enabled = !busy && draft.isNotBlank() && !hasCoachingContact(draft),
+            Button(onClick = { submitted = accepted; onSend(draft) }, enabled = !busy && draft.isNotBlank() && !blocked,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 if (busy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
-                Text(if (busy) "Sending…" else if (forCoach) "Send training response" else "Send follow-up")
+                Text(if (busy) "Sending…" else "Send message")
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        if (active && question.resolvedAt == null && !question.awaitingCoach) {
-            TextButton(onClick = onResolve, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Mark question resolved") }
-        }
     }
 }
 

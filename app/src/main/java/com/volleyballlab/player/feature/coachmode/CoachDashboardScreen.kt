@@ -144,6 +144,8 @@ fun CoachDashboardScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val graph = remember(context) { (context.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container }
     val questions by graph.coachingHubRepository.coachQuestions.collectAsStateWithLifecycle(emptyList())
+    val chat by graph.coachingHubRepository.coachChat.collectAsStateWithLifecycle(emptyList())
+    val chatReads by graph.coachingHubRepository.coachReads.collectAsStateWithLifecycle(emptyList())
 
     // Both clock reads are sampled once per composition rather than at the point
     // of use. A clock read inside a list item makes the item's output depend on
@@ -181,7 +183,7 @@ fun CoachDashboardScreen(
                         ?: stringResource(R.string.coach_hero_body),
                     // Player questions live behind the inbox, the one coach destination
                     // that is not already a bottom tab.
-                    trailing = { QuestionsInboxButton(questions.sumOf { it.unread(true) }, onOpenQuestions) },
+                    trailing = { QuestionsInboxButton(com.volleyballlab.player.domain.model.coachingInbox(questions, chat, chatReads).sumOf { it.unread }, onOpenQuestions) },
                 )
             }
         }
@@ -547,7 +549,7 @@ private fun QueueRow(
 @Composable
 private fun QuestionsInboxButton(unread: Int, onClick: () -> Unit) {
     androidx.compose.material3.IconButton(onClick = onClick,
-        modifier = Modifier.semantics { contentDescription = if (unread > 0) "Player questions, $unread unread" else "Player questions" }) {
+        modifier = Modifier.semantics { contentDescription = if (unread > 0) "Player messages, $unread unread" else "Player messages" }) {
         androidx.compose.material3.BadgedBox(badge = {
             if (unread > 0) androidx.compose.material3.Badge { Text(if (unread > 99) "99+" else "$unread") }
         }) {

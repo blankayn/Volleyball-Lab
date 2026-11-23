@@ -251,6 +251,20 @@ html[data-portal-theme="dark"] .app-shell .cue-callout { box-shadow: inset 0 0 0
   .app-shell .cue-table-scroll table.cues td:first-child { width: 34%; }
 }
 
+/* ---- Chat ------------------------------------------------------------------- */
+.chat { display: grid; gap: 14px; margin-top: 16px; }
+.chat-log { display: flex; flex-direction: column; gap: 14px; max-height: 420px; padding: 18px; overflow-y: auto; border-radius: 14px; background: var(--portal-subtle); }
+.chat-line { display: grid; justify-items: start; gap: 4px; max-width: min(78%, 560px); }
+.chat-line.is-own { align-self: flex-end; justify-items: end; }
+.app-shell .chat-line p { margin: 0; padding: 11px 15px; border-radius: 4px 16px 16px 16px; background: var(--portal-surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font-size: calc(15px * var(--portal-scale)); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-shell .chat-line.is-own p { border-radius: 16px 4px 16px 16px; background: var(--portal-accent-tint); }
+.chat-line small, .chat-label { color: var(--ink-faint); font-size: calc(12px * var(--portal-scale)); }
+.app-shell .chat-empty { margin: 24px auto; color: var(--ink-soft); font-size: calc(14px * var(--portal-scale)); text-align: center; }
+.chat-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.app-shell .chat-form textarea { min-height: 52px; max-height: 180px; padding: 13px 15px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; background: var(--portal-surface); color: var(--ink); font: 400 calc(15px * var(--portal-scale))/1.5 var(--font); }
+.chat-form .btn { min-height: 52px; }
+.app-shell .chat-hint { margin: 0; color: var(--ink-faint); font-size: calc(13px * var(--portal-scale)); }
+
 /* ---- Recording notes ------------------------------------------------------- */
 .recording-stage { position: relative; }
 .recording-stage:fullscreen { display: grid; background: #000; }
@@ -280,6 +294,8 @@ html[data-portal-theme="dark"] .app-shell .cue-callout { box-shadow: inset 0 0 0
 .rep-note small { color: var(--ink-soft); font-size: calc(13px * var(--portal-scale)); line-height: 1.5; }
 .rep-note-time { color: var(--rust); font-size: calc(14px * var(--portal-scale)); font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 620px) {
+  .chat-line { max-width: 92%; }
+  .chat-form { grid-template-columns: 1fr; }
   .rep-callout { top: 8px; left: 8px; padding: 9px 12px; }
   .app-shell .rep-callout p { font-size: 13px; }
   .app-shell .rep-callout p span { display: none; }

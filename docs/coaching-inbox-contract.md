@@ -1,4 +1,32 @@
-# Restricted coaching inbox
+# Coaching inbox
+
+## Open chat (November 2026)
+
+A coach and a connected player chat freely. Either side can start, send several
+messages in a row and write about anything in training. Two protections remain:
+only a player with an `Active` roster row and their coach can send, and contact
+details, links and social accounts are refused by both apps and by the rules.
+
+`coachingMessages/{id}` holds `id`, `coachUid`, `playerUid`, `senderUid`, `text`
+(1 to 1,000 characters) and a server `createdAt`. Participants can read; nobody can
+edit or delete. `coachingReads/{coachUid}_{playerUid}` holds one read marker per
+side, written only by its owner and only forward. Account deletion removes both.
+
+Both apps show earlier questions and open messages in one timeline. When a question
+is still waiting, the coach's next message is saved as its answer, so a player on an
+older Android build receives it. Other open messages need an updated build.
+Response-time statistics continue to measure question answers only.
+
+Deploy `firestore.rules` before the website and the Android build: until then the
+new collections are denied and messages cannot load or send.
+
+Verification: `functions/emulator-tests/coaching-chat.test.mjs` (rules),
+`coach-web/checks/coaching-chat.test.mjs` and Android `CoachingInboxTest`.
+
+## Earlier question threads
+
+The rest of this document describes `coachingQuestions`, kept for history and for
+Android builds released before open chat.
 
 Android groups `coachingQuestions` by player. Rows sort unread conversations first,
 then by newest message time. Header, row and dashboard badges count incoming

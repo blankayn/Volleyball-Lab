@@ -90,7 +90,11 @@ fun MyCoachScreen(
     val coach = link?.let { connection -> state.directory.firstOrNull { it.coachUid == connection.coachUid }
         ?: CoachPreview(connection.coachUid, CoachProfile(name = connection.coachName, teamName = connection.teamName), 0) }
     LaunchedEffect(active, leaving, leaveError) { if (!active && !leaving && leaveError == null) showLeave = false }
-    val unread = questions.filter { it.coachUid == link?.coachUid }.sumOf { it.unread(false) }
+    val chat by actions.hub.playerChat.collectAsStateWithLifecycle(emptyList())
+    val reads by actions.hub.playerReads.collectAsStateWithLifecycle(emptyList())
+    val playerUid = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container.authRepository.currentUid.orEmpty()
+    fun conversationWith(coachUid: String) = coachingConversation(coachUid, playerUid, questions, chat, reads)
+    val unread = link?.let { conversationWith(it.coachUid).unread(false) } ?: 0
 
     LazyColumn(Modifier.fillMaxSize().coachPageBackground(), contentPadding = hubPadding(contentPadding), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item(key = "header") { Column { HubHeader(selected?.label ?: "My coach", onBack); HubSync(actions.hub) } }
@@ -114,8 +118,7 @@ fun MyCoachScreen(
                             CoachSectionCard {
                                 Text("Ask about technique, what to practise next, or how to record a session. Your coach replies here.",
                                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                CoachingQuestionCard(link.coachUid, null, questions.firstOrNull { it.coachUid == link.coachUid && it.sessionId == null },
-                                    true, actions, busy, errors, initiallyExpanded = true, alwaysOpen = true)
+                                CoachChatCard(link.coachUid, conversationWith(link.coachUid), true, actions, busy, errors)
                             }
                         }
                     } else item(key = "no-connection") {
@@ -170,33 +173,32 @@ fun MyCoachScreen(
                         val feedback = state.notes.filter { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }.sortedBy { it.createdAtEpochMs }
                         val review = reviews.firstOrNull { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }
                         val connected = active && link.coachUid == submission.coachUid
-                        val question = questions.firstOrNull { it.coachUid == submission.coachUid && it.resolvedAt == null }
-                            ?: questions.firstOrNull { it.coachUid == submission.coachUid && it.sessionId == submission.sessionId }
+                        val conversation = conversationWith(submission.coachUid)
+                        val hasChat = conversation.messages.isNotEmpty()
                         var questionOpen by rememberSaveable(submission.coachUid, submission.sessionId) { mutableStateOf(false) }
                         CoachFeedbackSessionCard(submission, session, feedback) {
                             if (!submission.isPending) {
                                 ReviewEditor(submission, review, connected, actions, busy, errors) {
-                                    if (connected || question != null) {
+                                    if (connected || hasChat) {
                                         OutlinedButton(onClick = { questionOpen = !questionOpen },
                                             shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                                            Text(if (questionOpen) "Hide" else if (question != null) "Open conversation" else "Ask about this session",
+                                            Text(if (questionOpen) "Hide" else if (hasChat) "Open conversation" else "Ask about this session",
                                                 style = MaterialTheme.typography.labelMedium)
                                             Spacer(Modifier.width(4.dp))
-                                            CoachingUnreadBadge(question?.unread(false) ?: 0)
+                                            CoachingUnreadBadge(conversation.unread(false))
                                             Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp), tint = coachCardMuted())
                                         }
                                     }
                                 }
-                                CoachingQuestionCard(submission.coachUid, submission.sessionId, question, connected,
-                                    actions, busy, errors, initiallyExpanded = true, visible = questionOpen)
+                                if (questionOpen) CoachChatCard(submission.coachUid, conversation, connected, actions, busy, errors)
                             }
                         }
                     }
                     items(state.notes.filter { it.sessionId == null }, key = { "general-${it.id}" }) { note -> CoachGeneralNote(note) }
-                    items(questions.filter { it.sessionId == null && (!active || it.coachUid != link.coachUid) }, key = { "intro-${it.id}" }) { question ->
+                    items((questions.map { it.coachUid } + chat.map { it.coachUid }).distinct().filter { !active || it != link.coachUid }, key = { "earlier-$it" }) { coachUid ->
                         CoachSectionCard {
                             Text("Earlier conversation", style = MaterialTheme.typography.labelLarge, color = coachCardMuted())
-                            CoachingQuestionCard(question.coachUid, null, question, false, actions, busy, errors)
+                            CoachChatCard(coachUid, conversationWith(coachUid), false, actions, busy, errors)
                         }
                     }
                 }
@@ -218,61 +220,12 @@ fun MyCoachScreen(
 
 
 @Composable
-private fun CoachingQuestionCard(coachUid: String, sessionId: String?, question: CoachingQuestion?, connected: Boolean,
-    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>,
-    initiallyExpanded: Boolean = false, visible: Boolean = true, alwaysOpen: Boolean = false) {
-    val key = "question-$coachUid-${sessionId ?: "intro"}"
-    var open by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
-    var answerOpen by rememberSaveable(key) { mutableStateOf(initiallyExpanded) }
-    var text by rememberSaveable(key) { mutableStateOf("") }
-    val topics = CoachingTopic.entries.filter { it.introductory == (sessionId == null) }
-    var topic by rememberSaveable(key) { mutableStateOf(topics.first()) }
-    val allQuestions by actions.hub.playerQuestions.collectAsStateWithLifecycle(emptyList())
-    val current = allQuestions.firstOrNull { it.coachUid == coachUid && it.resolvedAt == null } ?: question
-    var startNew by rememberSaveable(key) { mutableStateOf(false) }
-    LaunchedEffect(question?.id) { startNew = false; open = initiallyExpanded }
-    LaunchedEffect(visible) {
-        if (visible && initiallyExpanded) {
-            if (current != null) answerOpen = true else open = true
-        }
-    }
-    if (!visible) return
-    if (current != null && !startNew) {
-        if (!alwaysOpen) TextButton(onClick = { answerOpen = !answerOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(if (answerOpen) "Hide training conversation" else "Open training conversation")
-            Spacer(Modifier.width(8.dp)); CoachingUnreadBadge(current.unread(false))
-        }
-        if (answerOpen || alwaysOpen) RestrictedCoachingThread(current, false, connected, current.id in busy, errors[current.id],
-            onSend = { value -> actions.perform(current.id) { actions.hub.followUp(current, value) } },
-            onResolve = { actions.perform(current.id) { actions.hub.resolve(current) } },
-            onRead = { actions.perform("read-${current.id}") { actions.hub.markRead(current, false) } })
-        if (connected && current.resolvedAt != null) OutlinedButton(onClick = { text = ""; startNew = true; open = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Start a new training question")
-        }
-    } else if (connected) {
-        if (!open && !alwaysOpen) OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(14.dp)) {
-            Text(if (sessionId == null) "Ask about getting started" else "Ask a coaching question", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(19.dp))
-        } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (!alwaysOpen) CoachEyebrow("Ask your coach")
-            Text(if (alwaysOpen) "Topic" else "Choose a training topic", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                topics.forEach { option -> FilterChip(selected = option == topic, onClick = { topic = option }, label = { Text(option.label) }, enabled = key !in busy) }
-            }
-            OutlinedTextField(text, { text = it.take(300) }, label = { Text("What would you like to understand?") },
-                minLines = 3, shape = RoundedCornerShape(16.dp), isError = hasCoachingContact(text),
-                supportingText = { Text(if (hasCoachingContact(text)) "No links or contact details." else "${text.length}/300 · one open training question at a time") },
-                enabled = key !in busy, modifier = Modifier.fillMaxWidth())
-            errors[key]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            Button(onClick = { actions.perform(key) { actions.hub.ask(coachUid, sessionId, topic, text) } },
-                enabled = text.isNotBlank() && !hasCoachingContact(text) && key !in busy,
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                if (key in busy) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
-                Text(if (key in busy) "Sending question…" else "Send coaching question")
-            }
-            if (!alwaysOpen) TextButton(onClick = { open = false }, enabled = key !in busy, modifier = Modifier.fillMaxWidth()) { Text("Keep for later") }
-        }
-    }
+private fun CoachChatCard(coachUid: String, conversation: CoachingConversation, connected: Boolean,
+    actions: CoachingActionsModel, busy: Set<String>, errors: Map<String, String>) {
+    val key = "chat-$coachUid"
+    CoachingChatThread(conversation, false, connected, key in busy, errors[key],
+        onSend = { text -> actions.perform(key) { actions.hub.send(coachUid, conversation, text) } },
+        onRead = { actions.perform("read-$key") { actions.hub.markRead(coachUid, conversation, false) } })
 }
 
 @Composable
@@ -340,8 +293,11 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
     val syncError by actions.hub.error.collectAsStateWithLifecycle(null)
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(selected != null) { selected = null }
-    val inbox = coachingInbox(questions)
+    val chat by actions.hub.coachChat.collectAsStateWithLifecycle(emptyList())
+    val reads by actions.hub.coachReads.collectAsStateWithLifecycle(emptyList())
+    val inbox = coachingInbox(questions, chat, reads)
     val conversation = inbox.firstOrNull { it.playerUid == selected }
+    val withoutChat = roster.filter { member -> member.isActive && inbox.none { it.playerUid == member.playerUid } }
     val playerName = roster.firstOrNull { it.playerUid == selected }?.playerName?.ifBlank { "Player" } ?: "Player"
     CoachQuestionsPage(onBack = { if (selected != null) selected = null else onBack() }, contentPadding = contentPadding,
         title = if (selected == null) "Inbox" else playerName, unread = if (selected == null) inbox.sumOf { it.unread } else 0) {
@@ -349,23 +305,30 @@ fun CoachQuestionsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
             Column { Text(message, color = MaterialTheme.colorScheme.error); TextButton(onClick = actions.hub::retry) { Text("Retry coaching sync") } }
         } }
         if (selected == null) {
-            if (inbox.isEmpty()) item { Text("Player training questions will appear here after a player starts a conversation.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (inbox.isEmpty() && withoutChat.isEmpty()) item { Text("Your active players will appear here.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(inbox, key = { it.playerUid }) { entry ->
                 CoachingInboxRow(entry, roster.firstOrNull { it.playerUid == entry.playerUid }?.playerName?.ifBlank { "Player" } ?: "Player") { selected = entry.playerUid }
             }
-        } else {
-            item { Text("Training questions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
-            items(conversation?.questions?.sortedByDescending { it.createdAt }.orEmpty(), key = { it.id }) { question ->
-                val active = roster.any { it.playerUid == question.playerUid && it.isActive }
-                RestrictedCoachingThread(question, true, active, question.id in busy, errors[question.id],
-                    onSend = { text -> actions.perform(question.id) { actions.hub.respond(question, text) } },
-                    onResolve = { actions.perform(question.id) { actions.hub.resolve(question) } },
-                    onRead = { actions.perform("read-${question.id}") { actions.hub.markRead(question, true) } },
-                    onWriting = { graph.coachPresenceReporter.writing(question.id, it) },
-                    onInteract = graph.coachPresenceReporter::interact)
-                Spacer(Modifier.height(18.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            if (withoutChat.isNotEmpty()) item(key = "start-label") { Text("Start a chat", Modifier.padding(top = 20.dp, bottom = 4.dp),
+                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+            items(withoutChat, key = { "start-${it.playerUid}" }) { member ->
+                OutlinedButton(onClick = { selected = member.playerUid }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 8.dp), shape = RoundedCornerShape(14.dp)) {
+                    Text(member.playerName.ifBlank { "Player" }, Modifier.weight(1f))
+                    Icon(Icons.Rounded.ChevronRight, null, Modifier.size(19.dp))
+                }
             }
+        } else {
+            selected?.let { playerUid -> item(key = "chat-$playerUid") {
+                val active = roster.any { it.playerUid == playerUid && it.isActive }
+                val coachUid = graph.authRepository.currentUid.orEmpty()
+                val thread = conversation ?: CoachingConversation(playerUid, emptyList())
+                val key = "chat-$playerUid"
+                CoachingChatThread(thread, true, active, key in busy, errors[key],
+                    onSend = { text -> actions.perform(key) { actions.hub.send(coachUid, thread, text) } },
+                    onRead = { actions.perform("read-$key") { actions.hub.markRead(coachUid, thread, true) } },
+                    onWriting = { graph.coachPresenceReporter.writing(key, it) },
+                    onInteract = graph.coachPresenceReporter::interact)
+            } }
         }
     }
 }

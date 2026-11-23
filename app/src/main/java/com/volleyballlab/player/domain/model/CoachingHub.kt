@@ -33,13 +33,42 @@ data class CoachingQuestion(
 }
 data class CoachingFollowUp(val text: String, val createdAt: Long, val answer: String? = null, val answeredAt: Long? = null)
 data class CoachingMessage(val id: String, val text: String, val at: Long, val fromCoach: Boolean)
-data class CoachingConversation(val playerUid: String, val questions: List<CoachingQuestion>) {
-    val unread: Int get() = questions.sumOf { it.unread(true) }
-    val latest: CoachingMessage get() = questions.flatMap { it.messages }.maxBy { it.at }
+
+/** One open chat message. [createdAt] is 0 until the server has accepted it. */
+data class CoachingChatMessage(val id: String, val coachUid: String, val playerUid: String, val senderUid: String,
+    val text: String, val createdAt: Long) {
+    val fromCoach: Boolean get() = senderUid == coachUid
 }
-fun coachingInbox(questions: List<CoachingQuestion>) = questions.groupBy { it.playerUid }
-    .map { (uid, rows) -> CoachingConversation(uid, rows.sortedBy { it.createdAt }) }
-    .sortedWith(compareByDescending<CoachingConversation> { it.unread > 0 }.thenByDescending { it.latest.at }.thenBy { it.playerUid })
+data class CoachingRead(val coachUid: String, val playerUid: String, val coachReadAt: Long = 0L, val playerReadAt: Long = 0L) {
+    fun at(forCoach: Boolean) = if (forCoach) coachReadAt else playerReadAt
+}
+
+/** Earlier question threads and open chat with one coach-player pair, as a single timeline. */
+data class CoachingConversation(val playerUid: String, val questions: List<CoachingQuestion>,
+    val chat: List<CoachingChatMessage> = emptyList(), val read: CoachingRead? = null) {
+    val messages: List<CoachingMessage> get() = (questions.flatMap { question -> question.messages.map { it.copy(id = "${question.id}:${it.id}") } } +
+        chat.map { CoachingMessage("chat:${it.id}", it.text, it.createdAt, it.fromCoach) })
+        .sortedBy { if (it.at <= 0L) Long.MAX_VALUE else it.at }
+    val latest: CoachingMessage get() = messages.last()
+    val unread: Int get() = unread(true)
+    fun unread(forCoach: Boolean): Int = questions.sumOf { it.unread(forCoach) } + unreadChat(forCoach).size
+    fun unreadChat(forCoach: Boolean): List<CoachingChatMessage> {
+        val readAt = read?.at(forCoach) ?: 0L
+        return chat.filter { it.fromCoach != forCoach && it.createdAt > readAt }
+    }
+    /** The oldest question still waiting. Answering it keeps older app versions in step. */
+    val waitingQuestion: CoachingQuestion? get() = questions.filter { it.awaitingCoach && it.createdAt > 0 }.minByOrNull { it.createdAt }
+}
+fun coachingConversation(coachUid: String, playerUid: String, questions: List<CoachingQuestion>,
+    chat: List<CoachingChatMessage>, reads: List<CoachingRead>) = CoachingConversation(playerUid,
+    questions.filter { it.coachUid == coachUid && it.playerUid == playerUid }.sortedBy { it.createdAt },
+    chat.filter { it.coachUid == coachUid && it.playerUid == playerUid },
+    reads.firstOrNull { it.coachUid == coachUid && it.playerUid == playerUid })
+fun coachingInbox(questions: List<CoachingQuestion>, chat: List<CoachingChatMessage> = emptyList(), reads: List<CoachingRead> = emptyList()) =
+    (questions.map { it.playerUid } + chat.map { it.playerUid }).distinct()
+        .map { uid -> CoachingConversation(uid, questions.filter { it.playerUid == uid }.sortedBy { it.createdAt },
+            chat.filter { it.playerUid == uid }, reads.firstOrNull { it.playerUid == uid }) }
+        .sortedWith(compareByDescending<CoachingConversation> { it.unread > 0 }.thenByDescending { it.latest.at }.thenBy { it.playerUid })
 
 data class CoachReview(
     val id: String, val coachUid: String, val playerUid: String, val sessionId: String,

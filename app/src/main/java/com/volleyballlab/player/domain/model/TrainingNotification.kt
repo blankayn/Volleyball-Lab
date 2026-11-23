@@ -17,6 +17,15 @@ object NotificationEvents {
         TrainingNotification(if (message.id == "answer") "question-answer:${question.id}" else "question-answer:${question.id}:${message.id}", TrainingNotificationType.CoachingAnswer,
             "Your coach answered", "Your coaching question has a response. Open My coach to read it.", message.at, question.id)
     }
+    /** Unread incoming chat only, so signing in on a new phone does not announce old messages. */
+    fun chat(messages: List<CoachingChatMessage>, reads: List<CoachingRead>, forCoach: Boolean): List<TrainingNotification> =
+        messages.filter { message -> message.fromCoach != forCoach && message.createdAt >
+            (reads.firstOrNull { it.coachUid == message.coachUid && it.playerUid == message.playerUid }?.at(forCoach) ?: 0L) }
+            .map { TrainingNotification("chat:${it.id}",
+                if (forCoach) TrainingNotificationType.CoachingQuestion else TrainingNotificationType.CoachingAnswer,
+                if (forCoach) "Player message" else "Message from your coach",
+                if (forCoach) "A player sent you a message. Open your inbox to reply." else "Your coach sent you a message. Open My coach to read it.",
+                it.createdAt, it.id) }
     fun connection(coachUid: String, member: RosterMember): TrainingNotification? {
         val decidedAt = member.decidedAtEpochMs ?: return null
         if (member.isPending) return null

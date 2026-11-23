@@ -39,7 +39,8 @@ import { wireProfileMedia } from "../lib/profile-media";
 import { profileHeader } from "../lib/profile-header";
 import { wireCoachExperience } from "../lib/coach-experience";
 import { messageBadge, playerUnreadCount, unreadCount } from "../lib/coaching-unread";
-import { getCoachQuestions, questionsQuery, renderCoachQuestions, wireCoachingHub, type CoachingQuestion } from "../lib/coaching-hub";
+import { getCoachQuestions, questionsQuery, type CoachingQuestion } from "../lib/coaching-hub";
+import { chatQuery, chatUnread, getCoachChat, renderChat, wireChat, type ChatData } from "../lib/coaching-chat";
 
 type Tab = "overview" | "queue" | "roster" | "assignments" | "account" | "player";
 
@@ -51,6 +52,7 @@ interface DashData {
   profileName: string;
   profileTeam: string;
   questions: CoachingQuestion[] | null;
+  chat: ChatData | null;
 }
 
 let unsubscribers: (() => void)[] = [];
@@ -148,12 +150,13 @@ function perSkillMeans(sessions: TrainingSession[]): { skill: Skill; mean: numbe
 }
 
 async function loadData(coachUid: string): Promise<DashData> {
-  const [roster, submissions, assignments, profile, questions] = await Promise.all([
+  const [roster, submissions, assignments, profile, questions, chat] = await Promise.all([
     getRoster(coachUid),
     getSubmissions(coachUid),
     getAssignments(coachUid),
     getProfile(coachUid),
     getCoachQuestions(coachUid).catch(() => null),
+    getCoachChat(coachUid).catch(() => null),
   ]);
   const sessionsByPlayer = new Map<string, TrainingSession[]>();
   await Promise.all(
@@ -161,7 +164,7 @@ async function loadData(coachUid: string): Promise<DashData> {
       sessionsByPlayer.set(m.playerUid, await getSessionsFor(m.playerUid, coachUid));
     }),
   );
-  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name, profileTeam: profile.teamName, questions };
+  return { roster, submissions, assignments, sessionsByPlayer, profileName: profile.name, profileTeam: profile.teamName, questions, chat };
 }
 
 const PAGE_LABELS: Record<Tab, string> = {
@@ -423,7 +426,8 @@ export async function renderDashboard(
           activeTab,
           playerUid,
           data.submissions.filter((s) => s.reviewedAt === null).length,
-          data.roster.filter((m) => m.status === "Pending").length + (data.questions?.reduce((total, q) => total + unreadCount(q), 0) ?? 0),
+          data.roster.filter((m) => m.status === "Pending").length + (data.questions?.reduce((total, q) => total + unreadCount(q), 0) ?? 0)
+            + data.roster.reduce((total, m) => total + chatUnread(data.chat, m.playerUid), 0),
         );
       }
       if (live && editing()) return;
@@ -468,7 +472,7 @@ export async function renderDashboard(
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
       wireActions(root, coachUid, () => void render());
-      disposeHub = wireCoachingHub(root, coachUid, () => void render());
+      disposeHub = wireChat(root, coachUid, data.questions, data.chat, () => void render());
       disposeExplanations = wireSessionExplanations(root);
       disposeAccount = wireAccount(root, coachUid, () => {
         void getProfile(coachUid).then((profile) => {
@@ -501,6 +505,7 @@ export async function renderDashboard(
     subscribe(assignmentsQuery(coachUid), scheduleRefresh, () => undefined),
     subscribe(sharedSessionsQuery(coachUid), scheduleRefresh, () => undefined),
     subscribe(questionsQuery(coachUid), scheduleRefresh, () => undefined),
+    subscribe(chatQuery(coachUid), scheduleRefresh, () => undefined),
     () => clearTimeout(liveRefresh),
   ];
   await render();
@@ -537,6 +542,8 @@ function greeting(date = new Date()): string {
   return "Good evening";
 }
 
+const unreadFor = (data: DashData, playerUid: string): number =>
+  playerUnreadCount(data.questions, playerUid) + chatUnread(data.chat, playerUid);
 const DAY_MS = 86_400_000;
 const plural = (count: number, one: string, many = `${one}s`): string => `${count} ${count === 1 ? one : many}`;
 const skillName = (skill: string): string => SKILL_LABEL[skill] ?? skill;
@@ -605,7 +612,7 @@ function teamRow(data: DashData, m: RosterMember): string {
     <span class="team-form"><small>Form</small><b>${form ?? "—"}</b></span>
     <span class="team-sets"><small>Sets</small><b>${sessions.length}</b></span>
     <span class="team-last">${last ? esc(timeAgo(last.startedAt)) : "No sessions"}</span>
-    ${messageBadge(playerUnreadCount(data.questions, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
+    ${messageBadge(unreadFor(data, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
 }
 
 /** Lowest form first, so the players who need the coach are at the top. */
@@ -726,7 +733,7 @@ function playerCard(data: DashData, m: RosterMember): string {
   const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
   const last = sessions[0];
   return `<a class="player-card" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">
-    <span class="review-top">${avatar(m.playerName || "Player", m.playerUid)}<span class="review-who"><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(positionLabel(m.position))}</small></span>${messageBadge(playerUnreadCount(data.questions, m.playerUid))}</span>
+    <span class="review-top">${avatar(m.playerName || "Player", m.playerUid)}<span class="review-who"><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(positionLabel(m.position))}</small></span>${messageBadge(unreadFor(data, m.playerUid))}</span>
     <span class="player-card-data"><span><small>Form</small><b>${meanForm(sessions) ?? "—"}</b></span><span><small>Sets</small><b>${sessions.length}</b></span><span class="player-card-trend">${sparkline(sessions)}</span></span>
     <span class="player-card-last">${last ? `Last session ${esc(timeAgo(last.startedAt))}` : "No sessions shared yet"}</span></a>`;
 }
@@ -784,11 +791,10 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     ? emptyState("session", "No shared sessions", "This player has not submitted a session yet.")
     : sessions.map((s) => sessionCard(coachUid, playerUid, s, notes)).join("");
 
-  const conversation = await renderCoachQuestions(coachUid,
-    data.questions === null ? null : data.questions.filter(q => q.playerUid === playerUid), [member]);
+  const conversation = renderChat(coachUid, member, data.questions, data.chat);
   return `<div class="player-profile-toolbar"><a class="back-link" href="${appPath("roster")}">${icon("chevronLeft")} Back to roster</a>
     <details class="player-messages" data-message-thread="${esc(playerUid)}"${expandedConversations.has(playerUid) ? " open" : ""}>
-      <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(playerUnreadCount(data.questions, playerUid))}</summary>
+      <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(unreadFor(data, playerUid))}</summary>
       <div class="player-message-content"><h2>Messages with ${esc(member.playerName || "Player")}</h2>${conversation}</div>
     </details></div>
   <div class="player-head">${profileHeader({ name: member.playerName || "Player", subtitle: `${positionLabel(member.position)} · ${member.status}`, uid: playerUid })}

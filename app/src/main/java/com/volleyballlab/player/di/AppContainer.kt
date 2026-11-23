@@ -120,6 +120,10 @@ class AppContainer(private val context: Context) {
                 launch { coachRepository.notesForMe.collect { notes -> notificationRepository.ingest(uid, notes.map(com.volleyballlab.player.domain.model.NotificationEvents::feedback)) } }
                 launch { coachingHubRepository.coachQuestions.collect { questions -> notificationRepository.ingest(uid, questions.filter { it.awaitingCoach && it.createdAt > 0 }.map(com.volleyballlab.player.domain.model.NotificationEvents::question)) } }
                 launch { coachingHubRepository.playerQuestions.collect { questions -> notificationRepository.ingest(uid, questions.mapNotNull(com.volleyballlab.player.domain.model.NotificationEvents::answer)) } }
+                launch { combine(coachingHubRepository.coachChat, coachingHubRepository.coachReads, ::Pair).collect { (messages, reads) ->
+                    notificationRepository.ingest(uid, com.volleyballlab.player.domain.model.NotificationEvents.chat(messages, reads, true)) } }
+                launch { combine(coachingHubRepository.playerChat, coachingHubRepository.playerReads, ::Pair).collect { (messages, reads) ->
+                    notificationRepository.ingest(uid, com.volleyballlab.player.domain.model.NotificationEvents.chat(messages, reads, false)) } }
                 launch { coachRepository.assignmentsForMe.collect { assignments -> notificationRepository.ingest(uid, assignments.map(com.volleyballlab.player.domain.model.NotificationEvents::assignment)) } }
                 launch { combine(coachRepository.coachProfile, coachRepository.submissions, ::Pair).collect { (profile, submissions) ->
                     notificationRepository.ingest(uid, submissions.map(com.volleyballlab.player.domain.model.NotificationEvents::submission), profile.notifySubmissions) } }

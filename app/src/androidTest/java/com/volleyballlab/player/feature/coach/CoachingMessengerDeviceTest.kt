@@ -51,31 +51,28 @@ class CoachingMessengerDeviceTest {
         var error by mutableStateOf<String?>(null)
         compose.setContent { VolleyballLabTheme {
             Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).testTag("thread")) {
-                RestrictedCoachingThread(question(), true, true, false, error,
-                    onSend = { sent = it; error = "Could not send. Try again." }, onResolve = {}, onRead = { reads++ })
+                CoachingChatThread(coachingInbox(listOf(question())).single(), true, true, false, error,
+                    onSend = { sent = it; error = "Could not send. Try again." }, onRead = { reads++ })
             }
         } }
         compose.runOnIdle { assertEquals(1, reads) }
         compose.onNode(hasSetTextAction()).performScrollTo().performTextInput("Call 0917 123 4567")
-        compose.onNodeWithText("Send training response").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Send message").performScrollTo().assertIsNotEnabled()
         compose.onNode(hasSetTextAction()).performTextReplacement("Start with controlled platform drills.")
-        compose.onNodeWithText("Send training response").performScrollTo().performClick()
+        compose.onNodeWithText("Send message").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("Start with controlled platform drills.", sent) }
         compose.onNodeWithText("Could not send. Try again.").performScrollTo().assertIsDisplayed()
         compose.onNode(hasSetTextAction()).assertTextContains("Start with controlled platform drills.")
         screenshot("thread", "restricted-coaching-thread.png")
     }
 
-    @Test fun resolvedAndDisconnectedConversationsHaveNoComposer() {
+    @Test fun onlyConnectedConversationsHaveAComposer() {
         compose.setContent { VolleyballLabTheme {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                RestrictedCoachingThread(question().copy(answer = "Ready position", answeredAt = 200, resolvedAt = 300),
-                    false, true, false, null, {}, {}, {})
-                RestrictedCoachingThread(question(), true, false, false, null, {}, {}, {})
+                CoachingChatThread(coachingInbox(listOf(question())).single(), true, false, false, null, {}, {})
             }
         } }
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
-        compose.onNodeWithText("Resolved · this question is read only.").assertExists()
         compose.onNodeWithText("Connection ended · this conversation is read only.").assertExists()
     }
 

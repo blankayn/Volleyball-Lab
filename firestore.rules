@@ -536,6 +536,48 @@ service cloud.firestore {
                 && request.resource.data.resolvedAt == request.time))));
       allow delete: if false;
     }
+    // Open chat between a coach and a connected player. Either side may start and send
+    // any number of messages; contact details stay blocked and messages are permanent.
+    match /coachingMessages/{messageId} {
+      allow read: if signedIn() && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['id', 'coachUid', 'playerUid', 'senderUid', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'senderUid', 'text', 'createdAt'])
+        && request.resource.data.id == messageId && validUid(messageId)
+        && validUid(request.resource.data.coachUid) && validUid(request.resource.data.playerUid)
+        && request.resource.data.coachUid != request.resource.data.playerUid
+        && request.resource.data.senderUid == request.auth.uid
+        && request.auth.uid in [request.resource.data.coachUid, request.resource.data.playerUid]
+        && coachingText(request.resource.data.text, 1000)
+        && request.resource.data.createdAt == request.time
+        && isActiveMember(request.resource.data.coachUid, request.resource.data.playerUid);
+      allow update, delete: if false;
+    }
+    // Each participant owns one monotonic read marker per connection.
+    match /coachingReads/{pairId} {
+      allow read: if signedIn() && (!exists(/databases/$(database)/documents/coachingReads/$(pairId))
+        || resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create: if signedIn() && validChatRead(request.resource.data, pairId)
+        && chatMarker({}, request.resource.data, request.resource.data.coachUid == request.auth.uid ? 'coachReadAt' : 'playerReadAt')
+        && request.resource.data.get(request.resource.data.coachUid == request.auth.uid ? 'playerReadAt' : 'coachReadAt', null) == null;
+      allow update: if signedIn() && validChatRead(request.resource.data, pairId)
+        && unchanged(['coachUid', 'playerUid'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([resource.data.coachUid == request.auth.uid ? 'coachReadAt' : 'playerReadAt'])
+        && chatMarker(resource.data, request.resource.data, resource.data.coachUid == request.auth.uid ? 'coachReadAt' : 'playerReadAt');
+      allow delete: if false;
+    }
+    function validChatRead(data, pairId) {
+      return data.keys().hasAll(['coachUid', 'playerUid'])
+        && data.keys().hasOnly(['coachUid', 'playerUid', 'coachReadAt', 'playerReadAt'])
+        && validUid(data.coachUid) && validUid(data.playerUid)
+        && request.auth.uid in [data.coachUid, data.playerUid]
+        && pairId == data.coachUid + '_' + data.playerUid
+        && exists(/databases/$(database)/documents/roster/$(data.coachUid)/members/$(data.playerUid));
+    }
+    function chatMarker(old, data, field) {
+      return data.get(field, null) is timestamp && data[field] <= request.time
+        && (old.get(field, null) == null || data[field] >= old[field]);
+    }
     match /coachResponseTimes/{questionId} {
       allow read: if signedIn();
       allow create: if signedIn()

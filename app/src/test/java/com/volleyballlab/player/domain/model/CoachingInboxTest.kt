@@ -41,6 +41,39 @@ class CoachingInboxTest {
         assertFalse(follow.copy(resolvedAt = 700).awaitingCoach)
         assertEquals(6, follow.copy(resolvedAt = 700).messages.size)
     }
+    private fun chat(id: String, at: Long, sender: String = "p", player: String = "p") =
+        CoachingChatMessage(id, "coach", player, sender, "Message $id", at)
+    @Test fun openChatJoinsEarlierQuestionsInOneTimelineAndSendingMessagesStayLast() {
+        val row = question(at = 100).copy(answer = "Ready position", answeredAt = 200)
+        val conversation = coachingInbox(listOf(row), listOf(chat("b", 0, "coach"), chat("a", 150))).single()
+        assertEquals(listOf("Which drill first?", "Message a", "Ready position", "Message b"), conversation.messages.map { it.text })
+        assertEquals("Message b", conversation.latest.text)
+    }
+    @Test fun chatUnreadIsPerSideAndOwnOrUnsavedMessagesNeverCount() {
+        val messages = listOf(chat("a", 100), chat("b", 300), chat("c", 400, "coach"), chat("d", 0, "coach"))
+        val read = CoachingRead("coach", "p", coachReadAt = 100)
+        val conversation = coachingInbox(emptyList(), messages, listOf(read)).single()
+        assertEquals(1, conversation.unread(true))
+        assertEquals(1, conversation.unread(false))
+        assertEquals(0, coachingInbox(emptyList(), messages, listOf(read.copy(coachReadAt = 300))).single().unread)
+    }
+    @Test fun coachCanStartAChatWithNoEarlierQuestionAndPlayersStayInSeparateConversations() {
+        val inbox = coachingInbox(emptyList(), listOf(chat("a", 100, "coach"), chat("b", 200, "other", "other")))
+        assertEquals(listOf("other", "p"), inbox.map { it.playerUid })
+        assertNull(inbox.last().waitingQuestion)
+        assertEquals(emptyList<CoachingMessage>(), coachingConversation("coach", "new", emptyList(), emptyList(), emptyList()).messages)
+        assertTrue(coachingConversation("another", "p", emptyList(), listOf(chat("a", 100)), emptyList()).messages.isEmpty())
+    }
+    @Test fun oldestWaitingQuestionIsAnsweredFirst() {
+        val inbox = coachingInbox(listOf(question("new", at = 300), question("old", at = 100), question("done", at = 50).copy(answer = "Yes", answeredAt = 60)))
+        assertEquals("old", inbox.single().waitingQuestion?.id)
+    }
+    @Test fun chatNotificationsAreOnlyForUnreadIncomingMessages() {
+        val messages = listOf(chat("a", 100), chat("b", 300), chat("c", 400, "coach"), chat("d", 0))
+        val read = listOf(CoachingRead("coach", "p", coachReadAt = 100))
+        assertEquals(listOf("chat:b"), NotificationEvents.chat(messages, read, true).map { it.id })
+        assertEquals(listOf("chat:c"), NotificationEvents.chat(messages, read, false).map { it.id })
+    }
     @Test fun contactPatternsAreRejectedWithoutBlockingOrdinaryTrainingNumbers() {
         listOf("https://example.com", "www.example.com", "example.com", "coach.ph", "training.xyz", "Email player@example.com",
             "DM @player", "Call +63 917 123 4567", "Message on WhatsApp").forEach { assertTrue(it, hasCoachingContact(it)) }
