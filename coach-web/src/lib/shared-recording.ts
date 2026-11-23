@@ -2,12 +2,13 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { esc } from "./format";
 import { attachCoachReel } from "./coach-reel";
+import { attachRepNotes } from "./rep-notes";
 import { attachRecordingSkeleton } from "./recording-skeleton";
 
 const DEFAULT_ENDPOINT = "https://volleyball-lab-session-ai.volleyball-lab-session-ai.workers.dev";
 
 export function sharedRecordingPanel(sessionId: string): string {
-  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><div style="position:relative"><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;object-fit:contain;background:#111;border-radius:12px;vertical-align:top"></video><canvas data-recording-skeleton aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas></div><label data-skeleton-option hidden><input type="checkbox" checked> Show MediaPipe skeleton</label><section data-coach-reel hidden aria-label="Coach Reel"></section></section>`;
+  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><div class="recording-stage" data-recording-stage><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;object-fit:contain;background:#111;border-radius:12px;vertical-align:top"></video><canvas data-recording-skeleton aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas></div><div class="recording-options"><label data-skeleton-option hidden><input type="checkbox" checked> Show MediaPipe skeleton</label><label data-notes-option hidden><input type="checkbox" checked> Show rep notes on video</label><button class="btn btn-ghost btn-sm" type="button" data-recording-full hidden>Full screen with notes</button></div><section data-rep-notes hidden aria-label="Rep notes"></section><section data-coach-reel hidden aria-label="Coach Reel"></section></section>`;
 }
 
 export function wireSharedRecordings(root: HTMLElement): () => void {
@@ -20,6 +21,7 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
     overlays.forEach(dispose => dispose());
     overlays.clear();
     root.querySelectorAll<HTMLElement>("[data-skeleton-option]").forEach(option => { option.hidden = true; });
+    root.querySelectorAll<HTMLElement>("[data-notes-option], [data-recording-full]").forEach(option => { option.hidden = true; });
     requests.forEach(request => request.abort());
     requests.clear();
     root.querySelectorAll<HTMLVideoElement>("[data-recording-video]").forEach(video => {
@@ -31,7 +33,13 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
   const onClick = async (event: Event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("[data-load-recording]");
     const panel = button?.closest<HTMLElement>("[data-recording-panel]");
-    if (!button || !panel || button.disabled || disposed) return;
+    if (!button) {
+      const full = (event.target as Element).closest("[data-recording-full]");
+      const stage = full?.closest("[data-recording-panel]")?.querySelector<HTMLElement>("[data-recording-stage]");
+      void stage?.requestFullscreen?.().catch(() => undefined);
+      return;
+    }
+    if (!panel || button.disabled || disposed) return;
     const status = panel.querySelector<HTMLElement>("[data-recording-status]")!;
     const video = panel.querySelector<HTMLVideoElement>("video")!;
     const controller = new AbortController(); requests.add(controller);
@@ -78,6 +86,20 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
         const reelHost = panel.querySelector<HTMLElement>("[data-coach-reel]");
         if (reelHost) overlays.add(attachCoachReel(video, reelHost, data));
         const detach = attachRecordingSkeleton(video, canvas, toggle, data);
+        const stage = panel.querySelector<HTMLElement>("[data-recording-stage]");
+        const notesHost = panel.querySelector<HTMLElement>("[data-rep-notes]");
+        const notesOption = panel.querySelector<HTMLElement>("[data-notes-option]");
+        const notesToggle = notesOption?.querySelector<HTMLInputElement>("input");
+        if (stage && notesHost && notesOption && notesToggle) {
+          overlays.add(attachRepNotes(video, stage, notesHost, notesToggle, data));
+          notesOption.hidden = false;
+          const full = panel.querySelector<HTMLElement>("[data-recording-full]");
+          if (full && document.fullscreenEnabled) {
+            // The browser's own full screen shows only the video, without the notes.
+            video.setAttribute("controlslist", "nofullscreen");
+            full.hidden = false;
+          }
+        }
         if (!detach) throw new Error();
         overlays.add(detach);
         option.hidden = false;

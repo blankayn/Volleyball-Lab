@@ -161,6 +161,13 @@ html[data-portal-focus] .app-shell .focus-card :focus-visible { outline-color: #
 @media (hover: hover) {
   html[data-portal-theme="light"] .app-shell :is(.review-card, .player-card):hover { transform: translateY(-3px); box-shadow: 0 18px 34px -20px #14203a66; }
 }
+.view-toggle { display: inline-flex; flex: none; padding: 4px; border-radius: 12px; background: var(--portal-surface); box-shadow: inset 0 0 0 1px var(--line); }
+.page-tools .page-lead { margin-right: auto; }
+.page-tools .view-toggle { margin: 0; }
+.view-toggle button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 14px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-soft); font: 500 calc(14px * var(--portal-scale)) var(--font); cursor: pointer; }
+.view-toggle button:hover { color: var(--ink); }
+.view-toggle button[aria-pressed="true"] { background: var(--portal-accent-tint); color: var(--rust); font-weight: 600; box-shadow: inset 0 0 0 1px currentColor; }
+.view-toggle svg { width: 18px; height: 18px; }
 .review-top { display: flex; align-items: center; gap: 14px; }
 .review-who { display: grid; flex: 1; gap: 2px; min-width: 0; }
 .review-skill { display: flex; align-items: baseline; gap: 10px; }
@@ -170,6 +177,23 @@ html[data-portal-focus] .app-shell .focus-card :focus-visible { outline-color: #
 .review-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: auto; }
 .review-open { display: inline-flex; align-items: center; gap: 8px; color: var(--rust); font-size: calc(14px * var(--portal-scale)); font-weight: 600; }
 .review-open svg { width: 18px; height: 18px; }
+@media (min-width: 621px) {
+  .review-grid.is-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .review-grid.is-list .review-card { display: grid; grid-template-columns: 44px minmax(130px, 1.2fr) minmax(110px, .8fr) minmax(0, 1.3fr) 150px 48px 92px; align-items: center; gap: 16px; padding: 12px 20px; border-radius: 12px; }
+  .review-grid.is-list :is(.review-top, .review-foot) { display: contents; }
+  .review-grid.is-list .avatar { order: 1; }
+  .review-grid.is-list .review-who { order: 2; }
+  .review-grid.is-list .review-skill { order: 3; flex-wrap: wrap; gap: 2px 8px; }
+  .review-grid.is-list .review-skill b { font-size: 22px; }
+  .review-grid.is-list .review-focus { order: 4; padding: 0; background: none; }
+  .review-grid.is-list .wait { order: 5; }
+  .review-grid.is-list .score-ring-sm { order: 6; }
+  .review-grid.is-list .review-open { order: 7; justify-content: flex-end; }
+}
+@media (min-width: 621px) and (max-width: 1240px) {
+  .review-grid.is-list .review-card { grid-template-columns: 44px minmax(0, 1.2fr) minmax(0, .9fr) 132px 48px; }
+  .review-grid.is-list :is(.review-focus, .review-open) { display: none; }
+}
 .app-shell .request-panel { padding: 24px 26px; border-radius: 16px; background: var(--portal-accent-tint); }
 .request-list { margin-top: 10px; }
 .request-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
@@ -225,6 +249,40 @@ html[data-portal-theme="dark"] .app-shell .cue-callout { box-shadow: inset 0 0 0
 @media (min-width: 601px) {
   .app-shell .cue-table-scroll table.cues { display: table; width: 100%; table-layout: auto; }
   .app-shell .cue-table-scroll table.cues td:first-child { width: 34%; }
+}
+
+/* ---- Recording notes ------------------------------------------------------- */
+.recording-stage { position: relative; }
+.recording-stage:fullscreen { display: grid; background: #000; }
+.recording-stage:fullscreen video { width: 100%; height: 100vh; max-height: none !important; border-radius: 0 !important; }
+.rep-callout { position: absolute; top: 14px; left: 14px; max-width: min(340px, calc(100% - 28px)); padding: 12px 16px; border-left: 5px solid #ff7a2f; border-radius: 10px; background: #0f1a2ee8; color: #fff; pointer-events: none; }
+.rep-callout > b { color: #ffb454; font-family: var(--num); font-size: 22px; font-weight: 600; line-height: 1; }
+.app-shell .rep-callout p { display: grid; gap: 2px; margin: 6px 0 0; font-size: 15px; line-height: 1.35; }
+.app-shell .rep-callout p span { color: #d5dfec; font-size: 13px; }
+.recording-options { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; margin-top: 12px; font-size: calc(14px * var(--portal-scale)); }
+[data-rep-notes] { margin-top: 18px; }
+.rep-notes-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.rep-notes-head h4 { margin: 0; }
+.rep-notes-head span { color: var(--ink-soft); font-size: calc(14px * var(--portal-scale)); }
+.rep-notes-head b { color: var(--rust); font-family: var(--num); font-size: 24px; font-weight: 600; }
+.rep-strip { position: relative; height: 22px; margin: 14px 0; overflow: hidden; border-radius: 6px; background: var(--portal-subtle); }
+.rep-strip i { position: absolute; top: 5px; bottom: 5px; min-width: 4px; border-radius: 3px; background: color-mix(in srgb, var(--ink-faint) 45%, transparent); }
+.rep-strip i.is-flagged { top: 0; bottom: 0; background: var(--rust); }
+.rep-strip b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+.rep-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.rep-list > li { padding: 14px 16px; border-radius: 12px; background: var(--portal-subtle); }
+.rep-list-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: calc(15px * var(--portal-scale)); }
+.rep-list-head span { color: var(--ink-soft); }
+.rep-note { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 12px; width: 100%; padding: 10px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.rep-note:hover, .rep-note.is-now { background: var(--portal-accent-tint); }
+.rep-note > span:last-child { display: grid; gap: 3px; }
+.rep-note strong { font-size: calc(15px * var(--portal-scale)); font-weight: 600; }
+.rep-note small { color: var(--ink-soft); font-size: calc(13px * var(--portal-scale)); line-height: 1.5; }
+.rep-note-time { color: var(--rust); font-size: calc(14px * var(--portal-scale)); font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) {
+  .rep-callout { top: 8px; left: 8px; padding: 9px 12px; }
+  .app-shell .rep-callout p { font-size: 13px; }
+  .app-shell .rep-callout p span { display: none; }
 }
 
 /* ---- Drills --------------------------------------------------------------- */
@@ -309,6 +367,11 @@ html[data-portal-density="compact"] .app-shell .focus-card { min-height: 230px; 
   .team-row .row-arrow { grid-column: 4; }
   .page-tools { display: grid; gap: 14px; }
   .app-shell .page-tools .coach-search { flex: none; }
+  .page-tools .view-toggle { justify-self: start; }
+  .review-grid.is-list { gap: 8px; }
+  .review-grid.is-list .review-card { gap: 8px; padding: 14px 16px; }
+  .review-grid.is-list .review-focus { display: none; }
+  .review-grid.is-list .review-skill b { font-size: 22px; }
   .request-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); }
   .request-actions { grid-column: 1 / -1; }
   .request-actions .btn { flex: 1; }

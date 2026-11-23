@@ -68,9 +68,11 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
   }
   host.innerHTML += `<div class="chip-row"><button type="button" class="btn btn-primary btn-sm" data-reel-play>Play Coach Reel</button><button type="button" class="btn btn-ghost btn-sm" data-reel-full>Full Recording</button></div><div class="chip-row" style="margin-top:8px">${clips.map((c, i) => `<button type="button" class="btn btn-ghost btn-sm" data-reel-clip="${i}">${esc(c.rep.angle && c.rep.angle !== "Unknown" ? c.rep.angle + " · " : "")}Rep ${c.rep.repNumber}</button>`).join("")}</div><p data-reel-comment role="status" aria-live="polite"></p>`;
   let current = -1, running = false, disposed = false;
-  let animation = 0;
+  let animation = 0, frozen = -1;
+  let hold: ReturnType<typeof setTimeout> | undefined;
   const comment = host.querySelector<HTMLElement>("[data-reel-comment]")!;
-  const stop = () => { running = false; window.cancelAnimationFrame(animation); };
+  const release = () => { clearTimeout(hold); hold = undefined; };
+  const stop = () => { running = false; release(); window.cancelAnimationFrame(animation); };
   const show = (index: number) => {
     const clip = clips[index]!;
     const cue = cueDefinition(clip.issue.cueId);
@@ -81,6 +83,7 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
   const play = () => { void video.play().catch(() => { stop(); comment.textContent = "Playback could not start. Use the video controls to retry."; }); };
   const start = (index: number) => {
     if (disposed) return;
+    release(); frozen = -1;
     current = index; show(index);
     video.currentTime = clips[index]!.startMs / 1000;
     play();
@@ -91,6 +94,13 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
     if (clip && !video.seeking && video.currentTime * 1000 >= clip.endMs - 30) {
       if (current + 1 < clips.length) start(current + 1);
       else { stop(); video.pause(); comment.textContent += " Coach Reel complete."; return; }
+    } else if (clip && !video.seeking && !video.paused && frozen !== current && video.currentTime * 1000 >= clip.freezeMs) {
+      // Hold on the measured moment, as the Android reel does, so the note can be read.
+      frozen = current;
+      video.pause();
+      video.currentTime = clip.freezeMs / 1000;
+      hold = setTimeout(() => { hold = undefined; if (running && !disposed) play(); }, 2500);
+      return;
     }
     animation = window.requestAnimationFrame(update);
   };
@@ -108,11 +118,16 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
   };
   // Pause keeps the current clip; play resumes its bounds. Scrubbing outside it returns to full recording.
   const onPause = () => { window.cancelAnimationFrame(animation); };
-  const onPlay = () => { if (running) { window.cancelAnimationFrame(animation); animation = window.requestAnimationFrame(update); } };
+  const onPlay = () => { release(); if (running) { window.cancelAnimationFrame(animation); animation = window.requestAnimationFrame(update); } };
   const onEnded = () => {
     if (!running) return;
     if (current + 1 < clips.length) start(current + 1);
     else { stop(); comment.textContent += " Coach Reel complete."; }
+  };
+  const onRepSeek = () => {
+    stop(); current = -1; comment.textContent = "";
+    video.dispatchEvent(new CustomEvent("reelhighlight", { detail: [] }));
+    host.querySelectorAll("[data-reel-clip]").forEach(b => b.setAttribute("aria-pressed", "false"));
   };
   const onSeek = () => {
     const clip = clips[current];
@@ -122,9 +137,10 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
     }
   };
   host.addEventListener("click", onClick);
+  video.addEventListener("repseek", onRepSeek);
   video.addEventListener("pause", onPause); video.addEventListener("play", onPlay); video.addEventListener("seeked", onSeek); video.addEventListener("ended", onEnded);
   return () => {
-    disposed = true; stop(); host.removeEventListener("click", onClick);
+    disposed = true; stop(); host.removeEventListener("click", onClick); video.removeEventListener("repseek", onRepSeek);
     video.removeEventListener("pause", onPause); video.removeEventListener("play", onPlay); video.removeEventListener("seeked", onSeek); video.removeEventListener("ended", onEnded);
     video.dispatchEvent(new CustomEvent("reelhighlight", { detail: [] }));
     host.replaceChildren(); host.hidden = true;

@@ -380,6 +380,10 @@ export async function renderDashboard(
     const send = body.querySelector<HTMLButtonElement>(`[data-action="send-note"][data-session="${CSS.escape(field.dataset.noteDraft!)}"]`);
     if (send) send.disabled = !field.value.trim();
   });
+  body.addEventListener("click", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-queue-view]");
+    if (button) setQueueView(body, button.dataset["queueView"] === "list" ? "list" : "cards");
+  });
   body.addEventListener("input", (event) => {
     const target = event.target as HTMLInputElement | HTMLTextAreaElement;
     if (target.matches("[data-coach-search]")) { filterQueries.set(target.getAttribute("aria-label") ?? "", target.value); return; }
@@ -539,6 +543,26 @@ const skillName = (skill: string): string => SKILL_LABEL[skill] ?? skill;
 const STATUS_LABEL: Record<Assignment["status"], string> = { Pending: "Pending", InProgress: "In progress", Completed: "Completed" };
 const overdue = (a: Assignment): boolean => a.status !== "Completed" && a.dueAt !== null && a.dueAt < Date.now();
 
+/** Stored position keys such as "MiddleBlocker", written as words. */
+const positionLabel = (position: string | null | undefined): string =>
+  position ? position.replace(/([a-z])([A-Z])/g, (_match, before: string, after: string) => `${before} ${after.toLowerCase()}`) : "Position not set";
+
+type QueueView = "cards" | "list";
+const QUEUE_VIEW_KEY = "vl.coach.queue.view";
+let queueView: QueueView | null = null;
+function currentQueueView(): QueueView {
+  if (queueView) return queueView;
+  try { queueView = localStorage.getItem(QUEUE_VIEW_KEY) === "list" ? "list" : "cards"; } catch { queueView = "cards"; }
+  return queueView;
+}
+function setQueueView(root: ParentNode, view: QueueView): void {
+  queueView = view;
+  try { localStorage.setItem(QUEUE_VIEW_KEY, view); } catch { /* The choice still applies to this visit. */ }
+  root.querySelector(".review-grid")?.classList.toggle("is-list", view === "list");
+  root.querySelectorAll<HTMLButtonElement>("[data-queue-view]").forEach((button) =>
+    button.setAttribute("aria-pressed", String(button.dataset["queueView"] === view)));
+}
+
 function findSession(data: DashData, sessionId: string): TrainingSession | null {
   for (const sessions of data.sessionsByPlayer.values()) {
     const found = sessions.find((s) => s.id === sessionId);
@@ -576,7 +600,7 @@ function teamRow(data: DashData, m: RosterMember): string {
   const form = meanForm(sessions);
   const last = sessions[0];
   return `<a class="team-row" href="${appPath("player", m.playerUid)}">
-    <span class="team-player">${avatar(m.playerName || "Player", m.playerUid)}<span><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(m.position ?? "Position not set")}</small></span></span>
+    <span class="team-player">${avatar(m.playerName || "Player", m.playerUid)}<span><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(positionLabel(m.position))}</small></span></span>
     <span class="team-trend">${sparkline(sessions)}</span>
     <span class="team-form"><small>Form</small><b>${form ?? "—"}</b></span>
     <span class="team-sets"><small>Sets</small><b>${sessions.length}</b></span>
@@ -675,9 +699,9 @@ function reviewCard(data: DashData, s: Submission): string {
   const member = data.roster.find((m) => m.playerUid === s.playerUid);
   const session = findSession(data, s.sessionId);
   return `<a class="review-card" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">
-    <span class="review-top">${avatar(name, s.playerUid)}<span class="review-who"><strong>${esc(name)}</strong><small>${esc(member?.position ?? "Position not set")}</small></span>${scoreRing(session?.formScore ?? null, "sm", "Form score")}</span>
+    <span class="review-top">${avatar(name, s.playerUid)}<span class="review-who"><strong>${esc(name)}</strong><small>${esc(positionLabel(member?.position))}</small></span>${scoreRing(session?.formScore ?? null, "sm", "Form score")}</span>
     <span class="review-skill"><b>${esc(session ? skillName(session.skill) : "Session")}</b>${session ? `<span>${plural(session.repCount, "rep")}</span>` : ""}</span>
-    <span class="review-focus">${session?.weakestCue ? `<small>Focus next</small>${esc(cueLabel(session.weakestCue))}` : `<small>Focus next</small>Open to see measurements`}</span>
+    <span class="review-focus">${session?.weakestCue ? `<small>Focus next</small>${esc(cueLabel(session.weakestCue))}` : `<small>Focus next</small>${session ? "No correction measured" : "Session details not available"}`}</span>
     <span class="review-foot">${waiting(s.submittedAt)}<span class="review-open">Review ${icon("arrow")}</span></span></a>`;
 }
 
@@ -689,9 +713,11 @@ function viewQueue(data: DashData, highlight: string | null): string {
   }
   return `<div data-search-region class="queue-page">
     <div class="page-tools"><p class="page-lead">${plural(pending.length, "session")} ready for your feedback.</p>
-      <label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search review queue" placeholder="Find a player or skill" /></label></div>
+      <label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search review queue" placeholder="Find a player or skill" /></label>
+      <div class="view-toggle" role="group" aria-label="Review queue layout">${(["cards", "list"] as const).map((view) =>
+        `<button type="button" data-queue-view="${view}" aria-pressed="${currentQueueView() === view}">${navIcon(view === "cards" ? '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' : '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>')}${view === "cards" ? "Cards" : "List"}</button>`).join("")}</div></div>
     <p class="search-empty" role="status" data-search-empty hidden>No matching sessions. Try another name or skill.</p>
-    <div class="review-grid">${pending.map((s) => reviewCard(data, s)).join("")}</div></div>`;
+    <div class="review-grid${currentQueueView() === "list" ? " is-list" : ""}">${pending.map((s) => reviewCard(data, s)).join("")}</div></div>`;
 }
 
 // ---- Roster -----------------------------------------------------------------
@@ -700,7 +726,7 @@ function playerCard(data: DashData, m: RosterMember): string {
   const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
   const last = sessions[0];
   return `<a class="player-card" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">
-    <span class="review-top">${avatar(m.playerName || "Player", m.playerUid)}<span class="review-who"><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(m.position ?? "Position not set")}</small></span>${messageBadge(playerUnreadCount(data.questions, m.playerUid))}</span>
+    <span class="review-top">${avatar(m.playerName || "Player", m.playerUid)}<span class="review-who"><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(positionLabel(m.position))}</small></span>${messageBadge(playerUnreadCount(data.questions, m.playerUid))}</span>
     <span class="player-card-data"><span><small>Form</small><b>${meanForm(sessions) ?? "—"}</b></span><span><small>Sets</small><b>${sessions.length}</b></span><span class="player-card-trend">${sparkline(sessions)}</span></span>
     <span class="player-card-last">${last ? `Last session ${esc(timeAgo(last.startedAt))}` : "No sessions shared yet"}</span></a>`;
 }
@@ -712,7 +738,7 @@ function viewRoster(data: DashData): string {
   return `${requests.length ? `<section class="request-panel" aria-label="Join requests"><h3 class="panel-title">${plural(requests.length, "player")} waiting to join</h3>
       <div class="request-list">${requests.map((m) => `
         <div class="request-row">${avatar(m.playerName || "Player", m.playerUid)}
-          <span class="queue-copy"><strong>${esc(m.playerName || "Unnamed player")}</strong><span>${esc(m.position ?? "Position not set")} · asked ${esc(timeAgo(m.requestedAt))}</span></span>
+          <span class="queue-copy"><strong>${esc(m.playerName || "Unnamed player")}</strong><span>${esc(positionLabel(m.position))} · asked ${esc(timeAgo(m.requestedAt))}</span></span>
           <span class="request-actions"><button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(m.playerUid)}">Approve</button>
           <button class="btn btn-ghost btn-sm" data-action="decline" data-player="${esc(m.playerUid)}">Decline</button></span>
         </div>`).join("")}</div></section>` : ""}
@@ -765,7 +791,7 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
       <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(playerUnreadCount(data.questions, playerUid))}</summary>
       <div class="player-message-content"><h2>Messages with ${esc(member.playerName || "Player")}</h2>${conversation}</div>
     </details></div>
-  <div class="player-head">${profileHeader({ name: member.playerName || "Player", subtitle: `${member.position ?? "Position not set"} · ${member.status}`, uid: playerUid })}
+  <div class="player-head">${profileHeader({ name: member.playerName || "Player", subtitle: `${positionLabel(member.position)} · ${member.status}`, uid: playerUid })}
     <div class="player-facts">
       <span><b>${form ?? "—"}</b>Mean form</span><span><b>${sessions.length}</b>${sessions.length === 1 ? "Set shared" : "Sets shared"}</span>
       <span><b>${assignments.filter((a) => a.status !== "Completed").length}</b>Open drills</span><span><b>${notes.length}</b>Feedback sent</span>

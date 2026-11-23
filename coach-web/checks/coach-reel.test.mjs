@@ -34,6 +34,7 @@ test("missing, stale, occluded or unmeasured joints do not create correction cli
 });
 test("one correction per rep uses cue weight to break tied scores", () => {
   const data = review(["Front"]);
+  data.issues[0].cueId = "PassShouldersLevel";
   data.issues.push({ ...data.issues[0], cueId: "PassPlatformStraight" });
   assert.equal(reel.buildCoachReel(data)[0].issue.cueId, "PassPlatformStraight");
 });

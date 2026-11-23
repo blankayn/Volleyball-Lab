@@ -23,9 +23,10 @@ const CUES: Record<string, CueDef[]> = {
     { id: "ServeTossArmLift", weight: 0.15, label: "Lift the guiding arm", tip: "Raise your guiding arm steadily while preparing the other elbow.", unit: "deg", target: [90, 160] },
   ],
   Receiving: [
-    { id: "PassPlatformStraight", weight: 0.35, label: "Steady the platform", tip: "Join your forearms and extend both elbows comfortably to form a steady platform.", unit: "deg", target: [165, 180] },
+    { id: "PassPlatformStraight", weight: 0.30, label: "Steady the platform", tip: "Join your forearms and extend both elbows comfortably to form a steady platform.", unit: "deg", target: [165, 180] },
+    { id: "PassPlatformHeight", weight: 0.10, label: "Keep the platform below the chest", tip: "Angle your joined forearms down toward the floor instead of lifting them to shoulder height.", unit: "deg", target: [25, 90] },
     { id: "PassKneeFlexion", weight: 0.30, label: "Bend the knees", tip: "Bend your knees comfortably while keeping a balanced stance.", unit: "deg", target: [110, 150] },
-    { id: "PassTrunkAngle", weight: 0.20, label: "Lean from the hips", tip: "Lean slightly forward from your hips while keeping your base balanced.", unit: "deg", target: [15, 40] },
+    { id: "PassTrunkAngle", weight: 0.15, label: "Lean from the hips", tip: "Lean slightly forward from your hips while keeping your base balanced.", unit: "deg", target: [15, 40] },
     { id: "PassShouldersLevel", weight: 0.15, label: "Level the shoulders", tip: "Keep your shoulders level to steady your forearm platform.", unit: "deg", target: [0, 12] },
   ],
   Setting: [
@@ -35,10 +36,11 @@ const CUES: Record<string, CueDef[]> = {
     { id: "SetExtensionFollowThrough", weight: 0.20, label: "Finish extended", tip: "Extend both arms upward evenly, then return to your starting posture.", unit: "deg", target: [155, 180] },
   ],
   Spiking: [
-    { id: "SpikeApproachLoad", weight: 0.25, label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
-    { id: "SpikeArmExtension", weight: 0.30, label: "Swing through full extension", tip: "Extend the raised arm above your shoulder within a comfortable range.", unit: "deg", target: [155, 180] },
-    { id: "SpikeJumpHeight", weight: 0.25, label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },
-    { id: "SpikeTrunkDrive", weight: 0.20, label: "Control the trunk", tip: "Keep your trunk controlled as your raised arm extends overhead.", unit: "deg", target: [-5, 25] },
+    { id: "SpikeApproachLoad", weight: 0.20, label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
+    { id: "SpikeArmExtension", weight: 0.25, label: "Swing through full extension", tip: "Extend the raised arm above your shoulder within a comfortable range.", unit: "deg", target: [155, 180] },
+    { id: "SpikeElbowHeight", weight: 0.20, label: "Keep the hitting elbow high", tip: "As you draw the hitting arm back, keep the elbow at or above shoulder height.", unit: "deg", target: [0, 90] },
+    { id: "SpikeJumpHeight", weight: 0.20, label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },
+    { id: "SpikeTrunkDrive", weight: 0.15, label: "Control the trunk", tip: "Keep your trunk controlled as your raised arm extends overhead.", unit: "deg", target: [-5, 25] },
   ],
   Blocking: [
     { id: "BlockArmExtension", weight: 0.30, label: "Straight arms", tip: "Extend both elbows comfortably during the overhead reach.", unit: "deg", target: [160, 180] },

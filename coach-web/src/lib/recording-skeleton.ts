@@ -15,7 +15,8 @@ export function attachRecordingSkeleton(video: HTMLVideoElement, canvas: HTMLCan
   const interval = review.sampleIntervalMs ?? 100;
   const maxGap = Math.min(150, (Number.isFinite(interval) && interval > 0 ? interval : 100) / 2 + 25);
   let animation = 0;
-  let highlights: number[] = [];
+  // Each group is one flagged cue; joints are only linked within their own group.
+  let reelPoints: number[] = [], noteGroups: number[][] = [];
   const visible = (p: Point | undefined): p is Point => !!p && Number.isFinite(p.confidence) && p.confidence >= 0.5 &&
     Number.isFinite(p.x) && p.x >= 0 && p.x <= 1 && Number.isFinite(p.y) && p.y >= 0 && p.y <= 1;
   function draw() {
@@ -27,7 +28,9 @@ export function attachRecordingSkeleton(video: HTMLVideoElement, canvas: HTMLCan
     if (canvas.height !== pixelsHigh) canvas.height = pixelsHigh;
     ctx.setTransform(density, 0, 0, density, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    if (!toggle.checked || video.seeking || !video.videoWidth || !video.videoHeight) return;
+    const groups = [reelPoints, ...noteGroups].filter(group => group.length > 0);
+    const highlights = new Set(groups.flat());
+    if ((!toggle.checked && !highlights.size) || video.seeking || !video.videoWidth || !video.videoHeight) return;
     const time = video.currentTime * 1000;
     let low = 0, high = frames.length;
     while (low < high) {
@@ -43,39 +46,75 @@ export function attachRecordingSkeleton(video: HTMLVideoElement, canvas: HTMLCan
     const x = (p: Point) => (width - fittedWidth) / 2 + p.x * fittedWidth;
     const y = (p: Point) => (height - fittedHeight) / 2 + p.y * fittedHeight;
     ctx.lineCap = "round";
-    ctx.beginPath();
-    for (const [a, b] of bones) {
-      const start = nearest.points[a], end = nearest.points[b];
-      if (!visible(start) || !visible(end)) continue;
-      ctx.moveTo(x(start), y(start));
-      ctx.lineTo(x(end), y(end));
-    }
-    ctx.strokeStyle = "#101828";
-    ctx.lineWidth = 5;
-    ctx.stroke();
-    ctx.strokeStyle = "#65d9ef";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = "#65d9ef";
-    nearest.points.slice(11).forEach((point, offset) => {
-      ctx.fillStyle = highlights.includes(offset + 11) ? "#ffb454" : "#65d9ef";
-      if (!visible(point)) return;
+    if (toggle.checked) {
       ctx.beginPath();
-      ctx.arc(x(point), y(point), 3, 0, Math.PI * 2);
+      for (const [a, b] of bones) {
+        const start = nearest.points[a], end = nearest.points[b];
+        if (!visible(start) || !visible(end)) continue;
+        ctx.moveTo(x(start), y(start));
+        ctx.lineTo(x(end), y(end));
+      }
+      ctx.strokeStyle = "#101828";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.strokeStyle = "#65d9ef";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#65d9ef";
+      nearest.points.slice(11).forEach(point => {
+        if (!visible(point)) return;
+        ctx.beginPath();
+        ctx.arc(x(point), y(point), 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+    if (!highlights.size) return;
+    // The flagged limb and its joints, drawn large enough to find at a glance.
+    const limb = (color: string, lineWidth: number) => {
+      ctx.beginPath();
+      for (const [a, b] of bones) {
+        const start = nearest.points[a], end = nearest.points[b];
+        if (!groups.some(group => group.includes(a) && group.includes(b)) || !visible(start) || !visible(end)) continue;
+        ctx.moveTo(x(start), y(start));
+        ctx.lineTo(x(end), y(end));
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+    };
+    limb("#101828", 11);
+    limb("#ff7a2f", 7);
+    const radius = Math.max(9, Math.min(fittedWidth, fittedHeight) * 0.026);
+    for (const index of highlights) {
+      const point = nearest.points[index];
+      if (!visible(point)) continue;
+      ctx.beginPath();
+      ctx.arc(x(point), y(point), radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff7a2f40";
       ctx.fill();
-    });
+      ctx.strokeStyle = "#101828";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.strokeStyle = "#ffb454";
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+    }
   }
   const update = () => {
     window.cancelAnimationFrame(animation);
     draw();
     if (!video.paused && !video.ended) animation = window.requestAnimationFrame(update);
   };
-  const onHighlight = (event: Event) => {
-    const points: unknown = (event as CustomEvent).detail;
-    highlights = Array.isArray(points) ? points.filter(i => Number.isInteger(i) && i >= 0 && i < 33) : [];
+  const joints = (points: unknown): number[] =>
+    Array.isArray(points) ? points.filter(i => Number.isInteger(i) && i >= 0 && i < 33) : [];
+  const onReel = (event: Event) => { reelPoints = joints((event as CustomEvent).detail); update(); };
+  const onNotes = (event: Event) => {
+    const detail: unknown = (event as CustomEvent).detail;
+    noteGroups = Array.isArray(detail) ? detail.map(joints) : [];
     update();
   };
-  video.addEventListener("reelhighlight", onHighlight);
+  video.addEventListener("reelhighlight", onReel);
+  video.addEventListener("repnotes", onNotes);
   const events = ["loadedmetadata", "play", "pause", "seeking", "seeked", "ended"];
   events.forEach(event => video.addEventListener(event, update));
   toggle.addEventListener("change", update);
@@ -85,7 +124,8 @@ export function attachRecordingSkeleton(video: HTMLVideoElement, canvas: HTMLCan
   return () => {
     window.cancelAnimationFrame(animation);
     resize.disconnect();
-    video.removeEventListener("reelhighlight", onHighlight);
+    video.removeEventListener("reelhighlight", onReel);
+    video.removeEventListener("repnotes", onNotes);
     events.forEach(event => video.removeEventListener(event, update));
     toggle.removeEventListener("change", update);
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
