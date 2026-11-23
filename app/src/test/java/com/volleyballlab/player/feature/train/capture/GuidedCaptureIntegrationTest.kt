@@ -518,6 +518,25 @@ class GuidedCaptureIntegrationTest {
         }
     }
 
+    /** The reps are swung with the right hand; only the chosen arm decides which way to turn. */
+    @Test fun `the side view always turns the chosen arm toward the camera`() = runTest(dispatcher) {
+        for (skill in listOf(Skill.Serving, Skill.Setting)) {
+            for (arm in com.volleyballlab.player.domain.repository.DominantArm.entries) {
+                withCapture(skill = skill, dominantArm = arm) { vm, feed ->
+                    vm.setRepsPerAngle(5)
+                    feed.stand(180)
+                    feed.stand(35)
+                    repeat(5) { if (skill == Skill.Serving) { feed.serve(); feed.stand(20) } else feed.rep() }
+                    val turn = requireNotNull((vm.uiState.value as CaptureUiState.Recording).rotation)
+                    val left = arm == com.volleyballlab.player.domain.repository.DominantArm.Left
+                    assertEquals("$skill $arm", if (left) com.volleyballlab.player.pose.analysis.Facing.Right
+                        else com.volleyballlab.player.pose.analysis.Facing.Left, turn.facing)
+                    assertTrue(turn.instruction, turn.instruction.contains("your ${if (left) "left" else "right"} shoulder points at the camera"))
+                }
+            }
+        }
+    }
+
     @Test fun `five reps request side and turning motion cannot add reps`() = runTest(dispatcher) {
         withCapture { vm, feed ->
             vm.setRepsPerAngle(5)
@@ -995,15 +1014,17 @@ class GuidedCaptureIntegrationTest {
         profile: com.volleyballlab.player.domain.model.AthleteProfile = com.volleyballlab.player.domain.model.AthleteProfile.Anonymous,
         skill: Skill = Skill.Setting,
         poseGuide: Boolean = true,
+        dominantArm: com.volleyballlab.player.domain.repository.DominantArm = com.volleyballlab.player.domain.repository.DominantArm.Right,
         body: suspend TestScope.(CaptureViewModel, Feed) -> Unit) {
         val detector = FakeDetector()
         val prefs = object : CoachingPreferencesRepository {
             override val preferences = flowOf(CoachingPreferences(detailedAiCoachingEnabled = detailed,
-                poseGuideEnabled = poseGuide))
+                poseGuideEnabled = poseGuide, dominantArm = dominantArm))
             override suspend fun setVoiceEnabled(enabled: Boolean) = Unit
             override suspend fun setHapticsEnabled(enabled: Boolean) = Unit
             override suspend fun setPoseGuideEnabled(enabled: Boolean) = Unit
             override suspend fun setDetailedAiCoachingEnabled(enabled: Boolean) = Unit
+            override suspend fun setDominantArm(arm: com.volleyballlab.player.domain.repository.DominantArm) = Unit
         }
         val profiles = object : com.volleyballlab.player.domain.repository.ProfileRepository {
             override val profile = flowOf(profile)

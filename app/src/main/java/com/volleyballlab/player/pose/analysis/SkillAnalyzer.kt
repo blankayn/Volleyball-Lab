@@ -31,6 +31,8 @@ data class RepWindow(
     val frames: List<PoseFrame>,
     val phaseFrames: Map<RepPhase, PoseFrame>,
     val baselineHipImageY: Float,
+    /** The guided view this was performed in, or null to read it from the frames. */
+    val view: CameraAngle? = null,
 ) {
     val startMs: Long get() = frames.first().timestampMs
     val endMs: Long get() = frames.last().timestampMs
@@ -291,6 +293,22 @@ internal object AnalyzerSupport {
         Angles.at(frame, shoulder(side), elbow(side), wrist(side))
 
     /**
+     * [elbowAngle] as drawn on screen. For an arm seen side-on this is the true
+     * angle, where the depth estimate is not: a groupmate's 15 side-view platforms
+     * were 177 to 180 degrees straight on screen and read 149 to 152 in world space.
+     */
+    fun imageElbowAngle(frame: PoseFrame, side: Side): Float? {
+        val (a, b, c) = listOf(shoulder(side), elbow(side), wrist(side)).map(frame::image)
+        val ux = (a.x - b.x) * frame.imageWidth
+        val uy = (a.y - b.y) * frame.imageHeight
+        val vx = (c.x - b.x) * frame.imageWidth
+        val vy = (c.y - b.y) * frame.imageHeight
+        val lengths = kotlin.math.hypot(ux, uy) * kotlin.math.hypot(vx, vy)
+        if (!lengths.isFinite() || lengths < 1e-3f) return null
+        return Math.toDegrees(kotlin.math.acos(((ux * vx + uy * vy) / lengths).coerceIn(-1f, 1f)).toDouble()).toFloat()
+    }
+
+    /**
      * Shoulder elevation: hip, shoulder, elbow. Larger means the arm is carried
      * higher relative to the trunk, which is what "reach" means for a serve.
      */
@@ -321,6 +339,25 @@ internal object AnalyzerSupport {
     /** Mean knee angle across both legs. */
     fun meanKneeAngle(frame: PoseFrame): Float? =
         bilateralMean { side -> kneeAngle(frame, side) }
+
+    /**
+     * Mean knee angle, leaning on the leg the camera sees better. Side-on the far
+     * leg is behind the body and its estimate wanders, which moved the start and end
+     * of a rep. The weights change smoothly, so a leg coming in and out of view does
+     * not make the curve jump; with both legs seen this is [meanKneeAngle].
+     */
+    fun steadyKneeAngle(frame: PoseFrame): Float? {
+        var total = 0f
+        var sum = 0f
+        for (side in Side.entries) {
+            val angle = kneeAngle(frame, side) ?: continue
+            val seen = listOf(hip(side), knee(side), ankle(side)).minOf { frame.image(it).visibility }
+            val weight = ((seen - 0.30f) / 0.40f).coerceIn(0.05f, 1f)
+            total += weight
+            sum += weight * angle
+        }
+        return if (total > 0f) sum / total else null
+    }
 
     /** Mean elbow angle across both arms. */
     fun meanElbowAngle(frame: PoseFrame): Float? =
@@ -410,12 +447,17 @@ internal object AnalyzerSupport {
      * Whether a movement was performed side-on: more of its frames read as a side
      * view than as a front or rear one. The majority, not the contact frame,
      * because a swing turns the shoulders square to the lens for a moment.
+     *
+     * In a guided side view the athlete was already confirmed side-on, so frames the
+     * detector is unsure of do not make it anything else; only a movement that mostly
+     * reads square to the lens does.
      */
     fun sideOn(window: RepWindow): Boolean {
         val detector = CameraOrientationDetector()
         val views = window.frames.map { detector.detect(it).angle }
-        val side = views.count { it == CameraAngle.Side }
-        return side > views.count { it == CameraAngle.Front || it == CameraAngle.Rear }
+        val square = views.count { it == CameraAngle.Front || it == CameraAngle.Rear }
+        if (window.view == CameraAngle.Side) return square * 2 <= views.size
+        return views.count { it == CameraAngle.Side } > square
     }
 
     /** Distance between the two wrists on screen, in torso lengths. */

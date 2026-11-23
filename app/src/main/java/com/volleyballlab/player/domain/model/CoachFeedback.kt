@@ -42,8 +42,28 @@ data class CoachNote(
     val sessionId: String?,
     val text: String,
     val createdAtEpochMs: Long,
+    /** A moment in the session's own recording this note is about. Never set without [sessionId]. */
+    val videoMs: Long? = null,
+    /** The repetition at [videoMs], when the recording's review names one. */
+    val repNumber: Int? = null,
+    /** A photo was sent with this note. The coach may have removed it since. */
+    val hasPhoto: Boolean = false,
 ) {
+    init {
+        require(videoMs == null || sessionId != null && videoMs in 0..MAX_VIDEO_MS) { "A moment needs its session" }
+        require(repNumber == null || videoMs != null && repNumber in 1..MAX_REP) { "A rep number needs its moment" }
+    }
+
     companion object {
         const val MAX_LENGTH = 800
+        const val MAX_PHOTO_LENGTH = 300_000
+        const val MAX_VIDEO_MS = 3_600_000L
+        const val MAX_REP = 1000
+
+        /** "Rep 4 · 0:12", or the time alone when no rep is known. */
+        fun momentLabel(videoMs: Long, repNumber: Int?): String {
+            val time = "%d:%02d".format(java.util.Locale.ROOT, videoMs / 60_000, videoMs / 1000 % 60)
+            return if (repNumber == null) "At $time" else "Rep $repNumber · $time"
+        }
     }
 }

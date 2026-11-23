@@ -228,9 +228,12 @@ class FirestoreCoachRepository(
                 .sortedByDescending { it.createdAtEpochMs }
         }
 
-    override suspend fun postNote(note: CoachNote) {
+    override suspend fun postNote(note: CoachNote) = postNote(note, null)
+
+    override suspend fun postNote(note: CoachNote, photo: String?) {
         val uid = requireNotNull(authRepository.currentUid) { "Sign in before sending feedback." }
         require(note.coachUid == uid)
+        require(note.hasPhoto == (photo != null) && (photo == null || validNotePhoto(photo)))
         runCatching {
             val submission = note.sessionId?.let { sessionId ->
                 db.collection(CloudSchema.SUBMISSIONS)
@@ -241,6 +244,9 @@ class FirestoreCoachRepository(
             // must reach the composer so it preserves the draft and offers retry.
             val batch = db.batch()
             batch.set(db.collection(CloudSchema.NOTES).document(note.id), CloudSchema.noteDoc(note))
+            if (photo != null) {
+                batch.set(db.collection(CloudSchema.NOTE_MEDIA).document(note.id), CloudSchema.noteMediaDoc(note, photo))
+            }
             if (submission?.data?.let { CloudSchema.submissionOf(it).isPending } == true) {
                 batch.update(submission.reference, "reviewedAt", now())
             }

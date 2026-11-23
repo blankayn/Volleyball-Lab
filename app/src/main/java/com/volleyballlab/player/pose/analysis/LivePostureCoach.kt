@@ -134,7 +134,8 @@ class LivePostureCoach(
         phase: RepPhase = RepPhase.Preparation,
         angle: CameraAngle = CameraAngle.Front,
     ): List<CueLiveStatus> {
-        val window = RepWindow(0, listOf(frame), mapOf(phase to frame), Angles.hipCentreImage(frame).y)
+        val window = RepWindow(0, listOf(frame), mapOf(phase to frame), Angles.hipCentreImage(frame).y,
+            view = angle.takeUnless { it == CameraAngle.Unknown })
         val statuses = cues.filter { it.phase == phase && it.id !in NON_LIVE_CUES }.map { cue ->
             val measured = if (AngleCuePolicy.isSupported(cue.id, angle, frame)) {
                 runCatching { analyzer.measure(cue, window) }.getOrNull()?.takeIf { it.isFinite() }

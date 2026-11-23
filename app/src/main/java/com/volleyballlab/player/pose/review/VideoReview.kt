@@ -69,6 +69,9 @@ data class VideoReview(
     val guided: GuidedReview? = null,
     val guidedCapture: Boolean? = null,
 ) {
+    /** The repetition playing at [positionMs], when one was recorded there. */
+    fun repAt(positionMs: Long): ReviewRep? = reps.firstOrNull { positionMs in it.startMs..it.endMs }
+
     /** Binary lookup also works after scrubbing backwards. Never hold a lost pose. */
     fun frameAt(positionMs: Long): ReviewPose? {
         if (positionMs !in 0..durationMs || frames.isEmpty()) return null

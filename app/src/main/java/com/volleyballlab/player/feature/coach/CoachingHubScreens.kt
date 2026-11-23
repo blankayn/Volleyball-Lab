@@ -68,6 +68,7 @@ fun MyCoachScreen(
     onOpenProfile: (String) -> Unit = {},
     section: String? = null,
     onOpenSection: (String) -> Unit = {},
+    onOpenMoment: (sessionId: String, videoMs: Long) -> Unit = { _, _ -> },
 ) {
     val model: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
@@ -176,7 +177,8 @@ fun MyCoachScreen(
                         val conversation = conversationWith(submission.coachUid)
                         val hasChat = conversation.messages.isNotEmpty()
                         var questionOpen by rememberSaveable(submission.coachUid, submission.sessionId) { mutableStateOf(false) }
-                        CoachFeedbackSessionCard(submission, session, feedback) {
+                        CoachFeedbackSessionCard(submission, session, feedback,
+                            onOpenMoment = session?.let { saved -> { at: Long -> onOpenMoment(saved.id, at) } }) {
                             if (!submission.isPending) {
                                 ReviewEditor(submission, review, connected, actions, busy, errors) {
                                     if (connected || hasChat) {

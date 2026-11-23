@@ -519,8 +519,7 @@ coached only, because it is not validated on correct spikes. A cue the view cann
 read, or that the drill does not train, is never a reason. `LiveRepCounter`,
 `RepSegmenter` through `SessionScorer`, and the spoken reaction all use it, so a
 refused movement adds nothing and a counted one is never called wrong: the
-reaction wording for a counted rep is now "Counted. Next, your arm extension",
-not "Not quite" or "needs work". A refusal and a count share one speech lane: the
+reaction wording for a counted rep never says "Not quite" or "needs work". A refusal and a count share one speech lane: the
 newest replaces the older, a refusal expires after 1.5 seconds, and one still
 being spoken stops when a rep is counted.
 
@@ -571,3 +570,28 @@ is refused only when that arm was seen elsewhere; the front view is what checks 
 About one in eight reps marked correct in public clips is now refused. No correct
 receiving recordings with labels exist yet, and nothing here has been tried on the
 phone.
+
+## Dominant arm, side-view passes and quieter counts (23 November 2026, evening)
+
+**Dominant arm.** The setup screen asks Left or Right (default Right, remembered on the
+device per account) and the side view always turns that arm toward the camera. Serving and
+spiking require it; the two-handed skills suggest it and accept either profile. Before, the
+arm was guessed from whichever wrist was higher on the last rep, so the direction changed
+between sessions. Reading which side is nearest was not the problem: on recorded side
+views it agreed with joint visibility, the nose and the feet on 99 to 100% of frames.
+
+**Side-view passes.** A straight platform read about 150 degrees side-on (149 to 152 on 15
+recorded passes, 177 to 180 on screen), next to the 140-degree refusal line and well under
+the 165-degree target. Side-on the straighter of the screen and depth angles is used. In a
+guided side view, frames the view detector is unsure of no longer demand both arms. Rep
+timing leans on the better-seen leg, the hidden far hand needs to be further away before it
+counts as a second, separate arm (0.75 torso lengths; 0.70 when fully seen), and bending
+deep never loses a rep. On the same recordings, movements of other skills counted as passes:
+25 before, 25 after. The refusal for a platform held up at the shoulders is unchanged.
+
+**Voice.** A counted rep is spoken as its number. "Counted" is never said. A cue scoring 0.5
+or more is shown on the card as something to polish and praised aloud; a remark asking for a
+change is not made on two reps in a row.
+
+Not tried on a phone yet. No labelled recordings of correct side-view passes exist, so how
+many more of those count has not been measured.

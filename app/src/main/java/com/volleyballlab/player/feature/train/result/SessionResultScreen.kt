@@ -193,6 +193,8 @@ fun SessionResultScreen(
     modifier: Modifier = Modifier,
     assignmentId: String? = null,
     doneLabel: String? = null,
+    /** Opens the recording at this moment, or negative for the top of the result. */
+    startAtMs: Long = -1L,
 ) {
     val viewModel: SessionResultViewModel = viewModel(
         key = "result-$sessionId",
@@ -225,6 +227,7 @@ fun SessionResultScreen(
             modifier = modifier,
             assignmentId = assignmentId ?: current.session.assignmentId,
             doneLabel = doneLabel,
+            startAtMs = startAtMs,
         )
     }
 }
@@ -238,6 +241,7 @@ private fun ResultContent(
     modifier: Modifier = Modifier,
     assignmentId: String? = null,
     doneLabel: String? = null,
+    startAtMs: Long = -1L,
 ) {
     val session = state.session
     val assessment = remember(session, state.history) { CoachAssessmentEngine.assess(session, state.history) }
@@ -250,8 +254,15 @@ private fun ResultContent(
         listOf(CameraAngle.Front, CameraAngle.Side).filter { it !in captured }
     }
     val side = Modifier.padding(horizontal = 20.dp)
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var startAt by remember { mutableStateOf(if (startAtMs >= 0) 0 to startAtMs else null) }
+    // The recording follows the hero, the report and, when there are any, the angle stages.
+    val recordingIndex = if (stages.isNotEmpty()) 3 else 2
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (startAtMs >= 0) list.scrollToItem(recordingIndex) }
 
     LazyColumn(
+        state = list,
         modifier = modifier.fillMaxWidth(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -291,7 +302,7 @@ private fun ResultContent(
                     Text(stringResource(R.string.recording_cloud_restoring))
                 }
                 if (playableVideo != null) {
-                    AnnotatedSessionVideo(session, playableVideo)
+                    AnnotatedSessionVideo(session, playableVideo, startAt = startAt)
                     TextButton(onClick = { confirmDeleteVideo = true }, modifier = Modifier.align(Alignment.End)) {
                         Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(6.dp))
@@ -321,7 +332,12 @@ private fun ResultContent(
             }
         }
 
-        item { SessionCoachFeedback(session.id, side) }
+        item {
+            SessionCoachFeedback(session.id, side) { at ->
+                startAt = ((startAt?.first ?: 0) + 1) to at
+                scope.launch { list.animateScrollToItem(recordingIndex) }
+            }
+        }
 
         if (assignmentId != null) {
             item { AssignmentResultActions(assignmentId, session, side) }

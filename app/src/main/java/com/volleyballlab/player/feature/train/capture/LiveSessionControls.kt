@@ -44,6 +44,7 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.pose.analysis.CoachPhrasebook
 import com.volleyballlab.player.pose.analysis.Facing
+import com.volleyballlab.player.domain.repository.DominantArm
 import com.volleyballlab.player.pose.analysis.FacingGuide
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
@@ -93,6 +94,8 @@ internal fun CaptureControls(
     onSayAgain: () -> Unit = {},
     /** Why the movement that just ended was not counted as a rep, while that is still current. */
     notCounted: String? = null,
+    dominantArm: DominantArm = DominantArm.Right,
+    onDominantArmChanged: (DominantArm) -> Unit = {},
 ) {
     var confirmEarly by remember { mutableStateOf(false) }
     if (confirmEarly) AlertDialog(
@@ -214,6 +217,8 @@ internal fun CaptureControls(
                     }
                 }
                 is CaptureUiState.Framing -> {
+                    // Outside the scrolling guidance: which way the side view faces depends on it.
+                    if (guidedOptions.enabled) DominantArmRow(dominantArm, onDominantArmChanged)
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
@@ -236,6 +241,23 @@ internal fun CaptureControls(
                 }
                 else -> Unit
             }
+        }
+    }
+}
+
+/** Which arm the athlete hits with, so the side view keeps that arm toward the camera. */
+@Composable
+private fun DominantArmRow(selected: DominantArm, onSelect: (DominantArm) -> Unit) {
+    Row(Modifier.fillMaxWidth().testTag("capture-dominant-arm"), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.capture_dominant_arm), style = MaterialTheme.typography.labelLarge, color = Color.White)
+            Text(stringResource(R.string.capture_dominant_arm_note), style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted)
+        }
+        listOf(DominantArm.Left to R.string.capture_arm_left, DominantArm.Right to R.string.capture_arm_right).forEach { (arm, label) ->
+            FilterChip(selected = selected == arm, onClick = { onSelect(arm) }, label = { Text(stringResource(label)) },
+                colors = FilterChipDefaults.filterChipColors(labelColor = Color.White,
+                    selectedLabelColor = Color.White, selectedContainerColor = com.volleyballlab.player.ui.theme.RustPrimary40))
         }
     }
 }

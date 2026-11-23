@@ -267,7 +267,7 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
                                 TopLevelDestination.Progress else TopLevelDestination.Home
                         currentDestination?.hasRoute<PlayerAssignmentRoute>() == true ||
                             (currentDestination?.hasRoute<SessionResultRoute>() == true &&
-                                backStackEntry?.toRoute<SessionResultRoute>()?.assignmentId != null) -> TopLevelDestination.Coach
+                                backStackEntry?.toRoute<SessionResultRoute>()?.let { it.assignmentId != null || it.returnToCoach } == true) -> TopLevelDestination.Coach
                         else -> null
                     },
                 )
@@ -615,7 +615,7 @@ internal fun NavHostController.navigateToTopLevel(destination: TopLevelDestinati
             // History feedback shares the result screen, but selecting Train
             // should still open the training tab rather than stay in history.
             popBackStack(SessionSummaryRoute(feedback.sessionId, feedback.summaryFromProgress), inclusive = false)
-        }
+        } else if (feedback.returnToCoach) popBackStack()
     }
     if (currentDestination?.hierarchy?.any { it.hasRoute(destination.graphClass) } == true) return
     navigate(destination.route) {
@@ -840,7 +840,9 @@ private fun VbNavHost(
                         // or its skill path; Done goes back to whichever one opened it.
                         val fromGuide = route.returnToDrillId != null &&
                             runCatching { navController.getBackStackEntry<DrillDetailRoute>() }.isSuccess
-                        if (route.returnToSummary) {
+                        if (route.returnToCoach) {
+                            navController.popBackStack()
+                        } else if (route.returnToSummary) {
                             navController.popBackStack(SessionSummaryRoute(route.sessionId, route.summaryFromProgress), inclusive = false)
                         } else if (route.assignmentId != null) {
                             navController.popBackStack(PlayerAssignmentRoute(route.assignmentId), inclusive = false)
@@ -853,7 +855,12 @@ private fun VbNavHost(
                             if (!returned) navController.navigate(SkillSelectRoute) { popUpTo<SkillSelectRoute> { inclusive = true } }
                         }
                     },
-                    doneLabel = if (route.returnToSummary) stringResource(R.string.session_summary_back_from_feedback) else null,
+                    doneLabel = when {
+                        route.returnToCoach -> stringResource(R.string.result_back_to_coach)
+                        route.returnToSummary -> stringResource(R.string.session_summary_back_from_feedback)
+                        else -> null
+                    },
+                    startAtMs = route.startAtMs,
                     contentPadding = contentPadding,
                 )
             }
@@ -925,6 +932,9 @@ private fun VbNavHost(
                     contentPadding = contentPadding,
                     onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
                     section = entry.toRoute<MyCoachSectionRoute>().section,
+                    onOpenMoment = { sessionId, at ->
+                        navController.navigate(SessionResultRoute(sessionId, returnToCoach = true, startAtMs = at))
+                    },
                     onOpenSection = navController::openMyCoachSection,
                 )
             }

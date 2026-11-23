@@ -183,7 +183,11 @@ fun PlayerAssignmentScreen(
                 if (state.notes.isNotEmpty()) item {
                     TaskCard {
                         Text("Coach feedback", style = MaterialTheme.typography.titleMedium)
-                        state.notes.forEach { Text(it.text) }
+                        state.notes.forEach { note ->
+                            Text(note.text)
+                            NoteMomentChip(note)
+                            NotePhoto(note)
+                        }
                     }
                 }
             }

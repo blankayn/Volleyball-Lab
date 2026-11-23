@@ -71,7 +71,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
     }
 
     fun scoreRep(
-        window: RepWindow,
+        candidate: RepWindow,
         skill: Skill,
         analyzer: SkillAnalyzer = SkillAnalyzers.forSkill(skill),
         receivingPostureEvaluator: ReceivingReadyPostureEvaluator? = null,
@@ -80,6 +80,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
         /** Cues the drill does not train ([DrillFocus.excluded]): left unmeasured. */
         excluded: Set<CueId> = emptySet(),
     ): RepResult {
+        val window = if (angle == null) candidate else candidate.copy(view = angle)
         val cues = FormCueCatalog.forSkill(skill)
         val measurements = cues.associate { cue ->
             val phase = analyzer.cueFrame(cue, window)

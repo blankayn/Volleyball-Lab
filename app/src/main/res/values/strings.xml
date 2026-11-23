@@ -57,6 +57,10 @@
     <string name="capture_start">Start</string>
     <string name="capture_stop">Finish</string>
     <string name="capture_cancel">Cancel</string>
+    <string name="capture_dominant_arm">Dominant arm</string>
+    <string name="capture_dominant_arm_note">This arm faces the camera in side view</string>
+    <string name="capture_arm_left">Left</string>
+    <string name="capture_arm_right">Right</string>
     <string name="capture_switch_camera">Switch camera</string>
 
     <!--

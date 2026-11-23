@@ -128,6 +128,59 @@ class UnrelatedMovementTest {
             view = Facing.Right, hidden = farArm)).live)
     }
 
+    /**
+     * A groupmate's side-view platforms were straight on screen and read about 150
+     * degrees in depth, close enough to the refusal line to lose a correct pass.
+     */
+    @Test
+    fun `a straight platform seen from the side counts when the depth estimate says it is bent`() {
+        val bentInDepth = reps(platform, 3, 500L to platform.copy(knee = 60f), 1_000L to platform,
+            view = Facing.Right, hidden = farArm).map { frame ->
+            val world = frame.world.toMutableList()
+            // Pushed sideways, away from the lens, where the picture cannot show it.
+            listOf(BodyPoint.LEFT_ELBOW).forEach { p -> world[p.ordinal] = world[p.ordinal].let { it.copy(z = it.z - .13f) } }
+            frame.copy(world = world)
+        }
+        val contact = bentInDepth[bentInDepth.size / 2]
+        assertTrue(AnalyzerSupport.elbowAngle(contact, Side.Left)!! < 140f)
+        assertTrue(AnalyzerSupport.imageElbowAngle(contact, Side.Left)!! > 165f)
+        val outcome = run(Skill.Receiving, bentInDepth, angle = CameraAngle.Side)
+        assertEquals(3, outcome.live)
+        assertEquals(3, outcome.saved)
+        assertTrue(outcome.refusals.isEmpty())
+    }
+
+    @Test
+    fun `bent elbows are still refused from the side`() {
+        val bent = standing.arms(45f, 95f).copy(join = 1f, knee = 20f)
+        val outcome = run(Skill.Receiving, reps(bent, 3, 500L to bent.copy(knee = 60f), 1_000L to bent,
+            view = Facing.Right, hidden = farArm), angle = CameraAngle.Side)
+        assertEquals(0, outcome.live)
+        assertEquals(0, outcome.saved)
+    }
+
+    /** The athlete was confirmed side-on before the view began, so an unsure detector cannot ask for the far arm. */
+    @Test
+    fun `a guided side pass counts while the view detector is unsure`() {
+        val unsure = reps(platform, 3, 500L to platform.copy(knee = 60f), 1_000L to platform,
+            view = Facing.Right, hidden = farArm).map { frame ->
+            val image = frame.image.toMutableList()
+            val right = image[BodyPoint.RIGHT_HIP.ordinal]
+            image[BodyPoint.RIGHT_HIP.ordinal] = right.copy(visibility = .55f)
+            frame.copy(image = image)
+        }
+        assertTrue(unsure.all { CameraOrientationDetector().detect(it).angle == CameraAngle.Unknown })
+        assertEquals(3, run(Skill.Receiving, unsure, angle = CameraAngle.Side).live)
+    }
+
+    @Test
+    fun `receiving low is not refused`() {
+        listOf(Facing.Forward, Facing.Right).forEach { view ->
+            val outcome = run(Skill.Receiving, reps(platform, 3, 500L to platform.copy(knee = 112f), 1_000L to platform, view = view))
+            assertEquals("low receive facing $view: ${outcome.refusals}", 3, outcome.live)
+        }
+    }
+
     @Test
     fun `a pass with only the left or only the right arm is not counted`() {
         val left = standing.copy(leftRaise = 45f, leftElbow = 172f, knee = 20f)

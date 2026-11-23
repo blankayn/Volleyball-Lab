@@ -27,6 +27,8 @@ test('deletion removes owner data and relationships, keeps other accounts, and i
     'assignments/a': { playerUid: uid, coachUid: 'other' },
     'submissions/s': { playerUid: 'other', coachUid: uid },
     'notes/n': { playerUid: uid, coachUid: 'other' },
+    'noteMedia/n': { playerUid: uid, coachUid: 'other', photo: 'feedback-photo' },
+    'noteMedia/sent': { playerUid: 'other', coachUid: uid, photo: 'feedback-photo' },
     'coachingQuestions/player-question': { playerUid: uid, coachUid: 'other' },
     'coachingQuestions/coach-question': { playerUid: 'other', coachUid: uid },
     'coachingLocks/other_delete-owner': { playerUid: uid, coachUid: 'other', questionId: 'player-question' },

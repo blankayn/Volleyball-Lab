@@ -28,6 +28,8 @@ internal fun CoachFeedbackSessionCard(
     submission: SessionSubmission,
     session: SessionResult?,
     feedback: List<CoachNote>,
+    /** Opens the player's recording at a moment; null when the session is not on this phone. */
+    onOpenMoment: ((Long) -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
     HubSurface {
@@ -55,6 +57,8 @@ internal fun CoachFeedbackSessionCard(
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = .06f)).padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(note.text, style = MaterialTheme.typography.bodyMedium)
+                    NoteMomentChip(note, onOpenMoment)
+                    NotePhoto(note)
                     Text("Your coach · ${dateLabel(note.createdAtEpochMs)}", style = MaterialTheme.typography.labelSmall, color = coachCardMuted())
                 }
             }

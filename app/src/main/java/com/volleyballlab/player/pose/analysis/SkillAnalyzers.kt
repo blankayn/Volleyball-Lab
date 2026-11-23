@@ -263,7 +263,7 @@ class ReceiveAnalyzer : SkillAnalyzer {
     override val skill = Skill.Receiving
 
     override fun segmentationSignal(frame: PoseFrame): Float? =
-        meanKneeAngle(frame)?.let { STRAIGHT_LEG_DEGREES - it }
+        AnalyzerSupport.steadyKneeAngle(frame)?.let { STRAIGHT_LEG_DEGREES - it }
 
     override val minExcursion: Float get() = MIN_KNEE_DIP_DEGREES
 
@@ -327,6 +327,7 @@ class ReceiveAnalyzer : SkillAnalyzer {
         } else {
             if (gap != null) {
                 if (arms.size == 2 && gap > MAX_SIDE_GAP) return MovementFault.UseBothArms
+                // Partly hidden: a guess, unless it is nowhere near the other hand.
                 val farSeen = Side.entries.filterNot { it in arms }.any {
                     frame.image(AnalyzerSupport.wrist(it)).visibility >= FAR_WRIST_SEEN
                 }
@@ -344,7 +345,7 @@ class ReceiveAnalyzer : SkillAnalyzer {
                 if (forward < MIN_FORWARD_REACH) return MovementFault.JoinPlatform
             }
         }
-        val elbows = arms.mapNotNull { elbowAngle(frame, it) }
+        val elbows = arms.mapNotNull { platformElbow(frame, it, sideOn) }
         if (elbows.any { it < MIN_PLATFORM_ELBOW }) return MovementFault.StraightenPlatform
         return null
     }
@@ -352,7 +353,11 @@ class ReceiveAnalyzer : SkillAnalyzer {
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         return when (cue.id) {
-            CueId.PassPlatformStraight -> AnalyzerSupport.visibleElbowAngle(contact)
+            CueId.PassPlatformStraight -> AnalyzerSupport.sideOn(window).let { sideOn ->
+                AngleCuePolicy.visibleSides(contact) {
+                    listOf(AnalyzerSupport.shoulder(it), AnalyzerSupport.elbow(it), AnalyzerSupport.wrist(it))
+                }.mapNotNull { platformElbow(contact, it, sideOn) }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+            }
             CueId.PassPlatformHeight -> platformBelowHorizontal(contact)
             CueId.PassKneeFlexion -> AnalyzerSupport.visibleKneeAngle(contact)
             CueId.PassTrunkAngle -> Angles.trunkForwardLean(contact)
@@ -360,6 +365,10 @@ class ReceiveAnalyzer : SkillAnalyzer {
             else -> null
         }
     }
+
+    /** Side-on the arm lies across the picture, so it is read there; facing the lens it needs the depth. */
+    private fun platformElbow(frame: PoseFrame, side: Side, sideOn: Boolean): Float? =
+        listOfNotNull(elbowAngle(frame, side), if (sideOn) AnalyzerSupport.imageElbowAngle(frame, side) else null).maxOrNull()
 
     /**
      * Degrees the shoulder-to-wrist line points below horizontal, averaged over
@@ -397,12 +406,15 @@ class ReceiveAnalyzer : SkillAnalyzer {
         /** Joined wrists on screen, in torso lengths, facing the camera. */
         const val MAX_JOINED_GAP = 0.35f
 
-        /** The same with both wrists seen side-on, where the hands overlap less exactly. */
-        const val MAX_SIDE_GAP = 0.50f
+        /**
+         * The same with both wrists seen side-on, where the far one is partly a
+         * guess. A far arm hanging or behind the back is about a torso length away.
+         */
+        const val MAX_SIDE_GAP = 0.70f
 
         /** A far wrist at least this visible, this far from the near one, is somewhere else. */
         const val FAR_WRIST_SEEN = 0.30f
-        const val MAX_FAR_GAP = 0.60f
+        const val MAX_FAR_GAP = 0.75f
 
         /** One wrist this much higher than the other is one arm, not a level platform. */
         const val MAX_LEVEL_GAP = 0.25f

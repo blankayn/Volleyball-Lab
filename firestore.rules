@@ -212,10 +212,18 @@ service cloud.firestore {
         && validDate(data.submittedAt) && nullableDate(data.reviewedAt);
     }
     function isValidNote(data, id) {
-      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'text', 'createdAt'])
+      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'text', 'createdAt', 'videoMs', 'repNumber', 'hasPhoto'])
         && data.id == id && boundedString(data.id, 128) && validUid(data.coachUid) && validUid(data.playerUid)
         && (data.sessionId == null || validUid(data.sessionId))
-        && boundedString(data.text, 800) && data.text.size() > 0 && validDate(data.createdAt);
+        && boundedString(data.text, 800) && data.text.size() > 0 && validDate(data.createdAt)
+        && validNoteMoment(data)
+        && (!('hasPhoto' in data) || data.hasPhoto == true);
+    }
+    // A moment points into the session's own recording, so it needs the session;
+    // a rep number only labels that moment.
+    function validNoteMoment(data) {
+      return (!('videoMs' in data) || (data.videoMs is int && data.videoMs >= 0 && data.videoMs <= 3600000 && data.sessionId is string))
+        && (!('repNumber' in data) || ('videoMs' in data && data.repNumber is int && data.repNumber >= 1 && data.repNumber <= 1000));
     }
     function validSharedWith(values) {
       return values is list && values.size() <= 10
@@ -666,8 +674,39 @@ service cloud.firestore {
         && request.resource.data.coachUid == request.auth.uid
         && isValidNote(request.resource.data, noteId)
         && notDeleting(request.resource.data.playerUid)
-        && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(request.resource.data.playerUid));
+        && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(request.resource.data.playerUid))
+        // A note that says it has a photo commits together with that photo.
+        && (!('hasPhoto' in request.resource.data) || existsAfter(/databases/$(database)/documents/noteMedia/$(noteId)));
       allow update, delete: if false;
+    }
+
+    // ---- Feedback photos ---------------------------------------------------
+    // One JPEG per note, kept apart so note lists stay small. Only the note's
+    // coach and player can open it. It is created in the same commit as its note
+    // and never replaced; the coach may remove it, leaving the written feedback.
+    match /noteMedia/{noteId} {
+      function noteAfter() {
+        return getAfter(/databases/$(database)/documents/notes/$(noteId)).data;
+      }
+      allow get: if signedIn() && (resource == null
+        || resource.data.coachUid == request.auth.uid
+        || resource.data.playerUid == request.auth.uid);
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['coachUid', 'playerUid', 'photo', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['coachUid', 'playerUid', 'photo', 'createdAt'])
+        && request.resource.data.coachUid == request.auth.uid
+        && validUid(request.resource.data.playerUid) && validDate(request.resource.data.createdAt)
+        && boundedString(request.resource.data.photo, 300000)
+        && request.resource.data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*')
+        && !exists(/databases/$(database)/documents/notes/$(noteId))
+        && existsAfter(/databases/$(database)/documents/notes/$(noteId))
+        && noteAfter().coachUid == request.auth.uid
+        && noteAfter().playerUid == request.resource.data.playerUid
+        && noteAfter().hasPhoto == true
+        && isActiveMember(request.auth.uid, request.resource.data.playerUid);
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.coachUid == request.auth.uid;
     }
 
     match /accountDeletions/{uid} {

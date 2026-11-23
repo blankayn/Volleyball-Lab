@@ -81,6 +81,7 @@ fun interface PoseDetectorFactory {
  * through a constructor, that migration is mechanical.
  */
 class AppContainer(private val context: Context) {
+    val notePhotos by lazy { com.volleyballlab.player.data.coach.NotePhotos(firestore, authRepository) }
     val coachPhotoStore by lazy { com.volleyballlab.player.data.coach.CoachPhotoStore(firestore, authRepository) }
     val coachPresenceReporter by lazy { com.volleyballlab.player.data.coach.CoachPresenceReporter(context, firestore, authRepository) }
     val coachingHubRepository by lazy { com.volleyballlab.player.data.coach.CoachingHubRepository(firestore, authRepository) }

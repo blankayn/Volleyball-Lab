@@ -85,6 +85,8 @@ internal data class NoteRecord(
     val sessionId: String? = null,
     val text: String = "",
     val createdAtEpochMs: Long = 0L,
+    val videoMs: Long? = null,
+    val repNumber: Int? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -144,6 +146,8 @@ internal fun CoachNote.toRecord() = NoteRecord(
     sessionId = sessionId,
     text = text,
     createdAtEpochMs = createdAtEpochMs,
+    videoMs = videoMs,
+    repNumber = repNumber,
 )
 
 // ---------------------------------------------------------------------------
@@ -222,4 +226,6 @@ internal fun NoteRecord.toDomain() = CoachNote(
     sessionId = sessionId,
     text = text,
     createdAtEpochMs = createdAtEpochMs,
+    videoMs = videoMs.takeIf { sessionId != null },
+    repNumber = repNumber.takeIf { sessionId != null && videoMs != null },
 )

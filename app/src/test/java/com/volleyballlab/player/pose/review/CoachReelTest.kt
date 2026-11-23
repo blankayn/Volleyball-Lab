@@ -14,17 +14,27 @@ class CoachReelTest {
         return VideoReview(30_000, 480, 640, 50, issues.map { issue ->
             ReviewPose(issue.timestampMs, List(33) { ReviewPoint(.5f, .5f, 1f) }) }, issues, 9, reps = reps)
     }
-    @Test fun reservesBothViewsCapsSixAndUsesOriginalVideoTimes() {
-        val clips = CoachReel.build(review())
-        assertEquals(6, clips.size)
-        assertEquals(setOf(CameraAngle.Front, CameraAngle.Side), clips.map { it.rep.angle }.toSet())
-        assertTrue(clips.all { it.freezeAtMs in it.sourceStartMs..it.sourceEndMs && it.sourceEndMs - it.sourceStartMs <= 8_000 })
-        assertTrue(clips.zipWithNext().all { (a, b) -> a.issue.score <= b.issue.score })
+    @Test fun listsEveryRepInOrderWithItsOwnCorrectionsWorstFirst() {
+        val base = review()
+        val extra = base.issues[1].copy(cueId = CueId.PassKneeFlexion, score = .05f)
+        val data = base.copy(issues = base.issues.filter { it.repNumber != 3 } + extra + base.issues[4].copy(score = .9f, cueId = CueId.PassTrunkAngle))
+        val list = CoachReel.repList(data)
+        assertEquals((1..9).toList(), list.map { it.rep.repNumber })
+        assertTrue(list[2].issues.isEmpty()); assertNull(list[2].freezeAtMs)
+        assertEquals(listOf(CueId.PassKneeFlexion, CueId.PassPlatformStraight), list[1].issues.map { it.cueId })
+        assertEquals("a cue in range is not a correction", 1, list[4].issues.size)
+        assertTrue(list.all { it.startMs < it.endMs && it.endMs <= data.durationMs && (it.freezeAtMs ?: it.startMs) in it.startMs..it.endMs })
+        assertEquals("opens on the worst rep", 2, CoachReel.startingRep(list))
+        assertEquals(1, CoachReel.startingRep(CoachReel.repList(data.copy(issues = emptyList()))))
+        assertEquals(0, CoachReel.startingRep(emptyList()))
     }
-    @Test fun legacyDefaultsAreUnknownAndMissingSkeletonIsNotAFaultClip() {
+    @Test fun correctionsWithoutSavedRepBoundariesAreStillListed() {
+        val old = review().copy(reps = emptyList(), frames = emptyList())
+        assertEquals((1..9).toList(), CoachReel.repList(old).map { it.rep.repNumber })
+    }
+    @Test fun legacyDefaultsAreUnknown() {
         val old = Json.decodeFromString<VideoReview>("""{"durationMs":1000,"width":480,"height":640,"sampleIntervalMs":50,"frames":[],"issues":[],"assessedCueCount":0}""")
         assertTrue(old.reps.isEmpty()); assertNull(old.guided); assertNull(old.guidedCapture)
-        assertTrue(CoachReel.build(review().copy(frames = emptyList())).isEmpty())
     }
     @Test fun missingSideIsHonestAndNoIssueMeansNoHighlight() {
         val data = review().let { it.copy(issues = it.issues.filter { issue -> issue.angle == CameraAngle.Front }) }

@@ -42,12 +42,14 @@ object CoachPhrasebook {
             LiveRepVerdict.Adjust -> {
                 // The rep was counted, so nothing here may say it was wrong: a
                 // movement that was wrong is refused and never reaches this line.
-                if (firstOfStage && faultId != null) return "Counted. Next, your ${focusName(faultId)}."
-                listOf("Counted. A little cleaner next time.", "Got it. Keep refining.", "Counted. Make the next one sharper.") +
-                    if (stayWithFocus && faultId != null) listOf("Counted. Stay with your ${focusName(faultId)}.") else emptyList()
+                // The number before it already says it counted.
+                if (faultId == null) listOf("Good rep.", "Nice, keep going.", "Good, same again.")
+                else if (firstOfStage) return "Next, your ${focusName(faultId)}."
+                else listOf("A little cleaner next time.", "Keep refining.", "Make the next one sharper.") +
+                    if (stayWithFocus) listOf("Stay with your ${focusName(faultId)}.") else emptyList()
             }
             LiveRepVerdict.Partial -> listOf("Only part of that one was in view.",
-                "Counted. Only part of your form was visible.")
+                "Only part of your form was visible.")
             LiveRepVerdict.Unrated -> listOf("Keep your hands and feet in frame for the next rep.",
                 "Leave enough room for the camera to see your full reach.")
         }

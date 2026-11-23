@@ -117,7 +117,7 @@ data class LiveCoachingPlan(
 
 /** How a **counted** rep went. A rep that was wrong is not counted and has no verdict here; see [RepJudge]. */
 enum class LiveRepVerdict(val label: String) {
-    Good("Form target met"), Adjust("Counted, can improve"), Partial("Partly assessed"), Unrated("Not assessed"),
+    Good("Form target met"), Adjust("Good rep, can improve"), Partial("Partly assessed"), Unrated("Not assessed"),
 }
 
 data class LiveRepFeedback(
@@ -133,6 +133,8 @@ data class LiveRepFeedback(
     val ack: String? = null,
     /** True when the director took this turn; the next rep is then a quiet count. */
     val directed: Boolean = false,
+    /** True when [ack] asked for a change or noted a limited view, rather than praising. */
+    val remarked: Boolean = false,
 ) {
     val countText: String get() = if (target == null) "Rep $totalReps" else "Rep $stageReps of $target"
 }
@@ -156,6 +158,9 @@ object PersonalizedLiveCoaching {
         val fault = measured.filter { it.score!! < 0.8f }.sortedWith(
             compareByDescending<CueLiveStatus> { it.cue.id in plan.focusCueIds }.thenBy { it.score },
         ).firstOrNull()
+        // A cue only a little outside its range is worth showing, not worth a remark
+        // on every rep: correct technique in coaching clips often has one.
+        val spokenFault = fault?.takeIf { it.score!! < SPOKEN_FAULT }
         val verdict = when {
             // Everything this view reads was read; it just reads too little to judge.
             // "Only part of your form was visible" would blame a body that was in view.
@@ -170,8 +175,9 @@ object PersonalizedLiveCoaching {
         val sideCue = if (angle == CameraAngle.Side && !assessment.isAssessable) {
             when {
                 measured.isEmpty() -> "Keep your whole body in frame for the next rep."
-                fault != null -> "Next rep: " + CoachPhrasebook.action(fault.cue.id, fault.measured!!)
+                spokenFault != null -> "Next rep: " + CoachPhrasebook.action(spokenFault.cue.id, spokenFault.measured!!)
                     .replaceFirstChar { it.lowercase() } + "."
+                fault != null -> null
                 else -> {
                     val cue = measured.firstOrNull { it.cue.id in plan.focusCueIds } ?: measured.first()
                     "Your ${CoachPhrasebook.focusName(cue.cue.id)} looked good from the side."
@@ -181,22 +187,30 @@ object PersonalizedLiveCoaching {
         val detail = direction?.text ?: sideCue ?: when (verdict) {
             LiveRepVerdict.Unrated -> "Keep your hands and feet in frame for the next rep."
             LiveRepVerdict.Partial -> if (fault != null) "I could only check part of your form. Watch your ${CoachPhrasebook.focusName(fault.cue.id)}."
-                else "Counted. Only part of your form was visible."
-            LiveRepVerdict.Adjust -> if (fault != null) "Counted. Next rep, work on your ${CoachPhrasebook.focusName(fault.cue.id)}."
-                else "Counted. Keep refining your form."
+                else "Only part of your form was visible."
+            LiveRepVerdict.Adjust -> when {
+                fault == null -> "Keep refining your form."
+                spokenFault == null -> "Good rep. To polish: your ${CoachPhrasebook.focusName(fault.cue.id)}."
+                else -> "Next rep, work on your ${CoachPhrasebook.focusName(fault.cue.id)}."
+            }
             LiveRepVerdict.Good -> "Form target met."
         }
         val count = CoachPhrasebook.repCount(stageReps, target, totalReps)
         // The rep after a director turn is a quiet retry: the count and nothing else.
-        val quiet = direction == null && previous?.directed == true
+        // So is the one after a remark of the same kind, so it is never every rep. Praise may repeat.
+        val remark = verdict != LiveRepVerdict.Good && !(verdict == LiveRepVerdict.Adjust && spokenFault == null)
+        val quiet = direction == null && (previous?.directed == true ||
+            remark && stageReps > 1 && previous?.remarked == true)
         val ack = if (direction != null || quiet) null else sideCue ?: CoachPhrasebook.repAck(
-            verdict, fault?.cue?.id, totalReps, previous?.ack, firstOfStage = stageReps == 1,
-            stayWithFocus = fault != null && fault.cue.id in plan.focusCueIds)
+            verdict, spokenFault?.cue?.id, totalReps, previous?.ack, firstOfStage = stageReps == 1,
+            stayWithFocus = spokenFault != null && spokenFault.cue.id in plan.focusCueIds)
         return LiveRepFeedback(totalReps, stageReps, target, verdict, detail,
             direction?.type ?: CoachingEventType.RepMilestone,
-            // A correction names a fault, so it says first that this rep was counted.
-            spokenText = CoachPhrasebook.repTurn(count, direction?.let {
-                if (it.type == CoachingEventType.Correction) "Counted. ${it.text}" else it.text
-            } ?: ack), ack = ack, directed = direction != null)
+            // The number is said first, so it is already clear that this rep counted.
+            spokenText = CoachPhrasebook.repTurn(count, direction?.text ?: ack), ack = ack, directed = direction != null,
+            remarked = remark && ack != null)
     }
+
+    /** A measured cue scoring below this is named aloud; above it, only on the card. */
+    private const val SPOKEN_FAULT = 0.5f
 }

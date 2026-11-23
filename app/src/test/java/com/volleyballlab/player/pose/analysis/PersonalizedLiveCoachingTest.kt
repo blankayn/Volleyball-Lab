@@ -27,7 +27,7 @@ class PersonalizedLiveCoachingTest {
     @Test fun firstCompletedRepGetsACountAndSpecificMeasuredVerdict() {
         val result = feedback(assessment(status(130f)))
         assertEquals(LiveRepVerdict.Adjust, result.verdict)
-        assertEquals("One. Counted. Next, your forearm platform.", result.spokenText)
+        assertEquals("One. Next, your forearm platform.", result.spokenText)
     }
 
     @Test fun goodRepIsJudgedWithoutInventingImprovementOrPerfectForm() {
@@ -76,7 +76,7 @@ class PersonalizedLiveCoachingTest {
     @Test fun theCountAndOneDirectorCorrectionShareOneSentenceTurn() {
         val correction = CoachingEvent(7, CoachingEventType.Correction, "Straighten both elbows and join your forearms.", 10_000, 1)
         val result = feedback(assessment(status(130f)), total = 3, stage = 3, direction = correction)
-        assertEquals("Three. Counted. ${correction.text}", result.spokenText)
+        assertEquals("Three. ${correction.text}", result.spokenText)
         assertEquals(CoachingEventType.Correction, result.type)
         assertFalse(result.spokenText.contains("needs work"))
     }
@@ -183,15 +183,48 @@ class PersonalizedLiveCoachingTest {
         assertTrue(turn.directed)
         val quiet = feedback(assessment(status(130f)), total = 4, stage = 4, previous = turn)
         assertEquals("One to go.", quiet.spokenText)
-        assertEquals("Counted. Next rep, work on your forearm platform.", quiet.detail)
+        assertEquals("Next rep, work on your forearm platform.", quiet.detail)
         val next = feedback(assessment(status(130f)), total = 5, stage = 5, previous = quiet)
         assertTrue(next.spokenText.startsWith("Five. "))
+    }
+
+    /** "Counted" on every rep said nothing the number had not, and sounded like a complaint about good reps. */
+    @Test fun aCountedRepIsANumberNotTheWordCounted() {
+        val correction = CoachingEvent(7, CoachingEventType.Correction, "Straighten both elbows.", 10_000, 1)
+        var previous: LiveRepFeedback? = null
+        for (view in listOf(CameraAngle.Front, CameraAngle.Side)) for (n in 1..10) {
+            for (measured in listOf(130f, 150f, 160f, 175f)) for (assessable in listOf(true, false)) {
+                val result = feedback(assessment(status(measured), assessable = assessable), total = n, stage = n, target = 10,
+                    angle = view, previous = previous, direction = correction.takeIf { n % 4 == 0 })
+                assertFalse(result.spokenText, result.spokenText.contains("counted", true))
+                assertFalse(result.detail, result.detail.contains("counted", true))
+                previous = result
+            }
+        }
+    }
+
+    @Test fun aRepWithOnlyASmallMissIsPraisedAndNoFaultIsNamedAloud() {
+        (1..6).forEach { n ->
+            // 160 degrees against a 165 target: worth showing, not worth saying.
+            val result = feedback(assessment(status(160f).copy(score = .7f)), total = n, stage = n)
+            assertTrue(result.spokenText, result.spokenText.contains("good", true) || result.spokenText.contains("nice", true))
+            assertFalse(result.spokenText.contains("platform"))
+            assertTrue(result.detail.contains("To polish: your forearm platform"))
+        }
+    }
+
+    @Test fun aRemarkIsNotRepeatedOnTheVeryNextRep() {
+        val first = feedback(assessment(status(130f)), total = 2, stage = 2)
+        assertTrue(first.remarked)
+        val second = feedback(assessment(status(130f)), total = 3, stage = 3, previous = first)
+        assertEquals("Three.", second.spokenText)
+        assertTrue(feedback(assessment(status(130f)), total = 4, stage = 4, previous = second).remarked)
     }
 
     @Test fun aMeasuredFaultOnTheAthletesFocusCanBeNamedInTheReaction() {
         val plan = LiveCoachingPlan(focusCueIds = setOf(CueId.PassPlatformStraight))
         val spoken = (2..9).map { feedback(assessment(status(130f)), total = it, stage = it, target = null, plan = plan).spokenText }
-        assertTrue(spoken.any { it.endsWith("Counted. Stay with your forearm platform.") })
+        assertTrue(spoken.any { it.endsWith("Stay with your forearm platform.") })
         assertTrue((2..9).none { feedback(assessment(status(130f)), total = it, stage = it, target = null).spokenText.contains("Stay with") })
     }
 }

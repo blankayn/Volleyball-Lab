@@ -43,7 +43,8 @@ class RepJudge(
     private val cues = FormCueCatalog.poseCues(skill).filterNot { it.id in DrillFocus.excluded(drillId) }
 
     /** @param angle the guided view the rep was performed in, or null to read it from the movement itself. */
-    fun judge(window: RepWindow, angle: CameraAngle? = null): MovementVerdict {
+    fun judge(candidate: RepWindow, angle: CameraAngle? = null): MovementVerdict {
+        val window = if (angle == null) candidate else candidate.copy(view = angle)
         val movement = analyzer.verdict(window)
         if (movement != MovementVerdict.Counted) return movement
         val view = angle ?: if (AnalyzerSupport.sideOn(window)) CameraAngle.Side else CameraAngle.Front
@@ -63,6 +64,9 @@ class RepJudge(
         // Coached, never a refusal: side-on only, not validated on correct
         // spikes, and it would have refused 2 of the 8 it measured.
         CueId.SpikeElbowHeight -> NEVER
+        // Receiving low is not a fault to refuse: the movement check already needs
+        // the knees to bend, so this cue could only lose a rep for bending deep.
+        CueId.PassKneeFlexion -> NEVER
         else -> CLEARLY_OUT
     }
 

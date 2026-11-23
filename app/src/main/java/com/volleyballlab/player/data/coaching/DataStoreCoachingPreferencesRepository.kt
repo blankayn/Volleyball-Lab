@@ -8,6 +8,7 @@ import com.volleyballlab.player.data.UserScope
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.CoachingPreferences
 import com.volleyballlab.player.domain.repository.CoachingPreferencesRepository
+import com.volleyballlab.player.domain.repository.DominantArm
 import java.io.IOException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -32,6 +33,8 @@ class DataStoreCoachingPreferencesRepository(
             hapticsEnabled = stored[scope.boolean("haptics_enabled")] ?: true,
             poseGuideEnabled = stored[scope.boolean("pose_guide_enabled")] ?: true,
             detailedAiCoachingEnabled = stored[scope.boolean("detailed_ai_enabled")] ?: false,
+            dominantArm = DominantArm.entries.firstOrNull { it.name == stored[scope.string("dominant_arm")] }
+                ?: DominantArm.Right,
         )
     }
 
@@ -40,6 +43,11 @@ class DataStoreCoachingPreferencesRepository(
     override suspend fun setHapticsEnabled(enabled: Boolean) = save("haptics_enabled", enabled)
     override suspend fun setPoseGuideEnabled(enabled: Boolean) = save("pose_guide_enabled", enabled)
     override suspend fun setDetailedAiCoachingEnabled(enabled: Boolean) = save("detailed_ai_enabled", enabled)
+
+    override suspend fun setDominantArm(arm: DominantArm) {
+        val scope = UserScope.of(authRepository.currentUid) ?: return
+        store.edit { it[scope.string("dominant_arm")] = arm.name }
+    }
 
     private suspend fun save(name: String, enabled: Boolean) {
         val scope = UserScope.of(authRepository.currentUid) ?: return

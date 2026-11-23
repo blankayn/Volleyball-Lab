@@ -164,6 +164,7 @@ private val Done = Color(0xFF2E9D5B)
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Note from your coach", style = MaterialTheme.typography.labelLarge, color = coachCardMuted())
             Text(note.text, style = MaterialTheme.typography.bodyLarge)
+            NotePhoto(note)
             Text(dateLabel(note.createdAtEpochMs), style = MaterialTheme.typography.bodySmall, color = coachCardMuted())
         }
     }

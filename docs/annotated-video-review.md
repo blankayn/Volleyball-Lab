@@ -26,12 +26,12 @@ Delivered and installed APK: `outputs/VolleyballLab-automatic-feedback-debug.apk
 Version two sidecars add rep windows, proven view angles and guided stage targets;
 version one remains readable with unknown views and empty windows. Capture maps
 all retained timestamps to the original MP4 clock. Legacy analysis also emits rep
-windows. Coach Reel selects up to six measurable correction clips, reserves
-failures from Front and Side, avoids overlapping selections, and reuses the
-existing private video player and skeleton renderer. Each clip pauses at the
-measured moment and includes what happened, why the posture matters and what to
-practice, with the measured value and provisional range. Full recording playback
-remains available. No video or landmarks are sent to a language model.
+windows. In the app, Coach Reel lists every rep in the order performed, grouped by
+view when both were recorded, and opens on the rep with the worst correction. The
+picked rep shows its corrections, worst first, and can be watched alone with a
+short hold at its worst moment (changed 23 November 2026; it replaced the clip
+player and the separate list of moments). The coach website uses the same rep
+list, and its Play Coach Reel button still plays up to six selected clips. No video or landmarks are sent to a language model.
 
 Front/Side comparison uses asynchronous local still extraction with a bounded
 bitmap cache. The two panes represent separate recorded repetitions. Missing

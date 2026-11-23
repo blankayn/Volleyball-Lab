@@ -12,4 +12,12 @@
     <string name="coach_feedback_sending">Sending…</string>
     <string name="coach_feedback_failed">Feedback could not be sent. Your draft is still here. Check your connection and try again.</string>
     <string name="coach_feedback_count">%1$d/%2$d</string>
+    <string name="coach_attach_moment">Comment on this moment (%1$s)</string>
+    <string name="coach_choose_moment">Link a moment</string>
+    <string name="coach_remove_moment">Remove the linked moment</string>
+    <string name="coach_add_photo">Add a photo</string>
+    <string name="coach_photo_preparing">Preparing photo…</string>
+    <string name="coach_remove_photo">Remove photo</string>
+    <string name="coach_photo_consent">Only this player and you can see it. Send photos only of people who have agreed to it, and a guardian for anyone under 18.</string>
+    <string name="result_back_to_coach">Back to coach feedback</string>
 </resources>

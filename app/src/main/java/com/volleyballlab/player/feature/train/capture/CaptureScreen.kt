@@ -349,6 +349,8 @@ private fun GrantedCaptureScreen(
         onSpeechSettings = { runCatching { context.startActivity(CoachingAudio.settingsIntent()) } },
         onGuidedChanged = viewModel::setGuidedAngles,
         onRepTargetChanged = viewModel::setRepsPerAngle,
+        dominantArm = preferences.dominantArm,
+        onDominantArmChanged = viewModel::setDominantArm,
         onRetryAngle = viewModel::onRetryAngle,
         onSkipAngle = viewModel::onSkipAngle,
         onStart = viewModel::onStartRequested,

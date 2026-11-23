@@ -19,6 +19,7 @@ import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.domain.repository.CoachingPreferencesRepository
+import com.volleyballlab.player.domain.repository.DominantArm
 import com.volleyballlab.player.domain.repository.CoachingPreferences
 import com.volleyballlab.player.domain.repository.ProfileRepository
 import com.volleyballlab.player.domain.model.AthleteProfile
@@ -241,7 +242,7 @@ class CaptureViewModel(
     private val allowDemoDetector: Boolean,
     private val coachRepository: CoachRepository? = null,
     private val receivingPostureEvaluator: ReceivingReadyPostureEvaluator? = null,
-    coachingPreferencesRepository: CoachingPreferencesRepository? = null,
+    private val coachingPreferencesRepository: CoachingPreferencesRepository? = null,
     private val assignmentId: String? = null,
     private val capturedReviewWriter: CapturedReviewWriter? = null,
     private val liveCoachingRepository: LiveCoachingRepository? = null,
@@ -326,7 +327,14 @@ class CaptureViewModel(
     private var reliableSinceMs: Long? = null
     private var lastFrameMs: Long? = null
     private var requiredSide: Side? = null
-    private var preferredSide: Side? = null
+
+    /**
+     * The arm the athlete said they hit with. It used to be guessed from whichever
+     * wrist was higher on their last rep, so the side-view direction flipped when a
+     * guiding arm, or a hidden hand the tracker guessed at, read as the higher one.
+     */
+    private val dominantSide: Side
+        get() = if (coachingPreferences.value.dominantArm == DominantArm.Left) Side.Left else Side.Right
     /**
      * The stance the current view is performed in. Fixed when the view begins,
      * so a later rep that reads the other hand as higher cannot flip the
@@ -586,8 +594,8 @@ class CaptureViewModel(
                 else ReferenceMoment.Finish
         }
         // Side-on, the arm nearest the lens is the hitting arm; that is the rule
-        // the side view is set up by. Otherwise, the arm they have been hitting with.
-        val hitting = FacingGuide.nearSide(facing) ?: preferredSide ?: Side.Right
+        // the side view is set up by. Otherwise, the arm they chose.
+        val hitting = FacingGuide.nearSide(facing) ?: dominantSide
         _referenceFigure.value = ReferenceFigure.layout(
             ReferencePoses.pose(skill, moment, hitting, body, grounded = DrillFocus.isGrounded(drillId)), moment, body, placement, facing,
             frame.imageWidth, frame.imageHeight,
@@ -606,6 +614,12 @@ class CaptureViewModel(
         if (_uiState.value !is CaptureUiState.Framing || reps !in listOf(5, 10)) return
         _guidedOptions.value = _guidedOptions.value.copy(repsPerAngle = reps)
         steadyMs = 0L
+    }
+
+    /** Remembered for later sessions. A view already under way keeps the direction it was announced with. */
+    fun setDominantArm(arm: DominantArm) {
+        if (_uiState.value !is CaptureUiState.Framing) return
+        viewModelScope.launch { coachingPreferencesRepository?.setDominantArm(arm) }
     }
 
     fun clearCoachingMessage(id: String) {
@@ -788,13 +802,6 @@ class CaptureViewModel(
                     speak = !GuidedCaptureProgress.reachedTarget(_guidedOptions.value, stageMetrics),
                     directorId = direction?.id)
                 if (assessment.isAssessable && assessment.isGood) hapticChannel.trySend(Unit)
-                if (skill == Skill.Serving || skill == Skill.Spiking) {
-                    val contact = window.frameFor(com.volleyballlab.player.domain.model.RepPhase.Contact)
-                    if (contact != null) preferredSide = if (
-                        contact.image(com.volleyballlab.player.pose.model.BodyPoint.LEFT_WRIST).y <
-                        contact.image(com.volleyballlab.player.pose.model.BodyPoint.RIGHT_WRIST).y
-                    ) Side.Left else Side.Right
-                }
             }
         }
         _uiState.value = state.copy(quality = quality, liveRepCount = totalMetrics.reps,
@@ -942,10 +949,9 @@ class CaptureViewModel(
         postureCoach.reset()
         reliableSinceMs = null
         rotationElapsedMs = 0L
-        // The hitting arm comes from the reps already seen. The one-armed skills need
-        // that arm nearest the lens; until one has been observed the turn is only
-        // suggested, and the other skills are measurable from either profile.
-        stageStance = FacingGuide.stance(skill, angle, preferredSide)
+        // The chosen arm faces the lens. The one-armed skills need it there; the
+        // others are measurable from either profile, so for them it is only suggested.
+        stageStance = FacingGuide.stance(skill, angle, dominantSide)
         requiredSide = stageStance.requiredNearSide
         val direction = FacingGuide.instruction(skill, stageStance)
         // The target rep shares the turn's audio lane, so its count and verdict
@@ -1220,7 +1226,6 @@ class CaptureViewModel(
         trackingGate.reset()
         stageStance = FacingGuide.stance(skill, CameraAngle.Front)
         requiredSide = null
-        preferredSide = null
         lastNotCounted = null
         director.reset()
         director.experience = _coachingPlan.value.experience

@@ -35,6 +35,8 @@ enum class CourtPosition(@param:StringRes val displayName: Int) {
  *
  * Dominant hand was removed on 19 Nov 2026: the serve and spike analyzers find
  * the hitting arm from each rep, so a stored hand only ever acted as a fallback.
+ * Which arm faces the camera in a side view is a training preference instead, chosen
+ * on the session setup screen (CoachingPreferences.dominantArm).
  */
 data class AthleteProfile(
     val name: String = "",
