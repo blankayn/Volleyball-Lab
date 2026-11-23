@@ -40,6 +40,25 @@ Deploy hosting + rules with the Firebase CLI from the repo root:
 firebase deploy
 ```
 
+## Cloudflare hosting
+
+The [Cloudflare Coach Portal](https://volleyball-lab.pages.dev/) serves the production
+web build and uses the `volleyball-lab` Firebase project. To publish an update
+to the `volleyball-lab` Pages project, run these commands from the repository root:
+
+```bash
+npm ci --prefix ai-worker
+npm ci --prefix coach-web
+npm run build --prefix coach-web
+cd coach-web
+node ../ai-worker/node_modules/wrangler/bin/wrangler.js pages deploy dist --project-name volleyball-lab --branch main --profile volleyball-pages
+```
+
+On a new machine, create the Wrangler profile with
+`npm exec --prefix ai-worker -- wrangler auth create volleyball-pages --scopes account:read user:read pages:write`.
+Firebase Authentication authorizes `volleyball-lab.pages.dev`, and the AI Worker allows
+requests from `https://volleyball-lab.pages.dev`.
+
 ## First-time backend setup
 
 1. Firebase console → project **`volleyball-lab`** (the one
