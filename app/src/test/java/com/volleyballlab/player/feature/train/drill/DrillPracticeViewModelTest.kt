@@ -23,12 +23,44 @@ class DrillPracticeViewModelTest {
     private val models = ViewModelStore()
     private var now = 0L
     private var index = 0
-    private fun model(sets: Int = 3, drillId: String = "set-wall-reps", resume: String? = null): DrillPracticeViewModel =
-        DrillPracticeViewModel(drillId, sets, 10, 30, resume, access, repository, auth, { now }).also { models.put("model-${index++}", it) }
+    private fun model(sets: Int = 3, drillId: String = "set-wall-reps", resume: String? = null, reps: Int = 10): DrillPracticeViewModel =
+        DrillPracticeViewModel(drillId, sets, reps, 30, resume, access, repository, auth, { now }).also { models.put("model-${index++}", it) }
     @After fun cleanUp() { models.clear(); Dispatchers.resetMain() }
     private fun workoutTest(block: suspend TestScope.() -> Unit) = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try { block() } finally { models.clear(); runCurrent() }
+    }
+
+    @Test fun customSetAndRepTargetsSurviveResumingAndSavingTheWorkout() = workoutTest {
+        val original = model(sets = 2, reps = 17)
+        runCurrent()
+        val config = DrillWorkoutConfig(sets = 2, reps = 17)
+        assertEquals(config, original.state.value.draft?.config)
+        val draft = requireNotNull(repository.draft.first())
+        assertEquals(config, draft.config)
+
+        val resumed = model(resume = draft.id)
+        runCurrent()
+        assertEquals(config, resumed.state.value.draft?.config)
+        resumed.resume()
+        runCurrent()
+
+        repeat(config.sets) { index ->
+            resumed.startSet()
+            runCurrent()
+            resumed.requestRepConfirmation()
+            runCurrent()
+            resumed.confirmSet(config.reps - index)
+            runCurrent()
+            resumed.skipRest()
+            runCurrent()
+        }
+
+        val workout = repository.history.first().single()
+        assertEquals(config, workout.config)
+        assertEquals(listOf(17, 16), workout.sets.map { it.reps })
+        assertTrue(workout.completed)
+        assertNull(repository.draft.first())
     }
 
     @Test fun confirmingPausesTimeAndRecordsActualRepsExactlyOnce() = workoutTest {

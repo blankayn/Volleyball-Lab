@@ -33,8 +33,9 @@ History. Every drill card has a Camera check button, and the Drills tab opens wi
 up to three "Recommended for you" picks (`DrillRecommendations`): the focus skill's
 drill at the athlete's level and its next step up, then the least-trained other
 skills relevant to their position. Picks reuse the dashboard's `SkillRecommendation`
-and only include drills the account can start. On a drill's page the camera is the
-only way to practise; the manual counting workout is no longer started from there. Existing unfinished workouts can still be resumed from the library.
+and only include drills the account can start. Open a drill to run a Camera Check
+or set your own sets and reps for a manual workout. Unfinished workouts can be
+resumed from the library or a drill's page.
 
 Train → a skill is the other way in, and deliberately not a second copy of the
 library: it is that skill's three drills as a path, easiest first (`SkillPath`).
@@ -42,9 +43,9 @@ Each step shows its best camera score against 80 (the Advanced band); a step at
 80+ is Strong, and the first open step below that is the one to train now. Only
 camera scores move the path; manual workouts never do. Each step links to its
 guide in the library, and Done after a camera session returns to the path. Guides include equipment, setup, numbered steps, common mistakes, and
-the existing skill illustrations. Defaults: 3 sets, the drill's target reps,
-30 seconds rest. Tap a number to enter any permitted value: 1–5 sets, 1–100
-target reps, 0–120 rest seconds.
+the existing skill illustrations. Manual workouts default to 3 sets, the drill's
+target reps, and 30 seconds of rest between sets. The setup accepts 1–5 sets and
+1–100 target reps per set.
 
 Only confirmed sets create reps. Actual reps may be 0–100 and can differ from
 the target. Rest ends at Ready; the next set starts explicitly. Pause, background,

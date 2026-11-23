@@ -218,6 +218,8 @@ fun DrillLibraryScreen(
 fun DrillDetailScreen(
     drillId: String,
     onCamera: (Drill) -> Unit,
+    onPractice: (DrillWorkoutConfig) -> Unit,
+    onResume: (DrillPracticeDraft) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -250,6 +252,25 @@ fun DrillDetailScreen(
                     Button({ upgrade = true }) { Text("View Pro") }
                 } }
             } else {
+                item(key = "workout-setup") {
+                    val draft = state.draft
+                    if (draft == null) {
+                        WorkoutSetupCard(drill, onPractice)
+                    } else {
+                        ModuleCard {
+                            Text(stringResource(R.string.drill_workout_unfinished, draft.drillName),
+                                style = MaterialTheme.typography.titleMedium)
+                            val draftDrill = state.drills.firstOrNull { it.id == draft.drillId }
+                            if (state.entitlement.canStart(draftDrill)) {
+                                OutlinedButton({ onResume(draft) }, Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.drill_workout_resume))
+                                }
+                            } else {
+                                Text(stringResource(R.string.drill_workout_unfinished_library))
+                            }
+                        }
+                    }
+                }
                 item { ModuleCard {
                     Text("Purpose", style = MaterialTheme.typography.titleMedium)
                     Text(drill.description)
@@ -274,6 +295,67 @@ fun DrillDetailScreen(
         item { Spacer(Modifier.height(16.dp)) }
     }
     if (upgrade) DrillUpgradeDialog { upgrade = false }
+}
+
+@Composable
+private fun WorkoutSetupCard(drill: Drill, onPractice: (DrillWorkoutConfig) -> Unit) {
+    var sets by rememberSaveable(drill.id) { mutableStateOf(DrillWorkoutConfig().sets.toString()) }
+    var reps by rememberSaveable(drill.id) { mutableStateOf(drill.targetReps.toString()) }
+    val setCount = sets.toIntOrNull()?.takeIf { it in DrillWorkoutConfig.setRange }
+    val repCount = reps.toIntOrNull()?.takeIf { it in DrillWorkoutConfig.repRange }
+    val workout = if (setCount != null && repCount != null) DrillWorkoutConfig(setCount, repCount) else null
+
+    ModuleCard {
+        Text(stringResource(R.string.drill_workout_setup), style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            WorkoutTargetField(
+                label = stringResource(R.string.drill_workout_sets),
+                value = sets,
+                onChange = { sets = it },
+                allowed = DrillWorkoutConfig.setRange,
+                modifier = Modifier.weight(1f),
+            )
+            WorkoutTargetField(
+                label = stringResource(R.string.drill_workout_reps_per_set),
+                value = reps,
+                onChange = { reps = it },
+                allowed = DrillWorkoutConfig.repRange,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        OutlinedButton(
+            onClick = { workout?.let(onPractice) },
+            enabled = workout != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.drill_workout_start)) }
+        Text(stringResource(R.string.drill_workout_manual),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun WorkoutTargetField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    allowed: IntRange,
+    modifier: Modifier,
+) {
+    val valid = value.toIntOrNull()?.let { it in allowed } == true
+    OutlinedTextField(
+        value = value,
+        onValueChange = { input ->
+            if (input.length <= allowed.last.toString().length && input.all(Char::isDigit)) onChange(input)
+        },
+        modifier = modifier,
+        label = { Text(label) },
+        singleLine = true,
+        isError = !valid,
+        supportingText = if (valid) null else {
+            { Text(stringResource(R.string.drill_workout_range, allowed.first, allowed.last)) }
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    )
 }
 
 @Composable
