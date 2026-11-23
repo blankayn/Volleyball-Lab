@@ -61,6 +61,12 @@ class AccountDeletionService(
                     val file = File(path).canonicalFile
                     if (file.parentFile == File(context.filesDir, "profile_photos").canonicalFile) file.delete()
                 }
+                val restoredRoot = File(context.filesDir, "restored_recordings").canonicalFile
+                val restored = File(restoredRoot, uid).canonicalFile
+                if (restored.parentFile == restoredRoot) {
+                    restored.listFiles()?.forEach { VideoReviewCache.delete(context, it.path) }
+                    restored.deleteRecursively()
+                }
                 val sharedRoot = File(context.cacheDir, "shared_recordings").canonicalFile
                 val shared = File(sharedRoot, uid).canonicalFile
                 if (shared.parentFile == sharedRoot) shared.deleteRecursively()

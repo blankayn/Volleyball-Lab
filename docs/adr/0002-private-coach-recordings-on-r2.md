@@ -31,3 +31,13 @@ continues to require explicit session sharing. Removing a downloaded phone copy
 keeps the cloud recording available. Uninstalling before backup completes can
 still lose a local recording. Already deleted videos cannot be recovered by this
 feature. Existing session history limits still apply.
+
+### Automatic restoration
+
+The owner requested that backed-up videos return automatically after reinstalling.
+After the session history loads, persistent background work retrieves missing
+recordings and feedback for that signed-in account. Owner downloads are kept in
+private persistent storage. The result screen observes the restored file path
+and shows restoration status while waiting for connectivity. Interrupted
+downloads retry; a late result cannot recreate a deleted session or attach to a
+different account. An account deletion also clears its restored private files.

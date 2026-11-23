@@ -96,7 +96,9 @@ class SharedRecordingStore(
             // Only missing R2 objects may use the legacy Firebase transport.
             if (error.status != 404) throw error
         }
-        val local = File(context.cacheDir, "shared_recordings/$viewer/$ownerUid/${session.id}.mp4")
+        val local = if (viewer == ownerUid) {
+            File(context.filesDir, "restored_recordings/" + viewer + "/" + session.id + ".mp4")
+        } else File(context.cacheDir, "shared_recordings/$viewer/$ownerUid/${session.id}.mp4")
         val prefix = "recordings/$ownerUid/${session.id}"
         withContext(Dispatchers.IO) { local.parentFile?.mkdirs() }
         if (!local.isFile || cache.read(local.path, session.skill) == null) {
@@ -117,7 +119,7 @@ class SharedRecordingStore(
                 require(review.width > 0 && review.height > 0)
                 check(auth.currentUid == viewer)
                 withContext(Dispatchers.IO) { check(temporary.renameTo(local)) }
-                cache.write(local.path, session.skill, review)
+                cache.write(local.path, session.skill, review, persistent = viewer == ownerUid)
             } finally { withContext(Dispatchers.IO) { temporary.delete() } }
         }
         check(auth.currentUid == viewer)

@@ -115,9 +115,16 @@ class AppContainer(private val context: Context) {
                     }
                 }
                 launch {
+                    val queuedRestores = mutableSetOf<String>()
+                    val queuedBackups = mutableSetOf<String>()
                     sessionRepository.sessions.collect { sessions ->
-                        sessions.filter { it.videoPath != null }.forEach { session ->
-                            com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+                        sessions.forEach { session ->
+                            if (queuedRestores.add(session.id)) {
+                                com.volleyballlab.player.data.session.RecordingRestoreWorker.schedule(context, uid, session.id)
+                            }
+                            if (session.videoPath != null && queuedBackups.add(session.id)) {
+                                com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+                            }
                         }
                     }
                 }

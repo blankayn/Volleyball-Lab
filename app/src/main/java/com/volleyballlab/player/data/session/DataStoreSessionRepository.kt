@@ -188,6 +188,20 @@ class DataStoreSessionRepository internal constructor(
         onSessionSaved(ownerUid, session)
     }
 
+    /** An in-flight download cannot restore a deleted session or cross accounts. */
+    internal suspend fun attachRestoredVideo(uid: String, id: String, path: String) {
+        val scope = UserScope.of(uid) ?: return
+        store.edit { preferences ->
+            if (authRepository.currentUid != uid) return@edit
+            val key = scope.string(KEY_SESSIONS)
+            val sessions = preferences[key].decodeSessions()
+            if (sessions.none { it.id == id }) return@edit
+            preferences[key] = json.encodeToString(sessions.map {
+                if (it.id == id) it.copy(videoPath = path).toRecord() else it.toRecord()
+            })
+        }
+    }
+
     override suspend fun byId(id: String): SessionResult? =
         sessions.first().firstOrNull { it.id == id }
 
@@ -274,8 +288,10 @@ private fun deletePrivateVideo(context: Context, path: String) {
     runCatching {
         val directory = File(context.filesDir, "training_videos").canonicalFile
         val restored = File(context.cacheDir, "shared_recordings").canonicalFile.toPath()
+        val persistentRestored = File(context.filesDir, "restored_recordings").canonicalFile.toPath()
         val video = File(path).canonicalFile
-        if (video.parentFile == directory || video.toPath().startsWith(restored)) {
+        if (video.parentFile == directory || video.toPath().startsWith(restored) ||
+            video.toPath().startsWith(persistentRestored)) {
             VideoReviewCache.delete(context, path)
             video.delete()
         }
