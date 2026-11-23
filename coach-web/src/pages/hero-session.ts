@@ -1,25 +1,16 @@
 import { gsap } from "gsap";
 import { icon } from "../lib/icons";
-
-// Illustration coordinates follow the supplied 736 × 920 photo, not a live pose model.
-const joints = [
-  [149, 390], [252, 394], [78, 355], [350, 359], [110, 305], [427, 324],
-  [184, 550], [252, 551], [143, 682], [270, 673], [47, 797], [263, 797],
-  [38, 808], [247, 821], [65, 826], [294, 827],
-] as const;
-const connections = [[0, 1], [0, 2], [2, 4], [1, 3], [3, 5], [0, 6], [1, 7],
-  [6, 7], [6, 8], [8, 10], [7, 9], [9, 11], [10, 12], [12, 14], [10, 14],
-  [11, 13], [13, 15], [11, 15]] as const;
+import { servingLinks, servingPose } from "./serving-pose";
 
 export function heroSession(): string {
   const skeleton = `<svg class="pose-skeleton" viewBox="0 0 736 920" fill="none" aria-hidden="true">
-    <g class="pose-connections">${connections.map(([a, b]) => `<line x1="${joints[a][0]}" y1="${joints[a][1]}" x2="${joints[b][0]}" y2="${joints[b][1]}"/>`).join("")}</g>
-    <g class="pose-joints">${joints.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join("")}</g>
+    <g class="pose-connections">${servingLinks.map(([a, b]) => `<line x1="${servingPose[a][0]}" y1="${servingPose[a][1]}" x2="${servingPose[b][0]}" y2="${servingPose[b][1]}"/>`).join("")}</g>
+    <g class="pose-joints">${Object.values(servingPose).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5"/>`).join("")}</g>
   </svg>`;
 
   return `<figure class="analysis-visual session-demo" aria-label="Serving technique demonstration">
     <div class="session-photo">
-      <img src="/assets/volleyball-serving.jpg" alt="Volleyball player preparing an overhead serve with an illustrative pose skeleton aligned to her arms, torso, and legs" width="736" height="920" fetchpriority="high" />
+      <img src="/assets/volleyball-serving.jpg" alt="Volleyball player preparing an overhead serve, with the arm, torso and leg joints found by the app's pose model drawn on top" width="736" height="920" fetchpriority="high" />
       ${skeleton}
       <div class="session-photo-label"><span class="session-dot"></span> Pose overlay <small>DEMO</small></div>
       <span class="session-corner session-corner-tl" aria-hidden="true"></span><span class="session-corner session-corner-br" aria-hidden="true"></span>

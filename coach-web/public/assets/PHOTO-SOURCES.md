@@ -5,8 +5,9 @@ These images were supplied by the user on October 26, 2026 for placement on the 
 - `volleyball-receiving.jpg`: user-supplied file `download.jpg`; previous receiving image, now superseded by the new color version.
 - `volleyball-receiving-color-original.jpg`: user-supplied file `Gemini_Generated_Image_3wmxrh3wmxrh3wmx.jpg`. Replaces the previous receiving image. The `-640.jpg` and `-1200.jpg` variants are proportional JPEG exports for responsive delivery, without color filters.
 - `volleyball-serving.jpg`: user-supplied file `download (1).jpg`; hero photograph.
+- `volleyball-spike-silhouette.jpg`: user-supplied file `96f88d07788b7e1c45a39321136e1956.jpg` (November 23, 2026); Technique feature card, cropped and tinted with CSS. Artist and license were not provided.
 
-Original JPEGs are copied unchanged, with responsive exports as noted above. The layout preserves each source frame with proportional sizing. The hero adds a hand-positioned SVG pose illustration and an interactive coaching demo; these are not MediaPipe detections or measured scores from the photograph. No generative image tools were used for these changes. Photographer and original publication details were not provided.
+Original JPEGs are copied unchanged, with responsive exports as noted above. The layout preserves each source frame with proportional sizing. The hero draws joints detected on `volleyball-serving.jpg` by the app's `pose_landmarker_full.task` (raw values in `src/pages/serving-pose.ts`). The scores, alignment figure and cues in the hero demo are examples, not measurements from the photograph. No generative image tools were used for these changes. Photographer and original publication details were not provided.
 
 ## Authentication panels
 

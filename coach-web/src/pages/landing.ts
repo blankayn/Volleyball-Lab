@@ -1,22 +1,25 @@
 import { topbar } from "../lib/ui";
 import { icon } from "../lib/icons";
+import { ballFlight, courtLines, featureArt } from "./landing-art";
 import { landingFooter } from "./landing-footer";
 import { heroSession, mountHeroSession } from "./hero-session";
 import { mountLandingMotion } from "./landing-motion";
 import "../styles/landing.css";
+import "../styles/landing-art.css";
 
 let disposeMotion: (() => void) | null = null;
 let disposeSession: (() => void) | null = null;
 
 export function renderLanding(root: HTMLElement): void {
   document.title = "Volleyball Lab — AI-powered training";
-  root.innerHTML = `<div class="landing-page" id="top">${topbar(false, "portal")}
+  root.innerHTML = `<div class="landing-page" id="top"><div class="scroll-progress" aria-hidden="true"><i></i></div>${topbar(false, "portal")}
   <main>
     <section class="hero" aria-labelledby="hero-title">
+      ${courtLines("hero-court")}
       <div class="hero-inner">
         <div class="hero-copy">
           <p class="eyebrow"><span class="hero-kicker-index">VL / 01</span> Your courtside advantage</p>
-          <h1 id="hero-title"><span class="hero-line">See the form.</span><span class="hero-line">Understand the</span><span class="hero-line">movement.</span><em class="hero-line">Improve together.</em></h1>
+          <h1 id="hero-title"><span class="hero-line">See the form.</span> <span class="hero-line">Understand the</span> <span class="hero-line">movement.</span> <em class="hero-line">Improve together.</em></h1>
           <p class="lead">Volleyball Lab helps you review player sessions with AI pose tracking, rep counts, and performance scores. See what they see, write feedback, and help every athlete improve.</p>
           <div class="hero-cta">
             <a class="btn btn-primary" href="#/register">Create an account ${icon("arrow")}</a>
@@ -27,18 +30,19 @@ export function renderLanding(root: HTMLElement): void {
         </div>
         ${heroSession()}
       </div>
-      <div class="performance-strip" aria-label="Train with purpose"><div class="wrap"><span class="performance-word">Train with purpose.</span><span class="performance-divider" aria-hidden="true">/</span><span class="performance-word">Review every detail.</span><span class="performance-divider" aria-hidden="true">/</span><span class="performance-word">Own the next point.</span></div></div>
+      <div class="performance-strip"><div class="performance-track">${[0, 1, 2, 3].map((copy) => `<p class="performance-set"${copy ? ' aria-hidden="true"' : ""}><span class="performance-word">Train with purpose.</span>${icon("court")}<span class="performance-word is-outline">Review every detail.</span>${icon("court")}<span class="performance-word">Own the next point.</span>${icon("court")}</p>`).join("")}</div></div>
       <div class="feature-ribbon wrap" id="features">
-        <article class="feature-card"><div class="feature-icon">${icon("pose")}</div><div><span class="feature-index">01 / Technique</span><h2>Read the movement.</h2><p>Pose analysis highlights the details that make a difference in each rep.</p><a href="#about">Explore the analysis ${icon("arrow")}</a></div></article>
-        <article class="feature-card"><div class="feature-icon">${icon("chart")}</div><div><span class="feature-index">02 / Progress</span><h2>See the whole session.</h2><p>Review rep counts, form scores, and training history in one place.</p><a href="#about">Explore session review ${icon("arrow")}</a></div></article>
-        <article class="feature-card"><div class="feature-icon">${icon("message")}</div><div><span class="feature-index">03 / Feedback</span><h2>Give the next cue.</h2><p>Send focused feedback and set the next drill for your athletes.</p><a href="#about">Explore feedback ${icon("arrow")}</a></div></article>
+        <article class="feature-card">${featureArt("spike")}<div><span class="feature-index">01 / Technique</span><h2>Read the movement.</h2><p>Pose analysis highlights the details that make a difference in each rep.</p><a href="#about">Explore the analysis ${icon("arrow")}</a></div></article>
+        <article class="feature-card">${featureArt("chart")}<div><span class="feature-index">02 / Progress</span><h2>See the whole session.</h2><p>Review rep counts, form scores, and training history in one place.</p><a href="#about">Explore session review ${icon("arrow")}</a></div></article>
+        <article class="feature-card">${featureArt("chat")}<div><span class="feature-index">03 / Feedback</span><h2>Give the next cue.</h2><p>Send focused feedback and set the next drill for your athletes.</p><a href="#about">Explore feedback ${icon("arrow")}</a></div></article>
       </div>
     </section>
     <section class="steps-section" id="how-it-works"><div class="wrap">
-      <div class="section-heading"><div><p class="eyebrow">How it works</p><h2>Three steps to a connected team</h2></div><p>From practice to progress, Volleyball Lab makes it simple to review, track, and support your athletes.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">How it works</p><h2>Three touches to a connected team</h2></div><p>From practice to progress, Volleyball Lab makes it simple to review, track, and support your athletes.</p></div>
+      ${ballFlight()}
       <div class="steps-flow">
-        <article class="step-card"><div><b>01</b><span>${icon("team")}</span></div><h3>Register the team</h3><p>Create your account and welcome your athletes in minutes.</p></article><i class="step-arrow" aria-hidden="true">${icon("arrow")}</i>
-        <article class="step-card"><div><b>02</b><span>${icon("play")}</span></div><h3>Review player sessions</h3><p>Athletes capture practice sessions on their phones. You see the data.</p></article><i class="step-arrow" aria-hidden="true">${icon("arrow")}</i>
+        <article class="step-card"><div><b>01</b><span>${icon("team")}</span></div><h3>Register the team</h3><p>Create your account and welcome your athletes in minutes.</p></article>
+        <article class="step-card"><div><b>02</b><span>${icon("play")}</span></div><h3>Review player sessions</h3><p>Athletes capture practice sessions on their phones. You see the data.</p></article>
         <article class="step-card"><div><b>03</b><span>${icon("chart")}</span></div><h3>Assign feedback and improve</h3><p>Write feedback, assign next drills, and track progress over time.</p></article>
       </div>
     </div></section>
@@ -46,10 +50,10 @@ export function renderLanding(root: HTMLElement): void {
       <div class="results-copy"><p class="eyebrow">Built for real teams</p><h2>From movement to measurable feedback</h2><p>Our analysis turns every rep into clear insight on technique, consistency, and progress—so you can focus on helping your athletes grow.</p><a class="text-link" href="#/register">Get started with Volleyball Lab →</a></div>
       <div class="result-preview serving-preview">
         <figure class="serving-photo receiving-photo"><img src="/assets/volleyball-receiving-color-1200.jpg" srcset="/assets/volleyball-receiving-color-640.jpg 640w, /assets/volleyball-receiving-color-1200.jpg 1200w" sizes="(max-width: 900px) calc(100vw - 64px), 55vw" alt="Volleyball player in a low receiving stance on a warm wooden indoor court" width="1200" height="1200" loading="lazy" decoding="async" /><figcaption class="photo-caption"><span>02 / Receiving</span><span>Every rep has a story.</span></figcaption></figure>
-        <div class="result-sheet"><div class="result-top"><span>Example session report</span>${icon("chart")}</div><div class="result-main"><div class="result-ring">89%</div><div><strong>Overall score</strong></div></div><div class="result-bars"><span>Platform <i><u style="width:87%"></u></i><b>87%</b></span><span>Knee bend <i><u style="width:92%"></u></i><b>92%</b></span><span>Body alignment <i><u style="width:90%"></u></i><b>90%</b></span></div><div class="result-note"><b>Example cue</b><span>Keep your platform steady and stay low through contact.</span></div></div>
+        <div class="result-sheet"><div class="result-top"><span>Example session report</span>${icon("chart")}</div><div class="result-main"><div class="result-ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="result-ring-track" cx="50" cy="50" r="43"/><circle class="result-ring-value" cx="50" cy="50" r="43" pathLength="100"/></svg><strong>89<span>%</span></strong></div><div><strong>Overall score</strong></div></div><div class="result-bars"><span>Platform <i><u style="width:87%"></u></i><b>87%</b></span><span>Knee bend <i><u style="width:92%"></u></i><b>92%</b></span><span>Body alignment <i><u style="width:90%"></u></i><b>90%</b></span></div><div class="result-note"><b>Example cue</b><span>Keep your platform steady and stay low through contact.</span></div></div>
       </div>
     </div></section>
-    <section class="final-cta"><div class="wrap"><p class="eyebrow">Ready for the next point?</p><h2>Bring your team into focus.</h2><p>Create your account and turn every recorded session into a clear next step.</p><a class="btn btn-primary" href="#/register">Create an account →</a></div></section>
+    <section class="final-cta">${courtLines("cta-court")}<div class="wrap"><p class="eyebrow">Ready for the next point?</p><h2>Bring your team into focus.</h2><p>Create your account and turn every recorded session into a clear next step.</p><a class="btn btn-primary" href="#/register">Create an account →</a></div></section>
   </main>${landingFooter()}</div>`;
 
   root.querySelectorAll<HTMLAnchorElement>('a[href^="#"]:not([href^="#/"])').forEach((link) => {
