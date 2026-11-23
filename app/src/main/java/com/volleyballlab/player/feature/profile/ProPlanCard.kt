@@ -1,5 +1,6 @@
 package com.volleyballlab.player.feature.profile
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
@@ -15,6 +16,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.volleyballlab.player.BuildConfig
 import com.volleyballlab.player.VolleyballLabApplication
 import com.volleyballlab.player.data.plan.FirestorePlanRepository
 import com.volleyballlab.player.data.plan.GcashCheckoutException
@@ -61,12 +63,22 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
             }
 
             val offer = checkout
-            if (!plan.isPro && offer != null) {
+            val testCheckoutUrl = BuildConfig.XENDIT_TEST_CHECKOUT_URL
+            // Development builds only: a fixed Xendit link that opens checkout but cannot grant Pro.
+            fun openTestCheckout() {
+                message = null
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(testCheckoutUrl)))
+                } catch (_: ActivityNotFoundException) {
+                    message = "Install a browser to open checkout."
+                }
+            }
+            if (testCheckoutUrl.isNotEmpty() || (!plan.isPro && offer != null)) {
                 Surface(shape = RoundedCornerShape(18.dp), color = colors.primary.copy(alpha = .08f),
                     border = BorderStroke(1.dp, colors.primary.copy(alpha = .25f))) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Upgrade to Pro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        if (offer.enabled) {
+                        Text(if (plan.isPro) "Pro payment" else "Upgrade to Pro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        if (!plan.isPro && offer?.enabled == true) {
                             val price = if (offer.priceCentavos % 100 == 0L) (offer.priceCentavos / 100).toString()
                                 else BigDecimal.valueOf(offer.priceCentavos, 2).toPlainString()
                             val access = if (offer.durationDays == 0L) "lifetime access" else "${offer.durationDays} days"
@@ -90,7 +102,8 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                                     } catch (failure: CancellationException) {
                                         throw failure
                                     } catch (failure: GcashCheckoutException) {
-                                        message = when (failure.code) {
+                                        if (failure.code == "checkout_not_configured" && testCheckoutUrl.isNotEmpty()) openTestCheckout()
+                                        else message = when (failure.code) {
                                             "offer_changed" -> "The Pro offer changed. Review the updated price and try again."
                                             "payment_processing" -> "Xendit is still confirming your previous checkout. Check again shortly."
                                             "previous_checkout_open" -> "The offer changed while your previous checkout was open. Try again after it expires."
@@ -107,6 +120,8 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                                     }
                                 }
                             }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Opening checkout…" else "Checkout") }
+                        } else if (testCheckoutUrl.isNotEmpty()) {
+                            Button(onClick = ::openTestCheckout, modifier = Modifier.fillMaxWidth()) { Text("Checkout") }
                         } else {
                             Text("GCash checkout is currently unavailable.", style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant)
