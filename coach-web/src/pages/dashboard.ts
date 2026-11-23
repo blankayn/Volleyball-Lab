@@ -25,10 +25,11 @@ import {
   type Submission,
   type TrainingSession,
 } from "../lib/cloud";
-import { cueLabel, cuesFor, formatMeasured, formatTarget, SKILL_LABEL } from "../lib/cues";
+import { cueDefinition, cueLabel, cuesFor, formatMeasured, formatTarget, SKILL_LABEL } from "../lib/cues";
 import { dueLabel, esc, fullDate, initials, timeAgo } from "../lib/format";
 import { appPath, go } from "../lib/router";
-import { avatar, emptyState, errorCard, iconChip, scoreBar } from "../lib/ui";
+import { avatar, emptyState, errorCard, scoreBar } from "../lib/ui";
+import { activityChart, scoreRing, skillBars, sparkline, trendChart } from "../lib/coach-charts";
 import { hydrateAccountPreferences, renderAccount, wireAccount } from "./account";
 import { getPreferences } from "../lib/preferences";
 import { mountNotifications, notificationBell } from "../lib/notifications";
@@ -343,7 +344,6 @@ export async function renderDashboard(
           <div class="app-title-line"><h1 id="page-heading" tabindex="-1">${PAGE_LABELS[activeTab]}</h1><span class="dash-team-name" id="team-name">Your team</span></div>
         </div>
         <div class="app-topbar-actions">
-          <span class="sync-pill"><i></i>Online</span>
           ${notificationBell()}
           <a class="btn btn-primary btn-sm topbar-cta" href="${appPath("assignments")}" aria-label="Set a new drill">${navIcon('<path d="M12 5v14M5 12h14"/>')}<span>New drill</span></a>
         </div>
@@ -533,47 +533,61 @@ function greeting(date = new Date()): string {
   return "Good evening";
 }
 
-function statCard(
-  icon: string,
-  tone: "rust" | "indigo" | "green" | "violet",
-  value: string | number,
-  label: string,
-  note: string,
-  noteTone: "up" | "warn" | "flat" = "flat",
-): string {
-  return `<article class="stat-card">
-    <div class="stat-card-top"><span class="stat-icon icon-${tone}">${navIcon(icon)}</span><span class="stat-note${noteTone === "flat" ? "" : ` ${noteTone}`}">${esc(note)}</span></div>
-    <b>${value}</b><span class="stat-label">${esc(label)}</span>
-  </article>`;
+const DAY_MS = 86_400_000;
+const plural = (count: number, one: string, many = `${one}s`): string => `${count} ${count === 1 ? one : many}`;
+const skillName = (skill: string): string => SKILL_LABEL[skill] ?? skill;
+const STATUS_LABEL: Record<Assignment["status"], string> = { Pending: "Pending", InProgress: "In progress", Completed: "Completed" };
+const overdue = (a: Assignment): boolean => a.status !== "Completed" && a.dueAt !== null && a.dueAt < Date.now();
+
+function findSession(data: DashData, sessionId: string): TrainingSession | null {
+  for (const sessions of data.sessionsByPlayer.values()) {
+    const found = sessions.find((s) => s.id === sessionId);
+    if (found) return found;
+  }
+  return null;
 }
 
-function activityBars(sessions: TrainingSession[]): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(today);
-    day.setDate(today.getDate() - (6 - index));
-    const start = day.getTime();
-    return {
-      label: day.toLocaleDateString(undefined, { weekday: "short" }),
-      count: sessions.filter((s) => s.startedAt >= start && s.startedAt < start + 86_400_000).length,
-      today: index === 6,
-    };
-  });
-  const max = Math.max(1, ...days.map((d) => d.count));
-  return days.map((d) => `<div class="activity-col${d.today ? " is-today" : ""}" title="${d.count} session${d.count === 1 ? "" : "s"}">
-      <span class="activity-count">${d.count || ""}</span>
-      <span class="activity-track"><i style="height:${Math.max(4, Math.round((d.count / max) * 100))}%"></i></span>
-      <small>${d.label}</small>
-    </div>`).join("");
+function sessionTitle(data: DashData, sessionId: string): string {
+  const s = findSession(data, sessionId);
+  return s ? `${skillName(s.skill)} · ${s.repCount} reps` : "Session";
 }
 
-function skillForm(sessions: TrainingSession[]): { html: string; hasData: boolean } {
-  const skills = perSkillMeans(sessions);
-  return {
-    hasData: skills.some((s) => s.mean !== null),
-    html: skills.map((s) => `<div class="skill-row"><span>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</span>${scoreBar(s.mean)}</div>`).join(""),
-  };
+/** How long a player has been waiting, flagged in words once it passes two days. */
+function waiting(submittedAt: number): string {
+  const late = Date.now() - submittedAt > 2 * DAY_MS;
+  return `<span class="wait${late ? " is-late" : ""}">${late ? "Waiting · sent " : "Sent "}${esc(timeAgo(submittedAt))}</span>`;
+}
+
+function scoreboardItem(href: string, value: string | number, label: string, note: string, tone: "" | "up" | "warn" = ""): string {
+  return `<a class="score-item" href="${href}"><b>${value}</b><span class="score-item-label">${esc(label)}</span><span class="score-item-note${tone ? ` is-${tone}` : ""}">${esc(note)}</span></a>`;
+}
+
+function queueRow(data: DashData, s: Submission): string {
+  const name = memberName(data.roster, s.playerUid);
+  const session = findSession(data, s.sessionId);
+  return `<a class="queue-row" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name, s.playerUid)}
+    <span class="queue-copy"><strong>${esc(name)}</strong><span>${esc(sessionTitle(data, s.sessionId))}</span></span>
+    ${session?.weakestCue ? `<span class="queue-focus"><small>Focus</small>${esc(cueLabel(session.weakestCue))}</span>` : `<span class="queue-focus"></span>`}
+    ${waiting(s.submittedAt)}${scoreRing(session?.formScore ?? null, "sm", "Form score")}</a>`;
+}
+
+function teamRow(data: DashData, m: RosterMember): string {
+  const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
+  const form = meanForm(sessions);
+  const last = sessions[0];
+  return `<a class="team-row" href="${appPath("player", m.playerUid)}">
+    <span class="team-player">${avatar(m.playerName || "Player", m.playerUid)}<span><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(m.position ?? "Position not set")}</small></span></span>
+    <span class="team-trend">${sparkline(sessions)}</span>
+    <span class="team-form"><small>Form</small><b>${form ?? "—"}</b></span>
+    <span class="team-sets"><small>Sets</small><b>${sessions.length}</b></span>
+    <span class="team-last">${last ? esc(timeAgo(last.startedAt)) : "No sessions"}</span>
+    ${messageBadge(playerUnreadCount(data.questions, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
+}
+
+/** Lowest form first, so the players who need the coach are at the top. */
+function byNeed(data: DashData, members: RosterMember[]): RosterMember[] {
+  const form = (m: RosterMember) => meanForm(data.sessionsByPlayer.get(m.playerUid) ?? []) ?? 1000;
+  return [...members].sort((a, b) => form(a) - form(b));
 }
 
 function viewOverview(data: DashData): string {
@@ -581,198 +595,159 @@ function viewOverview(data: DashData): string {
   const pending = data.submissions.filter((s) => s.reviewedAt === null);
   const requests = data.roster.filter((m) => m.status === "Pending");
   const allSessions = [...data.sessionsByPlayer.values()].flat();
-  const weekAgo = Date.now() - 7 * 86_400_000;
+  const weekAgo = Date.now() - 7 * DAY_MS;
   const setsWeek = allSessions.filter((s) => s.startedAt >= weekAgo).length;
-  const setsPrevWeek = allSessions.filter((s) => s.startedAt >= weekAgo - 7 * 86_400_000 && s.startedAt < weekAgo).length;
+  const setsPrevWeek = allSessions.filter((s) => s.startedAt >= weekAgo - 7 * DAY_MS && s.startedAt < weekAgo).length;
   const weekDelta = setsWeek - setsPrevWeek;
+  const openDrills = data.assignments.filter((a) => a.status !== "Completed");
+  const overdueDrills = openDrills.filter(overdue).length;
   const teamForms = active
     .map((m) => meanForm(data.sessionsByPlayer.get(m.playerUid) ?? []))
     .filter((f): f is number => f !== null);
   const teamForm = teamForms.length > 0
     ? Math.round(teamForms.reduce((a, b) => a + b, 0) / teamForms.length)
     : null;
-  const skills = skillForm(allSessions);
+  const skills = perSkillMeans(allSessions);
 
   const focus =
     requests.length > 0
-      ? { eyebrow: "Get started", title: `${requests.length} player${requests.length === 1 ? "" : "s"} waiting to join`, body: "Approve the players who are ready to join your team and share their sessions.", href: appPath("roster"), cta: "Review requests" }
+      ? { kicker: "Join requests", title: `${plural(requests.length, "player")} waiting to join`, body: "Approve the players who are ready to join your team and share their sessions.", href: appPath("roster"), cta: "Review requests", other: { href: appPath("queue"), label: "Review sessions" } }
       : pending.length > 0
-        ? { eyebrow: "Review queue", title: `${pending.length} session${pending.length === 1 ? "" : "s"} waiting for you`, body: "Your players sent these for review. Open one to score it and write back.", href: appPath("queue"), cta: "Open review queue" }
-        : { eyebrow: "All caught up", title: "Nothing waiting. Plan the next step.", body: "No submissions are queued. A good moment to set the next drill for your team.", href: appPath("assignments"), cta: "Set a drill" };
-
-  const queuePreview = pending.slice(0, 4).map((s) => {
-    const name = memberName(data.roster, s.playerUid);
-    return `<a class="row-item" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name, s.playerUid)}
-      <span style="flex:1"><strong>${esc(name)}</strong><br /><span class="muted">${esc(sessionTitle(data, s.sessionId))} · ${timeAgo(s.submittedAt)}</span></span>
-      <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
-  }).join("");
+        ? { kicker: "Review queue", title: `${plural(pending.length, "session")} waiting for you`, body: "Your players sent these for review. Open one to see its measurements and write back.", href: appPath("queue"), cta: "Open review queue", other: { href: appPath("roster"), label: "View roster" } }
+        : active.length === 0
+          ? { kicker: "Get started", title: "Your team starts here", body: "Players find you in the Volleyball Lab app and ask to join. Their requests appear here for you to approve.", href: appPath("account"), cta: "Complete your profile", other: { href: appPath("roster"), label: "View roster" } }
+          : { kicker: "All caught up", title: "Nothing waiting. Plan the next step.", body: "No submissions are queued. A good moment to set the next drill for your team.", href: appPath("assignments"), cta: "Set a drill", other: { href: appPath("roster"), label: "View roster" } };
 
   const coachFirstName = data.profileName?.trim().split(/\s+/)[0] || "Coach";
-  const formNote = teamForm === null ? "No scores yet" : teamForm >= 75 ? "Looking strong" : teamForm >= 50 ? "Building up" : "Needs focus";
-  const formTone = teamForm === null ? "flat" : teamForm >= 75 ? "up" : "warn";
-  const weekNote = weekDelta === 0 ? "No change" : `${weekDelta > 0 ? "+" : ""}${weekDelta} vs last week`;
+  const formNote = teamForm === null ? "No scored sessions yet" : teamForm >= 75 ? "Looking strong" : teamForm >= 50 ? "Building up" : "Needs focus";
+  const weekNote = weekDelta === 0 ? "Same as last week" : `${weekDelta > 0 ? "+" : ""}${weekDelta} vs last week`;
 
   return `<section class="overview-head">
-      <div>
-        <p class="eyebrow">Coach dashboard</p>
-        <h2 class="overview-greeting">${greeting()}, ${esc(coachFirstName)}</h2>
-        <p class="muted">Review new sessions, approve players, and plan the next drill.</p>
-      </div>
+      <h2 class="overview-greeting">${greeting()}, ${esc(coachFirstName)}</h2>
+      <p class="overview-date">${esc(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }))}</p>
     </section>
 
-    <section class="hero-panel" aria-label="Team coaching focus">
-      <img class="hero-panel-photo" src="/assets/volleyball-team-pavel-danilyuk.jpg" alt="" decoding="async" />
-      <div class="hero-panel-copy">
-        <span class="focus-pill"><i></i>${esc(focus.eyebrow)}</span>
+    <div class="lead-grid">
+      <section class="focus-card" aria-label="Next for your team">
+        <p class="focus-kicker">${esc(focus.kicker)}</p>
         <h2>${esc(focus.title)}</h2>
         <p>${esc(focus.body)}</p>
-        <div class="hero-panel-actions">
-          <a class="btn btn-primary" href="${focus.href}">${esc(focus.cta)}</a>
-          <a class="btn btn-hero-ghost" href="${appPath(requests.length ? "queue" : "roster")}">${requests.length ? "Review sessions" : "View roster"}</a>
-        </div>
-      </div>
-      <div class="hero-panel-ring">
-        <div class="form-ring" role="img" aria-label="${teamForm === null ? "Team form: no scored sessions yet" : `Team form: ${teamForm} out of 100`}">
-          <svg class="hero-form-ring" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
-            <circle class="hero-form-track" cx="100" cy="100" r="84" />
-            <circle class="hero-form-arc" cx="100" cy="100" r="84" pathLength="100" stroke-dasharray="${Math.max(0, Math.min(100, teamForm ?? 0))} 100" data-score="${Math.max(0, Math.min(100, teamForm ?? 0))}" />
-          </svg>
-          <div class="form-ring-inner"><strong>${teamForm ?? "—"}</strong><span>Team form</span></div>
-        </div>
-        <div class="hero-mini">
-          <span><b>${active.length}</b> players</span>
-          <span><b>${setsWeek}</b> sets this week</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="stat-grid">
-      ${statCard('<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>', "indigo", active.length, "Active players", requests.length > 0 ? `${requests.length} to approve` : "All approved", requests.length > 0 ? "warn" : "flat")}
-      ${statCard('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>', "rust", pending.length, "To review", pending.length > 0 ? "Needs you" : "All clear", pending.length > 0 ? "warn" : "flat")}
-      ${statCard('<path d="M3 12h4l2-7 4 14 2-7h6"/>', "green", teamForm ?? "—", "Team form", formNote, formTone)}
-      ${statCard('<path d="M4 19V5M4 15l6-6 4 4 6-8"/>', "violet", setsWeek, "Sets this week", weekNote, weekDelta >= 0 ? "up" : "warn")}
-    </section>
-
-    <div class="overview-grid">
-      <section class="panel">
-        <header class="panel-header">
-          <h3 class="panel-title">${navIcon('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8M14 9h3M8 16h9"/>')}Review queue</h3>
-          <a class="panel-link" href="${appPath("queue")}">View all</a>
-        </header>
-        ${pending.length === 0
-          ? emptyState("review", "Nothing waiting", "Sessions your players send for review will land here.")
-          : `<div class="panel-list">${queuePreview}</div>`}
+        <div class="focus-actions"><a class="btn btn-focus" href="${focus.href}">${esc(focus.cta)}</a><a class="btn btn-focus-quiet" href="${focus.other.href}">${esc(focus.other.label)}</a></div>
       </section>
-      <section class="panel">
-        <header class="panel-header">
-          <h3 class="panel-title">${navIcon('<path d="M3 12h4l2-7 4 14 2-7h6"/>')}Form by skill</h3>
-          <span class="panel-hint">All sessions</span>
-        </header>
-        ${skills.hasData
-          ? `<div class="skill-list">${skills.html}</div>`
-          : emptyState("chart", "No scores yet", "Submitted sessions will show team form per skill here.")}
+      <section class="panel form-panel" aria-label="Team form">
+        <div class="form-panel-score">${scoreRing(teamForm, "lg", "Team form")}<div><h3 class="panel-title">Team form</h3><p>${esc(formNote)}</p></div></div>
+        ${skillBars(skills.map((s) => ({ label: skillName(s.skill), mean: s.mean })))}
       </section>
     </div>
 
+    <section class="scoreboard" aria-label="Team at a glance">
+      ${scoreboardItem(appPath("roster"), active.length, active.length === 1 ? "Active player" : "Active players", requests.length ? `${requests.length} to approve` : "All approved", requests.length ? "warn" : "")}
+      ${scoreboardItem(appPath("queue"), pending.length, "To review", pending.length ? "Needs you" : "All clear", pending.length ? "warn" : "")}
+      ${scoreboardItem(appPath("roster"), setsWeek, "Sets this week", weekNote, weekDelta > 0 ? "up" : "")}
+      ${scoreboardItem(appPath("assignments"), openDrills.length, openDrills.length === 1 ? "Open drill" : "Open drills", overdueDrills ? `${overdueDrills} overdue` : "On track", overdueDrills ? "warn" : "")}
+    </section>
+
     <div class="overview-grid">
       <section class="panel">
-        <header class="panel-header">
-          <h3 class="panel-title">${navIcon('<path d="M4 19V5M4 15l6-6 4 4 6-8"/>')}Training activity</h3>
-          <span class="panel-hint">Last 7 days</span>
-        </header>
-        <div class="activity-chart">${activityBars(allSessions)}</div>
+        <header class="panel-header"><h3 class="panel-title">Review queue</h3><a class="panel-link" href="${appPath("queue")}">View all</a></header>
+        ${pending.length === 0
+          ? emptyState("review", "Nothing waiting", "Sessions your players send for review will land here.")
+          : `<div class="queue-list">${pending.slice(0, 4).map((s) => queueRow(data, s)).join("")}</div>`}
       </section>
       <section class="panel">
-        <header class="panel-header">
-          <h3 class="panel-title">${navIcon('<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/>')}Roster</h3>
-          <a class="panel-link" href="${appPath("roster")}">Manage</a>
-        </header>
-        ${active.length === 0
-          ? emptyState("team", "No players yet", "Approve a request to start building your team.")
-          : `<div class="panel-list">${active.slice(0, 4).map((m) => playerRow(data, m)).join("")}</div>`}
+        <header class="panel-header"><h3 class="panel-title">Training activity</h3><span class="panel-hint">Last 7 days</span></header>
+        ${allSessions.length === 0 ? emptyState("chart", "No training yet", "Sets your players record will show here day by day.") : activityChart(allSessions)}
       </section>
-    </div>`;
-}
+    </div>
 
-function sessionTitle(data: DashData, sessionId: string): string {
-  for (const sessions of data.sessionsByPlayer.values()) {
-    const s = sessions.find((x) => x.id === sessionId);
-    if (s) return `${SKILL_LABEL[s.skill] ?? s.skill} · ${s.repCount} reps`;
-  }
-  return "Session";
-}
-
-function playerRow(data: DashData, m: RosterMember): string {
-  const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
-  const form = meanForm(sessions);
-  return `<a class="row-item" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">${avatar(m.playerName || "Player", m.playerUid)}
-    <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
-    <span class="muted">${sessions.length} set${sessions.length === 1 ? "" : "s"}${form !== null ? ` · form ${form}` : ""}</span></span>
-    ${messageBadge(playerUnreadCount(data.questions, m.playerUid))}<span class="row-arrow">${icon("chevronRight")}</span></a>`;
+    <section class="panel">
+      <header class="panel-header"><h3 class="panel-title">Your players</h3>${active.length > 1 ? `<span class="panel-hint">Lowest form first</span>` : ""}<a class="panel-link" href="${appPath("roster")}">Manage roster</a></header>
+      ${active.length === 0
+        ? emptyState("team", "No players yet", "Approve a request to start building your team.")
+        : `<div class="team-list">${byNeed(data, active).slice(0, 6).map((m) => teamRow(data, m)).join("")}</div>`}
+    </section>`;
 }
 
 // ---- Queue ------------------------------------------------------------------
+
+function reviewCard(data: DashData, s: Submission): string {
+  const name = memberName(data.roster, s.playerUid);
+  const member = data.roster.find((m) => m.playerUid === s.playerUid);
+  const session = findSession(data, s.sessionId);
+  return `<a class="review-card" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">
+    <span class="review-top">${avatar(name, s.playerUid)}<span class="review-who"><strong>${esc(name)}</strong><small>${esc(member?.position ?? "Position not set")}</small></span>${scoreRing(session?.formScore ?? null, "sm", "Form score")}</span>
+    <span class="review-skill"><b>${esc(session ? skillName(session.skill) : "Session")}</b>${session ? `<span>${plural(session.repCount, "rep")}</span>` : ""}</span>
+    <span class="review-focus">${session?.weakestCue ? `<small>Focus next</small>${esc(cueLabel(session.weakestCue))}` : `<small>Focus next</small>Open to see measurements`}</span>
+    <span class="review-foot">${waiting(s.submittedAt)}<span class="review-open">Review ${icon("arrow")}</span></span></a>`;
+}
 
 function viewQueue(data: DashData, highlight: string | null): string {
   void highlight;
   const pending = data.submissions.filter((s) => s.reviewedAt === null);
   if (pending.length === 0) {
-    return `<div class="card" style="margin-top:14px">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here.")}</div>`;
+    return `<div class="card">${emptyState("review", "Nothing waiting", "Sessions your players submit for review land here.")}</div>`;
   }
-  return `<div class="card" data-search-region style="margin-top:14px">
-    <div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Review queue</h3></div>
-    <p class="muted">${pending.length} session${pending.length === 1 ? "" : "s"} ready for your feedback. Select one to open its measurements.</p>
-    <label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search review queue" placeholder="Find a player or skill" /></label>
+  return `<div data-search-region class="queue-page">
+    <div class="page-tools"><p class="page-lead">${plural(pending.length, "session")} ready for your feedback.</p>
+      <label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search review queue" placeholder="Find a player or skill" /></label></div>
     <p class="search-empty" role="status" data-search-empty hidden>No matching sessions. Try another name or skill.</p>
-    <div class="row-list">${pending.map((s) => {
-      const name = memberName(data.roster, s.playerUid);
-      return `<a class="row-item" data-search-item="${esc(`${name} ${sessionTitle(data, s.sessionId)}`)}" href="${appPath("player", s.playerUid, s.sessionId)}">${avatar(name, s.playerUid)}
-        <span style="flex:1"><strong>${esc(name)}</strong><br />
-        <span class="muted">${esc(sessionTitle(data, s.sessionId))} · sent ${timeAgo(s.submittedAt)}</span></span>
-        <span class="dot"></span><span class="row-arrow">${icon("chevronRight")}</span></a>`;
-    }).join("")}</div></div>`;
+    <div class="review-grid">${pending.map((s) => reviewCard(data, s)).join("")}</div></div>`;
 }
 
 // ---- Roster -----------------------------------------------------------------
+
+function playerCard(data: DashData, m: RosterMember): string {
+  const sessions = data.sessionsByPlayer.get(m.playerUid) ?? [];
+  const last = sessions[0];
+  return `<a class="player-card" data-search-item="${esc(`${m.playerName} ${m.position ?? ""}`)}" href="${appPath("player", m.playerUid)}">
+    <span class="review-top">${avatar(m.playerName || "Player", m.playerUid)}<span class="review-who"><strong>${esc(m.playerName || "Unnamed player")}</strong><small>${esc(m.position ?? "Position not set")}</small></span>${messageBadge(playerUnreadCount(data.questions, m.playerUid))}</span>
+    <span class="player-card-data"><span><small>Form</small><b>${meanForm(sessions) ?? "—"}</b></span><span><small>Sets</small><b>${sessions.length}</b></span><span class="player-card-trend">${sparkline(sessions)}</span></span>
+    <span class="player-card-last">${last ? `Last session ${esc(timeAgo(last.startedAt))}` : "No sessions shared yet"}</span></a>`;
+}
 
 function viewRoster(data: DashData): string {
   const requests = data.roster.filter((m) => m.status === "Pending");
   const active = activeRoster(data.roster);
   const past = data.roster.filter((m) => m.status === "Ended");
-  return `<div class="coach-page-intro"><p class="eyebrow">Your team</p><h2>Your players</h2><p class="muted">Find a player, review their sessions, and send feedback.</p></div><div class="page-grid">
-    ${requests.length ? `<div class="card span-2"><div class="chip-row" style="margin-bottom:8px">${iconChip("userPlus", "rust")}<h3 class="section-title">Join requests (${requests.length})</h3></div>
-      <div class="row-list">${requests.map((m) => `
-          <div class="row-item">${avatar(m.playerName || "Player", m.playerUid)}
-            <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong><br />
-            <span class="muted">${esc(m.position ?? "Position not set")} · asked ${timeAgo(m.requestedAt)}</span></span>
-            <button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(m.playerUid)}">Approve</button>
-            <button class="btn btn-ghost btn-sm" data-action="decline" data-player="${esc(m.playerUid)}">Decline</button>
-          </div>`).join("")}</div>
-    </div>` : ""}
-    <div class="card span-2" data-search-region><div class="chip-row" style="margin-bottom:8px">${iconChip("team", "rust")}<h3 class="section-title">On the team</h3><span class="muted" role="status" data-search-count>${active.length} players</span></div>
-      ${active.length ? `<label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search team" placeholder="Search by name or position" /></label><p class="search-empty" data-search-empty hidden>No matching players. Try another name or position.</p>` : ""}
-      ${active.length === 0 ? emptyState("team", "Nobody yet", "Approved players appear here.") : `<div class="row-list">${active.map((m) => playerRow(data, m)).join("")}</div>`}
+  return `${requests.length ? `<section class="request-panel" aria-label="Join requests"><h3 class="panel-title">${plural(requests.length, "player")} waiting to join</h3>
+      <div class="request-list">${requests.map((m) => `
+        <div class="request-row">${avatar(m.playerName || "Player", m.playerUid)}
+          <span class="queue-copy"><strong>${esc(m.playerName || "Unnamed player")}</strong><span>${esc(m.position ?? "Position not set")} · asked ${esc(timeAgo(m.requestedAt))}</span></span>
+          <span class="request-actions"><button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(m.playerUid)}">Approve</button>
+          <button class="btn btn-ghost btn-sm" data-action="decline" data-player="${esc(m.playerUid)}">Decline</button></span>
+        </div>`).join("")}</div></section>` : ""}
+    <div data-search-region class="roster-page">
+      <div class="page-tools"><p class="page-lead"><span role="status" data-search-count>${plural(active.length, "player")}</span> on the team</p>
+        ${active.length ? `<label class="coach-search">${icon("search")}<input type="search" data-coach-search aria-label="Search team" placeholder="Search by name or position" /></label>` : ""}</div>
+      ${active.length ? `<p class="search-empty" data-search-empty hidden>No matching players. Try another name or position.</p>` : ""}
+      ${active.length === 0 ? `<div class="card">${emptyState("team", "Nobody yet", "Approved players appear here.")}</div>` : `<div class="player-grid">${active.map((m) => playerCard(data, m)).join("")}</div>`}
     </div>
-    ${past.length ? `<details class="card span-2 history-disclosure"><summary>Past players <span class="muted">${past.length}</span>${icon("chevronDown")}</summary>
+    ${past.length ? `<details class="card history-disclosure"><summary>Past players <span class="muted">${past.length}</span>${icon("chevronDown")}</summary>
       <div class="row-list">${past.map((m) => `
         <div class="row-item">${avatar(m.playerName || "Player", m.playerUid)}
           <span style="flex:1"><strong>${esc(m.playerName || "Unnamed player")}</strong></span>
           <span class="muted">Connection ended</span>
         </div>`).join("")}</div>
-    </details>` : ""}
-  </div>`;
+    </details>` : ""}`;
 }
 
 // ---- Player detail ----------------------------------------------------------
 
+function drillItem(a: Assignment, who = ""): string {
+  const late = overdue(a);
+  return `<div class="drill-copy"><strong>${esc(a.title)}</strong><span>${who ? `${esc(who)} · ` : ""}${esc(skillName(a.skill))} · ${a.targetSets} × ${a.targetReps} reps</span></div>
+    <span class="drill-state"><span class="status-pill is-${a.status.toLowerCase()}">${STATUS_LABEL[a.status]}</span>${a.dueAt && a.status !== "Completed" ? `<small class="${late ? "is-late" : ""}">${esc(dueLabel(a.dueAt))}</small>` : ""}</span>`;
+}
+
 async function viewPlayer(coachUid: string, data: DashData, playerUid: string): Promise<string> {
   const member = data.roster.find((m) => m.playerUid === playerUid);
   if (!member) {
-    return `<div class="card" style="margin-top:14px">${emptyState("team", "Not on your roster", "This player is not on your team, so there is nothing to show.")}</div>`;
+    return `<div class="card">${emptyState("team", "Not on your roster", "This player is not on your team, so there is nothing to show.")}</div>`;
   }
   const sessions = data.sessionsByPlayer.get(playerUid) ?? [];
   const form = meanForm(sessions);
   const weak = weakestCue(sessions);
+  const weakCue = weak ? cueDefinition(weak.cueId) : undefined;
   const skills = perSkillMeans(sessions);
   const [notes, assignments] = await Promise.all([
     getNotesForPlayer(coachUid, playerUid),
@@ -785,45 +760,35 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
 
   const conversation = await renderCoachQuestions(coachUid,
     data.questions === null ? null : data.questions.filter(q => q.playerUid === playerUid), [member]);
-  return `<div class="player-profile-toolbar"><a href="${appPath("roster")}" style="font-size:13.5px;font-weight:700;color:var(--ink-soft);text-decoration:none">${icon("chevronLeft")} Back to roster</a>
+  return `<div class="player-profile-toolbar"><a class="back-link" href="${appPath("roster")}">${icon("chevronLeft")} Back to roster</a>
     <details class="player-messages" data-message-thread="${esc(playerUid)}"${expandedConversations.has(playerUid) ? " open" : ""}>
       <summary class="btn btn-ghost">${icon("message")} Messages ${messageBadge(playerUnreadCount(data.questions, playerUid))}</summary>
       <div class="player-message-content"><h2>Messages with ${esc(member.playerName || "Player")}</h2>${conversation}</div>
     </details></div>
-  <div style="margin-top:10px">${profileHeader({ name: member.playerName || "Player", subtitle: `${member.position ?? "Position not set"} · ${member.status}`, uid: playerUid })}</div>
+  <div class="player-head">${profileHeader({ name: member.playerName || "Player", subtitle: `${member.position ?? "Position not set"} · ${member.status}`, uid: playerUid })}
+    <div class="player-facts">
+      <span><b>${form ?? "—"}</b>Mean form</span><span><b>${sessions.length}</b>${sessions.length === 1 ? "Set shared" : "Sets shared"}</span>
+      <span><b>${assignments.filter((a) => a.status !== "Completed").length}</b>Open drills</span><span><b>${notes.length}</b>Feedback sent</span>
+    </div></div>
   ${member.status === "Pending" ? `<div class="profile-media-toolbar"><button class="btn btn-primary btn-sm" data-action="approve" data-player="${esc(playerUid)}">Approve</button></div>` : ""}
 
-  <div class="stat-strip" style="margin-top:14px">
-    <div class="stat"><b>${sessions.length}</b><span>Sets shared</span></div>
-    <div class="stat"><b>${form ?? "—"}</b><span>Mean form</span></div>
-    <div class="stat"><b>${assignments.filter((a) => a.status !== "Completed").length}</b><span>Open drills</span></div>
-    <div class="stat"><b>${notes.length}</b><span>Feedback sent</span></div>
+  ${weak ? `<section class="cue-callout" aria-label="Lowest-scoring cue"><span class="cue-callout-score">${Math.round(weak.mean * 100)}</span><div><p class="eyebrow">Lowest-scoring cue</p><h3>${esc(cueLabel(weak.cueId))}</h3>${weakCue ? `<p>${esc(weakCue.tip)}</p>` : ""}</div></section>` : ""}
+
+  <div class="overview-grid">
+    <section class="panel"><header class="panel-header"><h3 class="panel-title">Form over time</h3><span class="panel-hint">All skills</span></header>${trendChart(sessions, skillName)}</section>
+    <section class="panel"><header class="panel-header"><h3 class="panel-title">By skill</h3></header>${skillBars(skills.map((s) => ({ label: skillName(s.skill), mean: s.mean })))}</section>
   </div>
 
-  ${weak ? `<div class="card-dark" style="margin-top:14px">
-    <p class="eyebrow">Lowest-scoring cue</p>
-    <h3 style="font-size:20px;margin-bottom:6px">${esc(cueLabel(weak.cueId))} — ${Math.round(weak.mean * 100)}</h3>
-  </div>` : ""}
+  <section class="panel"><header class="panel-header"><h3 class="panel-title">Shared sessions</h3><span class="panel-hint">${plural(sessions.length, "session")}</span></header>${sessionCards}</section>
 
-  <div class="page-grid">
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("chart", "green")}<h3>By skill</h3></div>
-      ${skills.map((s) => `<div style="display:flex;align-items:center;gap:12px;padding:7px 0">
-        <span style="flex:1;font-weight:600">${SKILL_LABEL[s.skill]}</span>${scoreBar(s.mean)}</div>`).join("")}
-    </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("clipboard", "violet")}<h3>Drills set</h3></div>
-      ${assignments.length === 0 ? `<p class="muted">No drills set yet.</p>` : assignments.slice(0, 4).map((a) => `
-        <div style="padding:8px 0;border-top:1px solid var(--line)"><strong>${esc(a.title)}</strong><br />
-        <span class="muted">${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}${a.dueAt && a.status !== "Completed" ? ` · ${dueLabel(a.dueAt)}` : ""}</span></div>`).join("")}
-      <div style="margin-top:10px"><a class="btn btn-ghost btn-sm" href="${appPath("assignments")}">Set a drill</a></div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("session", "green")}<h3 class="section-title">Shared sessions</h3></div>
-    ${sessionCards}</div>
-
-  <div class="card" style="margin-top:14px"><div class="chip-row" style="margin-bottom:8px">${iconChip("note", "violet")}<h3>Coach Feedback</h3></div>
-    ${notes.length === 0 ? `<p class="muted">No coach feedback yet. Open a session above to provide feedback.</p>` : notes.slice(0, 5).map((n) => `
-      <div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
+  <div class="overview-grid is-even">
+    <section class="panel"><header class="panel-header"><h3 class="panel-title">Drills set</h3><a class="panel-link" href="${appPath("assignments")}">Set a drill</a></header>
+      ${assignments.length === 0 ? `<p class="muted">No drills set yet.</p>` : `<div class="drill-list">${assignments.slice(0, 4).map((a) => `<div class="drill-row">${drillItem(a)}</div>`).join("")}</div>`}
+    </section>
+    <section class="panel"><header class="panel-header"><h3 class="panel-title">Coach feedback</h3></header>
+      ${notes.length === 0 ? `<p class="muted">No coach feedback yet. Open a session above to provide feedback.</p>` : notes.slice(0, 5).map((n) => `
+        <div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
+    </section>
   </div>`;
 }
 
@@ -849,9 +814,9 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
 
   return `<details class="coach-session" data-session-details="${esc(s.id)}"${open ? " open" : ""}>
     <summary>
-      <span class="session-summary-copy"><strong>${esc(SKILL_LABEL[s.skill] ?? s.skill)}</strong>
+      ${scoreRing(s.formScore, "sm", "Form score")}
+      <span class="session-summary-copy"><strong>${esc(skillName(s.skill))}</strong>
         <span class="muted">${s.repCount} reps · ${fullDate(s.startedAt)}</span></span>
-      ${s.formScore !== null ? `<span class="score-num">${s.formScore}</span>` : ""}
       <span class="session-state${answered ? " answered" : ""}">${answered ? "Feedback Provided" : "Awaiting Coach Feedback"}</span>
       <span class="session-chevron">${icon("chevronDown")}</span>
     </summary>
@@ -876,36 +841,43 @@ function viewAssignments(data: DashData, editing: string | null): string {
   void editing;
   const active = activeRoster(data.roster);
   const playerOptions = active.map((m) => `<option value="${esc(m.playerUid)}">${esc(m.playerName || "Player")}</option>`).join("");
-  return `<div class="page-grid">
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("clipboard", "violet")}<h3 class="section-title">Set a drill</h3></div>
+  const open = data.assignments.filter((a) => a.status !== "Completed").length;
+  return `<div class="drill-page">
+    <section class="panel drill-form"><header class="panel-header"><h3 class="panel-title">Set a drill</h3></header>
       ${active.length === 0 ? emptyState("clipboard", "Approve a player first", "A drill needs someone to do it.") : `
       <div id="assign-error"></div>
       <form id="assign-form">
-        <div class="field"><label for="a-player">Player</label><select id="a-player">${playerOptions}</select></div>
-        <div class="field"><label for="a-title">Drill name</label><input id="a-title" maxlength="60" required placeholder="Cross-court cut shot" /></div>
-        <div class="form-grid">
-          <div class="field"><label for="a-skill">Target skill</label><select id="a-skill">
-            ${["Serving", "Receiving", "Setting", "Spiking", "Blocking"].map((s) => `<option>${s}</option>`).join("")}</select></div>
-          <div class="field"><label for="a-level">Difficulty</label><select id="a-level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
-        </div>
-        <div class="form-grid">
-          <div class="field"><label for="a-sets">Sets</label><input id="a-sets" type="number" min="1" max="10" value="3" /></div>
-          <div class="field"><label for="a-reps">Reps per set</label><input id="a-reps" type="number" min="1" max="50" value="10" /></div>
-        </div>
-        <div class="field"><label for="a-due">Due in (days, blank = none)</label><input id="a-due" type="number" min="1" max="90" placeholder="No deadline" /></div>
-        <div class="field"><label for="a-summary">Summary</label><input id="a-summary" maxlength="200" placeholder="One line on what this drill is for." /></div>
-        <div class="field"><label for="a-instructions">Instructions</label><textarea id="a-instructions" maxlength="1200" placeholder="Step by step. What to set up, what to do, what to watch for."></textarea></div>
+        <fieldset><legend>Who and what</legend>
+          <div class="field"><label for="a-player">Player</label><select id="a-player">${playerOptions}</select></div>
+          <div class="field"><label for="a-title">Drill name</label><input id="a-title" maxlength="60" required placeholder="Cross-court cut shot" /></div>
+          <div class="form-grid">
+            <div class="field"><label for="a-skill">Target skill</label><select id="a-skill">
+              ${["Serving", "Receiving", "Setting", "Spiking", "Blocking"].map((s) => `<option>${s}</option>`).join("")}</select></div>
+            <div class="field"><label for="a-level">Difficulty</label><select id="a-level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></div>
+          </div>
+        </fieldset>
+        <fieldset><legend>Goal</legend>
+          <div class="form-grid is-three">
+            <div class="field"><label for="a-sets">Sets</label><input id="a-sets" type="number" min="1" max="10" value="3" /></div>
+            <div class="field"><label for="a-reps">Reps per set</label><input id="a-reps" type="number" min="1" max="50" value="10" /></div>
+            <div class="field"><label for="a-due">Due in days</label><input id="a-due" type="number" min="1" max="90" placeholder="None" /></div>
+          </div>
+        </fieldset>
+        <fieldset><legend>Guidance</legend>
+          <div class="field"><label for="a-summary">Summary</label><input id="a-summary" maxlength="200" placeholder="One line on what this drill is for." /></div>
+          <div class="field"><label for="a-instructions">Instructions</label><textarea id="a-instructions" maxlength="1200" placeholder="Step by step. What to set up, what to do, what to watch for."></textarea></div>
+        </fieldset>
         <button class="btn btn-primary" style="width:100%" type="submit">Assign it</button>
       </form>`}
-    </div>
-    <div class="card"><div class="chip-row" style="margin-bottom:8px">${iconChip("review", "indigo")}<h3 class="section-title">Assigned (${data.assignments.length})</h3></div>
+    </section>
+    <section class="panel"><header class="panel-header"><h3 class="panel-title">Assigned drills</h3><span class="panel-hint">${open} open · ${data.assignments.length - open} completed</span></header>
       ${data.assignments.length === 0 ? emptyState("review", "No drills set", "Write a drill and hand it to one of your players. They see it in their Coach tab with your instructions attached.") : `
-      <div class="row-list">${data.assignments.map((a) => `
-        <div class="row-item"><div style="flex:1"><strong>${esc(a.title)}</strong><br />
-          <span class="muted">${esc(memberName(data.roster, a.playerUid))} · ${esc(SKILL_LABEL[a.skill] ?? a.skill)} · ${a.targetSets} × ${a.targetReps} reps · ${esc(a.status)}</span></div>
-          <button class="btn btn-ghost btn-sm" data-action="delete-assignment" data-id="${esc(a.id)}">Delete</button>
-        </div>`).join("")}</div>`}
-    </div>
+      <div class="drill-list">${data.assignments.map((a) => {
+        const name = memberName(data.roster, a.playerUid);
+        return `<div class="drill-row">${avatar(name, a.playerUid)}${drillItem(a, name)}
+          <button class="btn btn-quiet btn-sm" data-action="delete-assignment" data-id="${esc(a.id)}" aria-label="Delete ${esc(a.title)}">Delete</button></div>`;
+      }).join("")}</div>`}
+    </section>
   </div>`;
 }
 

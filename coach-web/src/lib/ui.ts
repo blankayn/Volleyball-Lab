@@ -43,7 +43,8 @@ export function scoreBar(score: number | null): string {
 }
 
 export function avatar(name: string, uid?: string): string {
-  return `<span class="avatar"${uid ? ` data-profile-avatar="${esc(uid)}"` : ""}>${esc(initials(name))}</span>`;
+  const tone = [...name].reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % 4;
+  return `<span class="avatar" data-tone="${tone}"${uid ? ` data-profile-avatar="${esc(uid)}"` : ""}>${esc(initials(name))}</span>`;
 }
 
 export function spinner(label: string): string {

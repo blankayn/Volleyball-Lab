@@ -24,6 +24,14 @@ export function wireCoachExperience(root: HTMLElement, enter: boolean): () => vo
       animations.add(ring);
       disposers.push(() => { ring.kill(); gsap.set(arc, { clearProps: "strokeDasharray" }); });
     }
+    for (const axis of ["x", "y"] as const) {
+      const bars = Array.from(root.querySelectorAll<HTMLElement>(`[data-grow="${axis}"]`));
+      if (!bars.length) continue;
+      const grow = gsap.from(bars, { [axis === "x" ? "scaleX" : "scaleY"]: 0, duration: .7, delay: .12,
+        stagger: .045, ease: "power3.out", clearProps: "transform" });
+      animations.add(grow);
+      disposers.push(() => { grow.kill(); gsap.set(bars, { clearProps: "transform" }); });
+    }
   }
 
   root.querySelectorAll<HTMLDetailsElement>("[data-session-details]").forEach(details => {

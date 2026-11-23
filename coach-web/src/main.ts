@@ -8,10 +8,10 @@ import "./styles/main.css";
 import "./styles/portal.css";
 import "./styles/preferences.css";
 import "./styles/coach-experience.css";
-import "./styles/coach-focus-card.css";
 import "./styles/auth-login.css";
 import "./styles/coaching-hub.css";
 import "./styles/profile-header.css";
+import "./styles/dashboard.css";
 import { setPreferenceAccount, watchSystemPreferences } from "./lib/preferences";
 
 const appRoot = document.querySelector<HTMLElement>("#app");

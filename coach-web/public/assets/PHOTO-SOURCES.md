@@ -18,10 +18,7 @@ These independently sourced photographs are used only in the authentication pane
 
 The source pages make these photos available under the [Pexels License](https://www.pexels.com/license/). CSS crops them to fit the responsive panels and adds a translucent caption gradient.
 
-## Coach dashboard focus card
+## Coach dashboard
 
-The focus card uses the existing bundled `volleyball-team-pavel-danilyuk.jpg`
-indoor practice photograph credited to [Pavel Danilyuk](https://www.pexels.com/@pavel-danilyuk/).
-The original asset is unchanged. The card applies CSS cropping, a slight blur,
-and dark overlays beneath its live text and score ring. No generated image is
-used for this card.
+The dashboard uses drawn court lines instead of a photograph. `volleyball-team-pavel-danilyuk.jpg` by
+[Pavel Danilyuk](https://www.pexels.com/@pavel-danilyuk/) remains bundled but is not displayed there.
