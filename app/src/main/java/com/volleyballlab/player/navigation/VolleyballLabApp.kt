@@ -799,6 +799,16 @@ private fun VbNavHost(
                 val route = entry.toRoute<DrillDetailRoute>()
                 DrillDetailScreen(route.drillId,
                     onCamera = { drill -> navController.navigate(CaptureRoute(drill.skill, drill.id, route.drillId)) },
+                    onPractice = { workout ->
+                        navController.navigate(DrillPracticeRoute(route.drillId, workout.sets, workout.reps, workout.restSeconds)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onResume = { draft ->
+                        navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) {
+                            launchSingleTop = true
+                        }
+                    },
                     onBack = { navController.popBackStack() }, contentPadding = contentPadding,
                 )
             }
