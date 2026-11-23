@@ -463,6 +463,6 @@ private fun SessionPrimaryButton(onClick: () -> Unit, text: String, enabled: Boo
 private fun viewLabel(angle: CameraAngle): String = stringResource(when (angle) {
     CameraAngle.Front -> R.string.capture_front_view
     CameraAngle.Side -> R.string.capture_side_view
-    CameraAngle.Rear -> R.string.capture_rear_view
-    CameraAngle.Unknown -> R.string.capture_setup_label
+    // No live session asks for a rear view.
+    CameraAngle.Rear, CameraAngle.Unknown -> R.string.capture_setup_label
 })

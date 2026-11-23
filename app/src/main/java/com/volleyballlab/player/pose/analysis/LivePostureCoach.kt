@@ -6,6 +6,7 @@ import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.model.isPoseCue
 import com.volleyballlab.player.pose.model.BodyPoint
 import com.volleyballlab.player.pose.model.PoseFrame
 
@@ -43,6 +44,17 @@ data class LiveRepAssessment(
     val isAssessable: Boolean,
     val isGood: Boolean,
     val statuses: List<CueLiveStatus>,
+    /**
+     * Catalog weight of the scored cues this camera view reads: the coverage
+     * [measurableWeight] is compared against. A front-only cue left out of a
+     * side-on rep is not missing evidence.
+     */
+    val applicableWeight: Float = 1f,
+    /**
+     * Not assessable only because this view reads too few cues, with nothing the
+     * view reads left unseen: a turned or between-views rep, not a hidden body.
+     */
+    val viewLimited: Boolean = false,
 )
 
 /** Phase-specific live measurements and full completed-rep assessment. */
@@ -61,7 +73,10 @@ class LivePostureCoach(
         val minVisibility: Float = 0.40f,
         val refreshMs: Long = 500L,
         val goodRepScore: Float = 80f,
+        /** Share of [LiveRepAssessment.applicableWeight] that must be measured for a full assessment. */
         val minMeasurableWeight: Float = 0.75f,
+        /** And never less than this much catalog weight, however few cues the view reads. */
+        val minAbsoluteWeight: Float = 0.40f,
     )
 
     private var displayed: CueLiveStatus? = null
@@ -154,17 +169,29 @@ class LivePostureCoach(
     }
 
     fun assessCompletedRep(window: RepWindow, angle: CameraAngle = CameraAngle.Front): LiveRepAssessment {
-        val result = SessionScorer().scoreRep(window, skill, analyzer, receivingEvaluator, angle)
+        val result = SessionScorer().scoreRep(window, skill, analyzer, receivingEvaluator, angle, liveSideView = angle == CameraAngle.Side)
+        var applicable = 0f
         val statuses = cues.map { cue ->
             val scored = result.cueScores.first { it.cueId == cue.id }
             val frame = analyzer.cueFrame(cue, window)
             val side = AngleCuePolicy.completedSide(cue.id, window)
+            // Coverage counts only what this view can read: a cue measured, or one
+            // that went unread because a joint was hidden. Pose cues only, as in
+            // the saved score: the jump-height proxy is never scored.
+            if (cue.id.isPoseCue && (scored.score != null || (frame?.let {
+                    AngleCuePolicy.support(cue.id, angle, it, side) != AngleCuePolicy.Support.NotInThisView
+                } ?: AngleCuePolicy.readsInView(cue.id, angle)))) {
+                applicable += cue.weight
+            }
             CueLiveStatus(cue, scored.measured, scored.score, AngleCuePolicy.affectedPoints(cue.id, frame, side), side)
         }
-        val weight = statuses.filter { it.isMeasurable }.sumOf { it.cue.weight.toDouble() }.toFloat()
-        val score = if (weight <= 0f) null else statuses.sumOf { ((it.score ?: 0f) * it.cue.weight).toDouble() }.toFloat() / weight * 100f
-        val assessable = score != null && weight + 1e-5f >= config.minMeasurableWeight
-        return LiveRepAssessment(score, weight, assessable, assessable && score!! >= config.goodRepScore, statuses)
+        val scoredStatuses = statuses.filter { it.isMeasurable && it.cue.id.isPoseCue }
+        val weight = scoredStatuses.sumOf { it.cue.weight.toDouble() }.toFloat()
+        val score = if (weight <= 0f) null else scoredStatuses.sumOf { (it.score!! * it.cue.weight).toDouble() }.toFloat() / weight * 100f
+        val coveredView = weight + 1e-5f >= config.minMeasurableWeight * applicable
+        val assessable = score != null && weight + 1e-5f >= config.minAbsoluteWeight && coveredView
+        return LiveRepAssessment(score, weight, assessable, assessable && score!! >= config.goodRepScore, statuses,
+            applicable, viewLimited = !assessable && coveredView)
     }
 
     fun updateCompletedRep(assessment: LiveRepAssessment, timestampMs: Long): LivePostureUi {

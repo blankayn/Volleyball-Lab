@@ -21,8 +21,8 @@ They are mapped in `ui/component/DrillArt.kt`. A drill without one falls back to
 | set-wall-reps | Setting Stance | done |
 | set-toss-to-target | Setting Extension | done |
 | set-back-set | Setting Overhead Alignment | done |
-| spike-standing-swing | Spiking Arm Position | done |
-| spike-three-step | Spiking Reach | done |
+| spike-standing-swing | Standing Spike | done |
+| spike-three-step | Jumping Spike | done |
 | spike-four-step-lines | Spiking Body Alignment | done |
 | block-ready-jumps | Blocking Stance | done |
 | block-lateral-shuffle | Blocking Arm Alignment | done |

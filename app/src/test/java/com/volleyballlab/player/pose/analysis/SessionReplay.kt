@@ -1,7 +1,9 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.model.isPoseCue
 import com.volleyballlab.player.pose.model.Landmark
 import com.volleyballlab.player.pose.model.PoseFrame
 import org.junit.Assume.assumeTrue
@@ -45,9 +47,44 @@ class SessionReplay {
                         knees.takeIf { it.isNotEmpty() }?.average() ?: "", AnalyzerSupport.observedElbowAngle(f) ?: "").joinToString(",")
                 })
             }
-            val live = LiveRepCounter(analyzer)
-            frames.forEach { live.onFrame(it) }
-            val saved = RepSegmenter().segment(frames, analyzer)
+            // The live after-rep verdict for every rep the live counter counts, assessed
+            // with the camera view in the file name, as the capture screen assesses it
+            // with the guided stage's view. "PARTIAL" is the "only part of your form
+            // was visible" rep. (No receiving model here: it needs an Android context.)
+            val view = when (file.nameWithoutExtension.substringAfterLast("__")) {
+                "side" -> CameraAngle.Side; "back" -> CameraAngle.Rear; else -> CameraAngle.Front
+            }
+            val coach = LivePostureCoach(skill, analyzer)
+            // The app's one decision, with the drill each skill starts on.
+            val judge = RepJudge(skill, if (skill == Skill.Spiking) "spike-standing-swing" else null, analyzer)
+            val decide = { window: RepWindow -> judge.judge(window, view) }
+            val live = LiveRepCounter(analyzer, judge = decide)
+            var partial = 0
+            var counted = 0
+            frames.forEach { frame ->
+                live.onFrame(frame)
+                live.lastCompletedWindow?.let { window ->
+                    val assessment = coach.assessCompletedRep(window, view)
+                    counted++
+                    if (!assessment.isAssessable && !assessment.viewLimited) partial++
+                    println("    live rep $counted: measured %.2f of %.2f %s, unread %s".format(
+                        assessment.measurableWeight, assessment.applicableWeight,
+                        if (assessment.isAssessable) "assessed" else if (assessment.viewLimited) "view-limited" else "PARTIAL",
+                        assessment.statuses.filter { !it.isMeasurable && it.cue.id.isPoseCue }.map { status ->
+                            // Why: the view, a hidden joint, or the analyzer had nothing to read.
+                            val at = analyzer.cueFrame(status.cue, window)
+                            val why = when {
+                                at == null -> "no frame"
+                                analyzer.measure(status.cue, window) == null -> "no value"
+                                else -> AngleCuePolicy.support(status.cue.id, view, at,
+                                    AngleCuePolicy.completedSide(status.cue.id, window)).name
+                            }
+                            "${status.cue.id}:$why"
+                        }))
+                }
+            }
+            println("LIVE ${file.nameWithoutExtension}: view $view, counted $counted, partial $partial")
+            val saved = RepSegmenter().segment(frames, analyzer, decide)
             fun at(ms: Long) = (ms - frames.first().timestampMs) / 100 / 10.0
             println("SESSION ${file.nameWithoutExtension}: frames ${frames.size}, live count ${live.count}, " +
                 "saved reps ${saved.size}, contacts at ${saved.map { at(it.contactMs) }}")
@@ -57,7 +94,7 @@ class SessionReplay {
                 override fun verdict(window: RepWindow) = MovementVerdict.Counted
             }
             RepSegmenter().segment(frames, everything).forEach { window ->
-                println("    candidate contact ${at(window.contactMs)}s -> ${analyzer.verdict(window)}")
+                println("    candidate contact ${at(window.contactMs)}s -> ${decide(window)}")
             }
             // What the app measures on each saved rep, against each cue's practice range.
             val cues = FormCueCatalog.forSkill(skill)

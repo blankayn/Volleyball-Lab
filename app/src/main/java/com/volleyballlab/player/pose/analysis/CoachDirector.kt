@@ -387,8 +387,7 @@ class CoachDirector {
         val text = facingPrompt ?: when (requestedAngle) {
             CameraAngle.Front -> "Face the camera again so I can assess this view."
             CameraAngle.Side -> "Turn sideways again so I can assess this view."
-            CameraAngle.Rear -> "Face away from the camera again for this view."
-            CameraAngle.Unknown, null -> "Step back into frame so your whole body is visible."
+            CameraAngle.Rear, CameraAngle.Unknown, null -> "Step back into frame so your whole body is visible."
         }
         return CoachingEvent(++sequence, CoachingEventType.Tracking, text, timestampMs, 2)
     }

@@ -154,10 +154,10 @@ class VideoReviewFeedback {
         if (!measured.isFinite() || !score.isFinite() || score !in 0f..<0.8f) return null
         val frame = at ?: return null
         val side = AngleCuePolicy.completedSide(cueId, window)
-        val points = AngleCuePolicy.affectedPoints(cueId, frame, side)
-        if (points.isEmpty() || points.any {
-                !AngleCuePolicy.isReliable(frame, it) || frame.image(it).x !in 0f..1f || frame.image(it).y !in 0f..1f
-            }) return null
+        // Mark the joints the cue was read from: side-on that is the near limb, and a
+        // fault scored from it must still reach the review.
+        val points = AngleCuePolicy.reviewPoints(cueId, frame, side)
+        if (points.isEmpty()) return null
         return ReviewIssue(frame.cameraTimestampMs, repNumber, cueId, measured, score, points.map { it.ordinal })
     }
 }

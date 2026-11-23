@@ -13,6 +13,8 @@ import com.volleyballlab.player.domain.model.CoachAssignment
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.domain.model.DrillFocus
+import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
@@ -47,6 +49,8 @@ import com.volleyballlab.player.pose.analysis.Facing
 import com.volleyballlab.player.pose.analysis.FacingGuide
 import com.volleyballlab.player.pose.analysis.GuideFigure
 import com.volleyballlab.player.pose.analysis.MovementFault
+import com.volleyballlab.player.pose.analysis.MovementVerdict
+import com.volleyballlab.player.pose.analysis.RepJudge
 import com.volleyballlab.player.pose.analysis.ProgressiveInstructions
 import com.volleyballlab.player.pose.analysis.SpokenCue
 import com.volleyballlab.player.pose.analysis.ReferenceFigure
@@ -330,7 +334,7 @@ class CaptureViewModel(
      */
     private var stageStance: Stance = FacingGuide.stance(skill, CameraAngle.Front)
     /** The last movement that was turned away, and when: (fault, timestamp). */
-    private var lastNotCounted: Pair<MovementFault, Long>? = null
+    private var lastNotCounted: Pair<String, Long>? = null
     private var rotationCountdownJob: Job? = null
     private var rotationElapsedMs = 0L
     private var chunks = mutableListOf<CaptureChunk>()
@@ -358,7 +362,13 @@ class CaptureViewModel(
 
 
     private val qualityValidator = PoseQualityValidator()
-    private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill))
+    private val repJudge = RepJudge(skill, drillId)
+
+    /** The count, the spoken reaction and the saved session all take [RepJudge]'s decision. */
+    private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill)) { window ->
+        repJudge.judge(window, (_uiState.value as? CaptureUiState.Recording)?.angle
+            ?.takeIf { _guidedOptions.value.enabled })
+    }
 
     /** Prototype, debug builds only: see [PersonalElbowBaseline] for the evidence and its limits. */
     private val elbowBaselineEnabled = com.volleyballlab.player.BuildConfig.DEBUG &&
@@ -366,6 +376,7 @@ class CaptureViewModel(
     private val elbowBaseline = PersonalElbowBaseline()
     private val postureCoach = LivePostureCoach(
         skill = skill,
+        cues = FormCueCatalog.forSkill(skill).filterNot { it.id in DrillFocus.excluded(drillId) },
         receivingEvaluator = receivingPostureEvaluator,
     )
 
@@ -578,7 +589,7 @@ class CaptureViewModel(
         // the side view is set up by. Otherwise, the arm they have been hitting with.
         val hitting = FacingGuide.nearSide(facing) ?: preferredSide ?: Side.Right
         _referenceFigure.value = ReferenceFigure.layout(
-            ReferencePoses.pose(skill, moment, hitting, body), moment, body, placement, facing,
+            ReferencePoses.pose(skill, moment, hitting, body, grounded = DrillFocus.isGrounded(drillId)), moment, body, placement, facing,
             frame.imageWidth, frame.imageHeight,
         )
     }
@@ -733,7 +744,7 @@ class CaptureViewModel(
         if (stageStartMs == null) stageStartMs = frame.timestampMs
         recordedFrames += frame
         val counted = repCounter.onFrame(frame)
-        repCounter.lastRejection?.let { onMovementNotCounted(it, frame.timestampMs) }
+        repCounter.lastRefusal?.let { onMovementNotCounted(it, frame.timestampMs) }
         _speechWindowOpen.value = repCounter.currentPhase != null
         val actualAngle = if (estimate.confidence >= 0.65f) estimate.angle else CameraAngle.Unknown
         _livePosture.value = postureCoach.update(frame, repCounter.currentPhase, actualAngle)
@@ -808,21 +819,25 @@ class CaptureViewModel(
      * [NOT_COUNTED_GAP_MS] apart, so a string of wrong attempts is coached
      * rather than narrated.
      */
-    private fun onMovementNotCounted(fault: MovementFault, timestampMs: Long) {
+    private fun onMovementNotCounted(refusal: MovementVerdict.NotCounted, timestampMs: Long) {
+        val fault = refusal.fault
+        val cue = CoachPhrasebook.notCountedCue(refusal)
         // They are moving, so "I'm waiting for a rep" would be the wrong thing to say.
         idleTicks = 0
+        // The last rep's card belongs to the last rep, not to this movement.
+        _repFeedback.value = null
         val last = lastNotCounted
         val sinceLast = last?.let { timestampMs - it.second }
         val speak = sinceLast == null || sinceLast >= NOT_COUNTED_REPEAT_MS ||
-            last?.first != fault && sinceLast >= NOT_COUNTED_GAP_MS
-        if (speak) lastNotCounted = fault to timestampMs
+            last?.first != cue.full && sinceLast >= NOT_COUNTED_GAP_MS
+        if (speak) lastNotCounted = cue.full to timestampMs
         // The finish position goes up with the words, unless the trouble was the
         // camera's view of them rather than where their body was.
         val picture = ReferenceShow.Finish.takeUnless {
             fault == MovementFault.ArmsNotVisible || fault == MovementFault.LegsNotVisible
         }
-        publish(CoachingEvent(0, CoachingEventType.NotCounted, CoachPhrasebook.notCounted(fault), timestampMs, 1,
-            reference = picture), speak = speak, cue = CoachPhrasebook.notCountedCue(fault))
+        publish(CoachingEvent(0, CoachingEventType.NotCounted, cue.full, timestampMs, 1,
+            reference = picture), speak = speak, cue = cue)
     }
 
     /**

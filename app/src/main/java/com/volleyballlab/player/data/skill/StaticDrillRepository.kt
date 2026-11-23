@@ -118,8 +118,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-standing-swing",
                 skill = Skill.Spiking,
-                name = "Spiking Arm Position",
-                description = "Keep both feet grounded and prepare your raised elbow. Practice a slow overhead arm swing, then reset your shoulders and stance.",
+                name = "Standing Spike",
+                description = "Keep both feet on the floor; no jump. Lift your guiding arm, draw your hitting elbow back, swing overhead under control, then reset your stance.",
                 targetReps = 12,
                 estimatedMinutes = 5,
                 level = DrillLevel.Beginner,
@@ -127,8 +127,8 @@ class StaticDrillRepository : DrillRepository {
             Drill(
                 id = "spike-three-step",
                 skill = Skill.Spiking,
-                name = "Spiking Reach",
-                description = "Practice a vertical jump and overhead reach from the same spot. Focus on knee bend, arm extension, and a controlled return to your stance.",
+                name = "Jumping Spike",
+                description = "Add an in-place jump to the standing spike. Bend your knees, take off and land in the same spot, and reach overhead with a straight arm.",
                 targetReps = 12,
                 estimatedMinutes = 10,
                 level = DrillLevel.Intermediate,

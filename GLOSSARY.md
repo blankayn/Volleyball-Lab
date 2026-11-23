@@ -52,7 +52,7 @@ Selected correction clips from the original session video, with its retained
 skeleton and educational coaching notes.
 
 **Required view**:
-Front or Side capture needed for a guided assessment. Rear remains optional.
+Front or Side capture needed for a guided assessment. Live sessions have no rear view.
 Early saved recordings retain an incomplete assessment label.
 
 **Posture comparison**:
@@ -62,8 +62,9 @@ Missing views and measurements are labelled rather than inferred.
 **Movement check**:
 The test a finished movement must pass to be a repetition of the selected skill:
 large enough to be the action, performed with the limbs that skill uses, and
-finishing where that skill finishes. The live count and the saved session apply
-the same check.
+finishing where that skill finishes, with no defining posture cue clearly out of
+range. One decision (`RepJudge`): the live count, the spoken reaction and the
+saved session all take it.
 _Avoid_: rep detection, form score
 
 **Not counted**:
@@ -72,6 +73,6 @@ reps, streak or score, and the coach names the one change that would make it cou
 _Avoid_: failed rep, bad rep
 
 **Facing**:
-Which way the athlete points their body for a view: forward, left, right or away.
+Which way the athlete points their body for a view: forward, left or right.
 Left and right are always the athlete's own, starting from facing the camera.
 _Avoid_: screen left, screen right

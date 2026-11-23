@@ -168,6 +168,8 @@ object ReferencePoses {
         moment: ReferenceMoment,
         hitting: Side = Side.Right,
         body: BodyProportions = BodyProportions.Typical,
+        /** The drill is done without leaving the floor ([com.volleyballlab.player.domain.model.DrillFocus.isGrounded]). */
+        grounded: Boolean = false,
     ): ReferencePose = when (skill) {
         Skill.Serving -> when (moment) {
             // Guiding arm lifted in front, hitting elbow out at shoulder height
@@ -212,10 +214,14 @@ object ReferencePoses {
         }
 
         Skill.Spiking -> when (moment) {
-            // Loaded: knees bent, both arms swung back.
-            ReferenceMoment.Start -> ReferencePose(
-                left = ARMS_BACK, right = ARMS_BACK,
-                knee = within(CueId.SpikeApproachLoad, 0.85f), trunkLean = LOADED_LEAN,
+            // The hitting elbow drawn back and the other arm guiding: the position a
+            // counted swing starts from. The jump drills add the knee load to it.
+            ReferenceMoment.Start -> oneArmed(
+                hitting,
+                hittingArm = ArmPose.reaching(raise = 95f, elbow = 75f),
+                otherArm = ArmPose.reaching(raise = 125f, elbow = 165f),
+                knee = if (grounded) SOFT_KNEE else within(CueId.SpikeApproachLoad, 0.85f),
+                trunkLean = UPRIGHT,
             )
             ReferenceMoment.Finish -> oneArmed(
                 hitting,
@@ -289,10 +295,8 @@ object ReferencePoses {
     private const val SOFT_KNEE = 165f
     private const val READY_KNEE = 162f
     private const val UPRIGHT = 3f
-    private const val LOADED_LEAN = 20f
     private const val OVERHEAD_REACH = 165f
     private const val HANDS_TOGETHER = 0.06f
     private const val SET_HAND_GAP = 0.20f
     private val LOWERED_ARM = ArmPose.reaching(raise = 25f, elbow = 150f)
-    private val ARMS_BACK = ArmPose(upperElevation = 35f, foreElevation = 45f, azimuth = 180f)
 }

@@ -7,7 +7,6 @@ import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.elbowAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.hittingSide
-import com.volleyballlab.player.pose.analysis.AnalyzerSupport.meanElbowAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.meanKneeAngle
 import com.volleyballlab.player.pose.analysis.AnalyzerSupport.shoulderAngle
 import com.volleyballlab.player.pose.model.BodyPoint
@@ -128,8 +127,68 @@ private object OverheadSwing {
             return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
         }
         if (peak.rise < MIN_CONTACT_RISE) return MovementVerdict.NotCounted(MovementFault.ReachOverhead)
+        incompleteSwing(frames, peak, hitting, if (hitting == Side.Left) right else left)
+            ?.let { return MovementVerdict.NotCounted(it) }
         return MovementVerdict.Counted
     }
+
+    /**
+     * What a hand that did get overhead is still missing to be a swing, or null.
+     *
+     * Reaching overhead alone let unrelated movements count: a set, a block, a
+     * stretch, a wave or a raised hand all end there. A swing is drawn back
+     * first, by one arm, with the other lifted to guide it. Checked against
+     * recorded reps: the groupmate's 14 serves and 15 spikes all pass; of 32
+     * serves and 27 spikes marked correct in public coaching clips, 29 and 24
+     * do, and 78 and 75 two-handed movements from other skills no longer count.
+     */
+    private fun incompleteSwing(
+        frames: List<PoseFrame>,
+        peak: AnalyzerSupport.Peak,
+        hitting: Side,
+        otherPeak: AnalyzerSupport.Peak?,
+    ): MovementFault? {
+        val other = hitting.opposite()
+        val before = frames.filter { it.timestampMs <= peak.frame.timestampMs }
+        if (otherPeak != null && AnalyzerSupport.armObserved(peak.frame, other)) {
+            val otherAtPeak = AnalyzerSupport.wristRise(peak.frame, other)
+            if (otherAtPeak != null && otherAtPeak >= BOTH_HANDS_UP && peak.rise - otherAtPeak < BOTH_HANDS_LEVEL &&
+                abs(peak.frame.timestampMs - otherPeak.frame.timestampMs) <= BOTH_HANDS_TOGETHER_MS) {
+                return MovementFault.SwingOneHand
+            }
+        }
+        // The tightest the hitting elbow got with the arm carried up near the
+        // shoulder. An elbow that was never carried there was not drawn back
+        // either, but it was not measured, and is left alone.
+        val drawn = before.filter { elbowCarried(it, hitting) }.mapNotNull { elbowAngle(it, hitting) }.minOrNull()
+        if (drawn != null && drawn > MAX_DRAWN_ELBOW) return MovementFault.DrawElbowBack
+        // Side-on the guiding arm is behind the body for most of the swing. Only
+        // an arm that was seen hanging for most of it is asked for.
+        val guide = before.filter { AnalyzerSupport.armObserved(it, other) }
+        val lifted = guide.mapNotNull { AnalyzerSupport.wristRise(it, other) }.maxOrNull()
+        if (lifted != null && guide.size * 2 >= before.size && lifted < MIN_GUIDE_RISE) return MovementFault.LiftGuidingArm
+        return null
+    }
+
+    private fun elbowCarried(frame: PoseFrame, side: Side): Boolean {
+        val torso = AnalyzerSupport.torsoImageLength(frame) ?: return false
+        val rise = (Angles.shoulderCentreImage(frame).y - frame.image(AnalyzerSupport.elbow(side)).y) / torso
+        return rise > ELBOW_CARRIED_RISE
+    }
+
+    /** Two hands this high, this level and peaking this close together are one two-handed movement. */
+    private const val BOTH_HANDS_UP = 0.45f
+    private const val BOTH_HANDS_LEVEL = 0.25f
+    private const val BOTH_HANDS_TOGETHER_MS = 200L
+
+    /** Below the shoulder line by this much or less, the elbow is carried (torso lengths). */
+    private const val ELBOW_CARRIED_RISE = -0.25f
+
+    /** Straighter than this all the way up and the arm was lifted, not swung. */
+    private const val MAX_DRAWN_ELBOW = 160f
+
+    /** The guiding hand must come up to about the chest at some point before the hit. */
+    private const val MIN_GUIDE_RISE = -0.25f
 }
 
 /**
@@ -221,52 +280,81 @@ class ReceiveAnalyzer : SkillAnalyzer {
         if (Side.entries.none { AnalyzerSupport.legObserved(contact, it) }) {
             return MovementVerdict.NotCounted(MovementFault.LegsNotVisible)
         }
-        return platformFault(contact)?.let { MovementVerdict.NotCounted(it) } ?: MovementVerdict.Counted
+        // The platform has to be there as the ball is met, not for one frame of
+        // it: the frames on either side of the deepest bend vote.
+        val index = window.frames.indexOfFirst { it.timestampMs >= contact.timestampMs }.coerceAtLeast(0)
+        val met = window.frames.subList((index - 1).coerceAtLeast(0), (index + 2).coerceAtMost(window.frames.size))
+        val sideOn = AnalyzerSupport.sideOn(window)
+        val faults = met.mapNotNull { platformFault(it, sideOn) }
+        if (faults.size * 2 <= met.size) return MovementVerdict.Counted
+        val fault = faults.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key
+        return MovementVerdict.NotCounted(fault)
     }
 
     /**
-     * What is wrong with the forearm platform at the bottom of the bend, or null.
+     * What is wrong with the forearm platform on this frame, or null.
      *
-     * Each test reads only what the camera saw. From behind, a correct platform
-     * is hidden by the athlete's own back, so hidden hands are accepted there
-     * and nowhere else; hands that *are* visible hanging apart are a fault from
-     * any direction.
+     * A platform is **both** forearms, joined, straight and level. Facing the
+     * camera both arms are in view, so both are required: one arm out with the
+     * other hanging, hidden or behind the back is not a pass. Joined wrists in
+     * public front-view passes measured 0.08 to 0.27 torso lengths apart on
+     * screen and hands that were not joined 0.50 or more.
+     *
+     * Side-on the far arm is behind the near one, and the tracker's guess at it
+     * is unusable (a groupmate's joined passes read 0.3 to 1.1 torso lengths
+     * apart with the far wrist at visibility 0.04 to 0.18). So the near arm must
+     * make the platform, and the far arm is refused only when it was seen
+     * somewhere else. From behind the arms cannot be seen at all, and a platform
+     * that cannot be seen is not counted.
      */
-    private fun platformFault(frame: PoseFrame): MovementFault? {
-        val view = CameraOrientationDetector().detect(frame).angle
-        val wrists = Side.entries.filter { AnalyzerSupport.observed(frame, AnalyzerSupport.wrist(it)) }
-        if (wrists.isEmpty()) {
-            return if (view == CameraAngle.Rear) null else MovementFault.ArmsNotVisible
-        }
-        if (wrists.any { side -> AnalyzerSupport.wristRise(frame, side)?.let { it > MAX_PLATFORM_RISE } == true }) {
-            return MovementFault.PlatformTooHigh
-        }
-        if (wrists.size == 2) {
+    private fun platformFault(frame: PoseFrame, sideOn: Boolean): MovementFault? {
+        val arms = AnalyzerSupport.observedArms(frame)
+        if (arms.isEmpty() || !sideOn && arms.size < 2) return MovementFault.ArmsNotVisible
+        val rises = arms.mapNotNull { AnalyzerSupport.wristRise(frame, it) }
+        if (rises.any { it > MAX_PLATFORM_RISE }) return MovementFault.PlatformTooHigh
+        val gap = AnalyzerSupport.wristGap(frame)
+        if (!sideOn) {
             val shoulders = Angles.distance(
                 frame.world(BodyPoint.LEFT_SHOULDER), frame.world(BodyPoint.RIGHT_SHOULDER),
             )
-            val gap = Angles.distance(frame.world(BodyPoint.LEFT_WRIST), frame.world(BodyPoint.RIGHT_WRIST))
-            if (shoulders > MIN_SHOULDER_WIDTH_METRES && gap / shoulders > MAX_WRIST_GAP) {
+            val worldGap = Angles.distance(frame.world(BodyPoint.LEFT_WRIST), frame.world(BodyPoint.RIGHT_WRIST))
+            val level = rises.size < 2 || rises.max() - rises.min() <= MAX_LEVEL_GAP
+            if (!level) return MovementFault.UseBothArms
+            if (gap != null && gap > MAX_JOINED_GAP ||
+                shoulders > MIN_SHOULDER_WIDTH_METRES && worldGap / shoulders > MAX_WRIST_GAP) {
                 return MovementFault.JoinPlatform
             }
+        } else {
+            if (gap != null) {
+                if (arms.size == 2 && gap > MAX_SIDE_GAP) return MovementFault.UseBothArms
+                val farSeen = Side.entries.filterNot { it in arms }.any {
+                    frame.image(AnalyzerSupport.wrist(it)).visibility >= FAR_WRIST_SEEN
+                }
+                if (farSeen && gap > MAX_FAR_GAP) return MovementFault.UseBothArms
+            }
+            // Side-on, hands joined against the thighs look the same as a platform
+            // to the gap test, so the hands must also be out in front of the hips.
+            val w = frame.imageWidth.toFloat()
+            val h = frame.imageHeight.toFloat()
+            val shoulder = Angles.shoulderCentreImage(frame)
+            val hip = Angles.hipCentreImage(frame)
+            val torso = kotlin.math.hypot((shoulder.x - hip.x) * w, (shoulder.y - hip.y) * h)
+            if (torso > 0f) {
+                val forward = arms.minOf { abs(frame.image(AnalyzerSupport.wrist(it)).x - hip.x) * w / torso }
+                if (forward < MIN_FORWARD_REACH) return MovementFault.JoinPlatform
+            }
         }
-        // Side-on, hands joined against the thighs look the same as a platform
-        // to the gap test, so the hands must also be out in front of the hips.
-        if (view == CameraAngle.Side) {
-            val torso = AnalyzerSupport.torsoImageLength(frame) ?: return null
-            val hipX = Angles.hipCentreImage(frame).x
-            val forward = wrists.maxOf { abs(frame.image(AnalyzerSupport.wrist(it)).x - hipX) } / torso
-            if (forward < MIN_FORWARD_REACH) return MovementFault.JoinPlatform
-        }
+        val elbows = arms.mapNotNull { elbowAngle(frame, it) }
+        if (elbows.any { it < MIN_PLATFORM_ELBOW }) return MovementFault.StraightenPlatform
         return null
     }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? {
         val contact = window.frameFor(RepPhase.Contact) ?: return null
         return when (cue.id) {
-            CueId.PassPlatformStraight -> meanElbowAngle(contact)
+            CueId.PassPlatformStraight -> AnalyzerSupport.visibleElbowAngle(contact)
             CueId.PassPlatformHeight -> platformBelowHorizontal(contact)
-            CueId.PassKneeFlexion -> meanKneeAngle(contact)
+            CueId.PassKneeFlexion -> AnalyzerSupport.visibleKneeAngle(contact)
             CueId.PassTrunkAngle -> Angles.trunkForwardLean(contact)
             CueId.PassShouldersLevel -> Angles.shoulderTilt(contact)
             else -> null
@@ -301,16 +389,32 @@ class ReceiveAnalyzer : SkillAnalyzer {
          * Standing knees wobble by several degrees in the tracker's depth
          * estimate; a pass sits well clear of that.
          */
-        const val MIN_KNEE_DIP_DEGREES = 15f
+        const val MIN_KNEE_DIP_DEGREES = 20f
 
-        /** Wrist gap as a share of shoulder width. Hanging arms measure above 1. */
+        /** Wrist gap in depth as a share of shoulder width. Hanging arms measure above 1. */
         const val MAX_WRIST_GAP = 0.60f
+
+        /** Joined wrists on screen, in torso lengths, facing the camera. */
+        const val MAX_JOINED_GAP = 0.35f
+
+        /** The same with both wrists seen side-on, where the hands overlap less exactly. */
+        const val MAX_SIDE_GAP = 0.50f
+
+        /** A far wrist at least this visible, this far from the near one, is somewhere else. */
+        const val FAR_WRIST_SEEN = 0.30f
+        const val MAX_FAR_GAP = 0.60f
+
+        /** One wrist this much higher than the other is one arm, not a level platform. */
+        const val MAX_LEVEL_GAP = 0.25f
+
+        /** Straight enough to be a platform at all; how straight is the cue's job. */
+        const val MIN_PLATFORM_ELBOW = 125f
 
         /** Torso lengths above the shoulder line. A platform lives below it. */
         const val MAX_PLATFORM_RISE = 0.15f
 
         /** Torso lengths the hands must be ahead of the hips, seen from the side. */
-        const val MIN_FORWARD_REACH = 0.25f
+        const val MIN_FORWARD_REACH = 0.40f
         const val MIN_SHOULDER_WIDTH_METRES = 0.05f
     }
 }
@@ -346,11 +450,19 @@ class SetAnalyzer : SkillAnalyzer {
         val excursion = AnalyzerSupport.excursion(window, ::segmentationSignal) ?: return MovementVerdict.TooSmall
         if (excursion < MIN_EXCURSION) return MovementVerdict.TooSmall
         val rises = AnalyzerSupport.observedArms(contact).mapNotNull { AnalyzerSupport.wristRise(contact, it) }
-        if (rises.isEmpty()) return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        // Facing the camera both hands are in view, so both are required. Side-on
+        // the far one is behind the head.
+        if (rises.isEmpty() || rises.size < 2 && !AnalyzerSupport.sideOn(window)) {
+            return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        }
         if (rises.size == 2 && rises.max() >= MIN_HAND_RISE && rises.max() - rises.min() > MAX_HAND_GAP) {
             return MovementVerdict.NotCounted(MovementFault.UseBothHands)
         }
         if (rises.min() < MIN_HAND_RISE) return MovementVerdict.NotCounted(MovementFault.HandsAboveForehead)
+        if (rises.size == 2 && (AnalyzerSupport.wristGap(contact) ?: 0f) > MAX_HANDS_APART) {
+            return MovementVerdict.NotCounted(MovementFault.HandsTogether)
+        }
+        if (!handsFinishLevel(window)) return MovementVerdict.NotCounted(MovementFault.UseBothHands)
         // Only an elbow that was seen staying straight is a fault. One that could
         // not be measured on the way up is unknown, not wrong.
         val tightest = window.frames.asSequence()
@@ -360,7 +472,44 @@ class SetAnalyzer : SkillAnalyzer {
         if (tightest != null && tightest > MAX_STRAIGHT_ELBOW) {
             return MovementVerdict.NotCounted(MovementFault.BendElbowsFirst)
         }
+        if ((pushDegrees(window, contact) ?: MIN_PUSH_DEGREES) < MIN_PUSH_DEGREES) {
+            return MovementVerdict.NotCounted(MovementFault.PushToExtend)
+        }
         return MovementVerdict.Counted
+    }
+
+    /**
+     * Both hands at the top together. On a swing the guiding hand and the hitting
+     * hand pass each other at face height, and at that moment their average height
+     * looks like a set; at the higher hand's own peak the other is far below it.
+     * On correct public sets it was never more than 0.17 torso lengths below (19
+     * measured); on the spikes that used to count as sets it was over 0.35 on 30
+     * of 39.
+     */
+    private fun handsFinishLevel(window: RepWindow): Boolean {
+        val frames = AnalyzerSupport.steadyFrames(window.frames)
+        val left = AnalyzerSupport.peakRise(frames, Side.Left) ?: return true
+        val right = AnalyzerSupport.peakRise(frames, Side.Right) ?: return true
+        val (higher, other) = if (left.rise >= right.rise) left to Side.Right else right to Side.Left
+        if (!AnalyzerSupport.armObserved(higher.frame, other)) return true
+        val otherAtPeak = AnalyzerSupport.wristRise(higher.frame, other) ?: return true
+        return higher.rise - otherAtPeak <= MAX_HAND_GAP
+    }
+
+    /**
+     * How far the elbows opened from the catch to the finish, with the hands up at
+     * the face throughout; null when it was not seen. Hands that only come up to
+     * the face and go back down - adjusting hair, shading the eyes - never push.
+     * Of 31 correct public sets 29 opened 8 degrees or more (median 45).
+     */
+    private fun pushDegrees(window: RepWindow, contact: PoseFrame): Float? {
+        val raised = window.frames.filter { (AnalyzerSupport.meanWristRise(it) ?: return@filter false) >= MIN_HAND_RISE }
+        val caught = raised.filter { it.timestampMs <= contact.timestampMs }
+            .mapNotNull { frame -> AnalyzerSupport.observedElbowAngle(frame)?.let { frame to it } }
+            .minByOrNull { it.second } ?: return null
+        val finish = raised.filter { it.timestampMs >= caught.first.timestampMs }
+            .mapNotNull { AnalyzerSupport.observedElbowAngle(it) }.maxOrNull() ?: return null
+        return finish - caught.second
     }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
@@ -372,7 +521,7 @@ class SetAnalyzer : SkillAnalyzer {
         // Measured during loading, not contact: the leg drive that powers a set
         // happens before the hands touch the ball, and by contact the athlete is
         // already extending.
-        CueId.SetKneeFlexion -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.SetKneeFlexion -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
 
         else -> null
     }
@@ -448,7 +597,7 @@ class SetAnalyzer : SkillAnalyzer {
      * against 161° from the front.
      */
     private fun setElbowAngle(frame: PoseFrame): Float? =
-        AnalyzerSupport.observedElbowAngle(frame) ?: meanElbowAngle(frame)
+        AnalyzerSupport.observedElbowAngle(frame) ?: AnalyzerSupport.visibleElbowAngle(frame)
 
     /** The frame of most bent or straightest elbows among [frames] with both hands up at the face. */
     private fun extremeElbow(frames: List<PoseFrame>, straightest: Boolean, elbow: (PoseFrame) -> Float?): PoseFrame? {
@@ -472,10 +621,8 @@ class SetAnalyzer : SkillAnalyzer {
      */
     private fun handsAboveNoseMetres(frame: PoseFrame): Float {
         val nose = frame.world(BodyPoint.NOSE)
-        val wrists = Angles.midpoint(
-            frame.world(BodyPoint.LEFT_WRIST),
-            frame.world(BodyPoint.RIGHT_WRIST),
-        )
+        // The wrists the camera saw: side-on the far hand is behind the head.
+        val wrists = AnalyzerSupport.visibleWrists(frame)
         // World y increases downward, so "above" is the nose's y minus the wrists'.
         return nose.y - wrists.y
     }
@@ -495,6 +642,12 @@ class SetAnalyzer : SkillAnalyzer {
 
         /** An elbow that never closed past this was a straight-arm lift. */
         const val MAX_STRAIGHT_ELBOW = 150f
+
+        /** Hands further apart than this on screen (torso lengths) are not shaping a ball. Correct sets peaked at 0.77. */
+        const val MAX_HANDS_APART = 0.90f
+
+        /** The least the elbows open in a push. */
+        const val MIN_PUSH_DEGREES = 8f
     }
 }
 
@@ -537,7 +690,7 @@ class SpikeAnalyzer : SkillAnalyzer {
         OverheadSwing.hitIndex(frames, signalPeak)
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
-        CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.SpikeApproachLoad -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
         CueId.SpikeArmExtension -> window.frameFor(RepPhase.Contact)
             ?.let { elbowAngle(it, hittingSide(it)) }
 
@@ -651,7 +804,9 @@ class BlockAnalyzer : SkillAnalyzer {
         val excursion = AnalyzerSupport.excursion(window, ::segmentationSignal) ?: return MovementVerdict.TooSmall
         if (excursion < MIN_EXCURSION) return MovementVerdict.TooSmall
         val rises = AnalyzerSupport.observedArms(contact).mapNotNull { AnalyzerSupport.wristRise(contact, it) }
-        if (rises.isEmpty()) return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        if (rises.isEmpty() || rises.size < 2 && !AnalyzerSupport.sideOn(window)) {
+            return MovementVerdict.NotCounted(MovementFault.ArmsNotVisible)
+        }
         if (rises.size == 2 && rises.max() >= MIN_HAND_RISE && rises.min() < ONE_HAND_BELOW) {
             return MovementVerdict.NotCounted(MovementFault.UseBothHands)
         }
@@ -661,6 +816,13 @@ class BlockAnalyzer : SkillAnalyzer {
             return MovementVerdict.NotCounted(MovementFault.StraightenArms)
         }
         if (!handsPeakTogether(window)) return MovementVerdict.NotCounted(MovementFault.UseBothHands)
+        // Arms lifted from still legs are a stretch. All 26 correct public blocks
+        // bent the knees at least 8 degrees on the way up or left the floor.
+        val load = AnalyzerSupport.kneeLoad(window)
+        val lift = AnalyzerSupport.hipLift(window)
+        if (load != null && lift != null && load < MIN_KNEE_LOAD_DEGREES && lift < MIN_HIP_LIFT) {
+            return MovementVerdict.NotCounted(MovementFault.BendKnees)
+        }
         return MovementVerdict.Counted
     }
 
@@ -697,13 +859,13 @@ class BlockAnalyzer : SkillAnalyzer {
     }
 
     override fun measure(cue: FormCue, window: RepWindow): Float? = when (cue.id) {
-        CueId.BlockArmExtension -> window.frameFor(RepPhase.Contact)?.let { meanElbowAngle(it) }
+        CueId.BlockArmExtension -> window.frameFor(RepPhase.Contact)?.let { AnalyzerSupport.visibleElbowAngle(it) }
         CueId.BlockHandSeparation -> window.frameFor(RepPhase.Contact)?.let {
             Angles.distance(it.world(BodyPoint.LEFT_WRIST), it.world(BodyPoint.RIGHT_WRIST))
         }
 
         CueId.BlockPenetration -> window.frameFor(RepPhase.Contact)?.let { penetrationMetres(it) }
-        CueId.BlockKneeLoad -> window.frameFor(RepPhase.Loading)?.let { meanKneeAngle(it) }
+        CueId.BlockKneeLoad -> window.frameFor(RepPhase.Loading)?.let { AnalyzerSupport.visibleKneeAngle(it) }
         else -> null
     }
 
@@ -741,10 +903,7 @@ class BlockAnalyzer : SkillAnalyzer {
      * faces, which is the honest reason to decline.
      */
     private fun penetrationMetres(frame: PoseFrame): Float? {
-        val wrists = Angles.midpoint(
-            frame.world(BodyPoint.LEFT_WRIST),
-            frame.world(BodyPoint.RIGHT_WRIST),
-        )
+        val wrists = AnalyzerSupport.visibleWrists(frame)
         return Angles.alongForward(frame, Angles.shoulderCentre(frame), wrists)
     }
 
@@ -770,6 +929,12 @@ class BlockAnalyzer : SkillAnalyzer {
          * this sits between them with room for a slower camera.
          */
         const val MAX_PEAK_GAP_MS = 250L
+
+        /** The least the knees bend before a block, unless the hips left the floor. */
+        const val MIN_KNEE_LOAD_DEGREES = 8f
+
+        /** Torso lengths the hips rise in even a small jump. */
+        const val MIN_HIP_LIFT = 0.10f
     }
 }
 

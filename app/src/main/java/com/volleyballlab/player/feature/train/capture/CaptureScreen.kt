@@ -285,6 +285,7 @@ private fun GrantedCaptureScreen(
     LaunchedEffect(viewModel, audio, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             launch {
+                var refusalSpeaking = false
                 viewModel.coachingEvents.collect { event ->
                     val recording = viewModel.uiState.value as? CaptureUiState.Recording ?: return@collect
                     // The target rep is included in the complete angle/final turn.
@@ -292,6 +293,9 @@ private fun GrantedCaptureScreen(
                     val delivery = speechDelivery(event.type, event.repNumber != null)
                     val priority = delivery.priority
                     if (priority == SpeechPriority.Rotation || priority == SpeechPriority.Tracking) audio.stop()
+                    // A refusal still being spoken must not run into the count that follows it.
+                    if (event.repNumber != null && refusalSpeaking) audio.stop()
+                    refusalSpeaking = event.type == CoachingEventType.NotCounted
                     // Session lines that are not about a rep do not wait for the rep window.
                     audio.setCorrectionWindow(priority == SpeechPriority.Tracking || event.repNumber == null ||
                         viewModel.speechWindowOpen.value)
@@ -409,6 +413,10 @@ internal fun speechDelivery(type: CoachingEventType, isRep: Boolean): SpeechDeli
     isRep && type == CoachingEventType.Correction -> SpeechDelivery(SpeechPriority.Coaching, SpeechStyle.Correction, 6_000)
     isRep && type == CoachingEventType.Improvement -> SpeechDelivery(SpeechPriority.Coaching, SpeechStyle.Praise, 6_000)
     isRep -> SpeechDelivery(SpeechPriority.RepFeedback, SpeechStyle.Count, 3_000)
+    // The same lane and priority as a count, so the newest outcome replaces an
+    // older one, and it goes stale at once: a refusal heard after the next rep
+    // has been added sounds like that rep was the wrong one.
+    type == CoachingEventType.NotCounted -> SpeechDelivery(SpeechPriority.RepFeedback, SpeechStyle.Correction, 1_500)
     type == CoachingEventType.Improvement -> SpeechDelivery(SpeechPriority.Improvement, SpeechStyle.Praise, 5_000)
     type == CoachingEventType.RepMilestone -> SpeechDelivery(SpeechPriority.Milestone, SpeechStyle.Guidance, 5_000)
     else -> SpeechDelivery(SpeechPriority.Correction, SpeechStyle.Correction, 5_000)
@@ -617,7 +625,7 @@ internal fun GuidedSetupCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Guided angles", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Text("Front → side → rear", style = MaterialTheme.typography.labelMedium,
+                    Text("Front → side", style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.75f))
                 }
                 Switch(checked = options.enabled, onCheckedChange = onGuidedChanged,

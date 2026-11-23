@@ -107,7 +107,7 @@ object DrillGuideCatalog {
             "Clear practice space and a stable camera position",
             "Keep your whole body visible. Move slowly within a comfortable range and reset between repetitions.",
             listOf(
-                "Keep both feet grounded in a balanced stance.",
+                "Keep both feet on the floor in a balanced stance. There is no jump in this drill.",
                 "Draw one elbow back and lift the guiding arm.",
                 "Reach overhead with a slow arm swing and controlled trunk rotation.",
                 "Lower your arm and reset your shoulders and stance.",
@@ -120,7 +120,7 @@ object DrillGuideCatalog {
                 "Start with balanced feet in one spot and a comfortably upright trunk.",
                 "Draw one elbow back and lift the guiding arm. Bend your knees before an in-place jump.",
                 "Extend the raised arm above the shoulder while keeping your trunk controlled.",
-                "Lower the arm and regain balance. If jumping, return to the same spot with softened knees.",
+                "Lower the arm and land in the same spot with softened knees, then regain balance.",
             ),
         ),
         "spike-four-step-lines" to Setup(

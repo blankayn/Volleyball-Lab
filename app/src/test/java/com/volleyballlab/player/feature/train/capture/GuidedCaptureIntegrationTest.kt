@@ -186,7 +186,10 @@ class GuidedCaptureIntegrationTest {
             assertEquals(0, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
             assertEquals(com.volleyballlab.player.pose.analysis.CoachPhrasebook.notCounted(
                 com.volleyballlab.player.pose.analysis.MovementFault.ReachOverhead), vm.coachingMessage.value?.text)
-            repeat(5) { feed.rep(peak = .42f) }
+            // Both hands going up together is a set or a stretch, however high it goes.
+            feed.rep(peak = .42f)
+            assertEquals(0, (vm.uiState.value as CaptureUiState.Recording).totalMetrics.reps)
+            repeat(5) { feed.serve() }
             val turn = vm.uiState.value as CaptureUiState.Recording
             assertEquals(5, turn.totalMetrics.reps)
             assertTrue(turn.rotation!!.instruction.startsWith("Turn to your left, so your right shoulder points at the camera."))
@@ -619,7 +622,7 @@ class GuidedCaptureIntegrationTest {
         }
     }
 
-    @Test fun `side setting still emits spoken rep guidance when bilateral cues are obscured`() = runTest(dispatcher) {
+    @Test fun `side setting with the far arm and leg hidden is assessed from the near side`() = runTest(dispatcher) {
         withCapture { vm, feed ->
             val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
             val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -634,8 +637,10 @@ class GuidedCaptureIntegrationTest {
                 assertEquals(3, (vm.uiState.value as CaptureUiState.Recording).stageMetrics.reps)
                 assertTrue("Side reps must not leave speech silent when correction measurements are unavailable",
                     events.any { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.RepMilestone })
-                assertFalse("Hidden bilateral cues must not generate invented corrections",
-                    events.any { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.Correction })
+                // Side-on the far limbs are always behind the body. The near arm and leg
+                // were in view, so no rep may be called only partly visible.
+                assertFalse("A side view must not report a fully visible near side as partly visible",
+                    events.any { "part of your form" in it.text || "part of that one" in it.text })
             } finally { speech.cancel() }
         }
     }
@@ -1020,7 +1025,9 @@ class GuidedCaptureIntegrationTest {
             repeat(frames) { emit(pose(angle, occluded)) }
         }
         /**
-         * One raise and lowering of the hands.
+         * One raise and lowering of the hands: the elbows bend as the hands come
+         * up to the face and open again in the push. They stop short of straight,
+         * which is counted and leaves the coach something to refine.
          *
          * @param peak how far the wrists travel up the picture. The default ends
          *   above the face, which is a set; a taller one clears the head.
@@ -1032,15 +1039,52 @@ class GuidedCaptureIntegrationTest {
             peak: Float = .35f,
             hands: Set<BodyPoint> = setOf(BodyPoint.LEFT_WRIST, BodyPoint.RIGHT_WRIST),
         ) {
-            listOf(0f, .05f, .15f, .25f, .35f, .35f, .35f, .25f, .15f, .05f, 0f, 0f).forEach { step ->
+            val steps = listOf(0f to 175f, .05f to 160f, .15f to 110f, .25f to 95f, .35f to 90f, .35f to 115f, .35f to 135f,
+                .25f to 110f, .15f to 120f, .05f to 160f, 0f to 175f, 0f to 175f)
+            steps.forEach { (step, elbow) ->
                 val lift = step / .35f * peak
-                val base = pose(angle, occluded)
-                val wrists = hands.map { it.ordinal }.toSet()
-                emit(base.copy(
-                    image = base.image.mapIndexed { index, point -> if (index in wrists) point.copy(y = point.y - lift) else point },
-                    world = base.world.mapIndexed { index, point -> if (index in wrists) point.copy(y = point.y - lift * 2f) else point },
-                ))
+                emit(hands.fold(pose(angle, occluded)) { frame, wrist -> raise(frame, wrist, lift, elbow) })
             }
+        }
+
+        /** An overhand serve: the left arm guides, then the right is drawn back and swings overhead as it comes down. */
+        suspend fun serve(angle: CameraAngle = CameraAngle.Front) {
+            val steps = listOf(
+                0f to 0f, .12f to .05f, .25f to .14f, .30f to .24f, .30f to .30f, .20f to .36f, .10f to .43f,
+                .05f to .36f, 0f to .20f, 0f to .05f, 0f to 0f, 0f to 0f,
+            )
+            val elbows = listOf(175f, 150f, 110f, 90f, 85f, 120f, 162f, 150f, 150f, 165f, 175f, 175f)
+            steps.forEachIndexed { index, (guide, hit) ->
+                emit(raise(raise(pose(angle), BodyPoint.LEFT_WRIST, guide, 160f), BodyPoint.RIGHT_WRIST, hit, elbows[index]))
+            }
+        }
+
+        /** [wrist] lifted by [lift] of the picture, with its elbow placed so the arm bends by [elbow] degrees. */
+        private fun raise(frame: PoseFrame, wrist: BodyPoint, lift: Float, elbow: Float): PoseFrame {
+            if (lift == 0f) return frame
+            val left = wrist == BodyPoint.LEFT_WRIST
+            val shoulderPoint = if (left) BodyPoint.LEFT_SHOULDER else BodyPoint.RIGHT_SHOULDER
+            val elbowPoint = if (left) BodyPoint.LEFT_ELBOW else BodyPoint.RIGHT_ELBOW
+            fun bend(points: List<com.volleyballlab.player.pose.model.Landmark>, up: Float, aspect: Float) = points.toMutableList().also { out ->
+                val shoulder = points[shoulderPoint.ordinal]
+                val hand = points[wrist.ordinal].let { it.copy(y = it.y - up) }
+                out[wrist.ordinal] = hand
+                // The elbow sits off the middle of the shoulder-to-hand line, out to the side.
+                val dx = (hand.x - shoulder.x) * aspect
+                val dy = hand.y - shoulder.y
+                val dz = hand.z - shoulder.z
+                val length = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz).coerceAtLeast(.02f)
+                val off = length / 2f / kotlin.math.tan(Math.toRadians(elbow / 2.0)).toFloat()
+                val outward = if (points[shoulderPoint.ordinal].x >= points[(if (left) BodyPoint.RIGHT_SHOULDER else BodyPoint.LEFT_SHOULDER).ordinal].x) 1f else -1f
+                // Perpendicular to the line within the picture plane, on the outer side.
+                var nx = -dy / length
+                var ny = dx / length
+                if (nx * outward < 0f) { nx = -nx; ny = -ny }
+                val old = points[elbowPoint.ordinal]
+                out[elbowPoint.ordinal] = old.copy(x = (shoulder.x + hand.x) / 2f + nx * off / aspect,
+                    y = (shoulder.y + hand.y) / 2f + ny * off, z = (shoulder.z + hand.z) / 2f)
+            }
+            return frame.copy(image = bend(frame.image, lift, frame.imageWidth.toFloat() / frame.imageHeight), world = bend(frame.world, lift * 2f, 1f))
         }
         private fun pose(angle: CameraAngle, occluded: Boolean = false): PoseFrame {
             val frame = when (angle) {

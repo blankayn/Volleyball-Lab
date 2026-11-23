@@ -26,9 +26,9 @@ object SkillLearningCatalog {
             listOf("Low hands change the overhead starting position.", "Stiff knees limit the preparation movement.", "Uneven arms change the overhead shape."))
         Skill.Spiking -> SkillLearning("Practice the spiking arm position and body alignment from a fixed starting stance.", listOf(
             TechniqueStep("Prepare", "Start with balanced feet in one spot and a comfortably upright trunk."),
-            TechniqueStep("Load", "Draw one elbow back and lift the guiding arm. Bend your knees before an in-place jump."),
+            TechniqueStep("Load", "Lift the guiding arm and draw the hitting elbow back. Keep both feet on the floor; the jump comes with the intermediate drill."),
             TechniqueStep("Position", "Extend the raised arm above the shoulder while keeping your trunk controlled."),
-            TechniqueStep("Reset", "Lower the arm and regain balance. If jumping, return to the same spot with softened knees.")),
+            TechniqueStep("Reset", "Lower the arm and regain balance over both feet.")),
             listOf("Excessive backward lean changes shoulder alignment.", "A bent reaching elbow shortens your reach.", "Drifting from the starting spot makes balance harder."))
         Skill.Blocking -> SkillLearning("Practice a balanced blocking stance, overhead arm alignment, and controlled return.", listOf(
             TechniqueStep("Prepare", "Start with balanced feet, square shoulders, and both hands raised."),

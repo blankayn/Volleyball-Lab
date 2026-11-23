@@ -48,8 +48,9 @@ class CapturedVideoReviewTest {
             frame.copy(image = frame.image.map { it.copy(x = 1f - it.x) }, cameraTimestampMs = frame.timestampMs + 100_000)
         } }
         val scorer = SessionScorer()
-        val detailed = scorer.scoreWithReview("capture", Skill.Setting, "set", 0, frames)
-        assertEquals(scorer.score("capture", Skill.Setting, "set", 0, frames), detailed.session)
+        // The synthetic figure lifts both arms together from bent knees: a block.
+        val detailed = scorer.scoreWithReview("capture", Skill.Blocking, "block", 0, frames)
+        assertEquals(scorer.score("capture", Skill.Blocking, "block", 0, frames), detailed.session)
         assertTrue(detailed.session.reps.isNotEmpty())
         assertTrue(detailed.issues.isNotEmpty())
         detailed.issues.forEach { issue ->

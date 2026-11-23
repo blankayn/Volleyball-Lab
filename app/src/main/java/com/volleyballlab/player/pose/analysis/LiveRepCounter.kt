@@ -40,7 +40,7 @@ import com.volleyballlab.player.pose.model.PoseFrame
  * ## Shape is not enough
  *
  * A curve of the right size still only says that *something* moved. Every
- * candidate is therefore put to [SkillAnalyzer.verdict] before it is counted,
+ * candidate is therefore put to [judge] before it is counted,
  * which is where a knee bend stops being a forearm pass. A candidate that is
  * turned away leaves its reason in [lastRejection] so the coach can say it.
  *
@@ -49,6 +49,8 @@ import com.volleyballlab.player.pose.model.PoseFrame
 class LiveRepCounter(
     private val analyzer: SkillAnalyzer,
     private val config: Config = Config(),
+    /** The decision on a finished movement. The capture screen passes [RepJudge]. */
+    private val judge: (RepWindow) -> MovementVerdict = analyzer::verdict,
 ) {
 
     data class Config(
@@ -65,6 +67,11 @@ class LiveRepCounter(
         val warmUpFrames: Int = 15,
         val maxRepDurationMs: Long = 6_000,
         val maxFrameGapMs: Long = 500,
+        /**
+         * The least time between two counted contacts. Closer ones are one
+         * movement seen twice: a wobble at the top, an arm coming back down.
+         */
+        val minRepSpacingMs: Long = RepSegmenter.MIN_REP_SPACING_MS,
     )
 
     var count: Int = 0
@@ -77,7 +84,10 @@ class LiveRepCounter(
      * Why the movement that ended on the latest frame was not counted, or null.
      * Set for that one frame only, like [lastCompletedWindow].
      */
-    var lastRejection: MovementFault? = null
+    val lastRejection: MovementFault? get() = lastRefusal?.fault
+
+    /** [lastRejection] with the posture cue it names, when it was one. */
+    var lastRefusal: MovementVerdict.NotCounted? = null
         private set
 
     /** Contact is confirmed only after the signal returns to rest. */
@@ -93,11 +103,13 @@ class LiveRepCounter(
     private var repStartMs = 0L
     private var framesSeen = 0
     private var lastTimestampMs: Long? = null
+    private var lastCountedContactMs: Long? = null
     private val preparationFrames = ArrayDeque<PoseFrame>()
     private val activeFrames = mutableListOf<PoseFrame>()
 
     fun reset() {
         count = 0
+        lastCountedContactMs = null
         resetSegment()
     }
 
@@ -110,7 +122,7 @@ class LiveRepCounter(
         framesSeen = 0
         lastTimestampMs = null
         lastCompletedWindow = null
-        lastRejection = null
+        lastRefusal = null
         preparationFrames.clear()
         activeFrames.clear()
     }
@@ -128,7 +140,7 @@ class LiveRepCounter(
         if (previous != null && (frame.timestampMs <= previous || frame.timestampMs - previous > config.maxFrameGapMs)) resetSegment()
         lastTimestampMs = frame.timestampMs
         lastCompletedWindow = null
-        lastRejection = null
+        lastRefusal = null
         val signal = analyzer.segmentationSignal(frame)?.takeIf { it.isFinite() }
         if (signal == null) { resetSegment(); return false }
         if (isInRep) activeFrames.add(frame) else {
@@ -185,14 +197,17 @@ class LiveRepCounter(
                 activeFrames.clear()
                 preparationFrames.addLast(frame)
                 if (window == null) return false
-                return when (val verdict = analyzer.verdict(window)) {
+                return when (val verdict = judge(window)) {
                     MovementVerdict.Counted -> {
+                        val previous = lastCountedContactMs
+                        if (previous != null && window.contactMs - previous in 0 until config.minRepSpacingMs) return false
+                        lastCountedContactMs = window.contactMs
                         lastCompletedWindow = window
                         count++
                         true
                     }
                     is MovementVerdict.NotCounted -> {
-                        lastRejection = verdict.fault
+                        lastRefusal = verdict
                         false
                     }
                     MovementVerdict.TooSmall -> false

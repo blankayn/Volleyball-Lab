@@ -173,22 +173,126 @@ object AngleCuePolicy {
         CueId.BlockPenetration, CueId.SetHandsAboveForehead,
     )
 
-    fun isSupported(cueId: CueId, angle: CameraAngle, frame: PoseFrame, resolvedSide: Side? = null): Boolean {
-        if (angle == CameraAngle.Unknown) return false
+    /** Read only from the side: the elbow's height at the cocked arm. */
+    private val sideOnly = setOf(CueId.SpikeElbowHeight)
+
+    /**
+     * Not readable from the side: level shoulders sit one behind the other, and
+     * the two hands of a block overlap, so their gap would be a depth guess.
+     */
+    private val notSideOn = setOf(CueId.PassShouldersLevel, CueId.BlockHandSeparation)
+
+    /** Whether a cue can be read on [frame], and if not, whether the view or the body is why. */
+    enum class Support {
+        Measurable,
+
+        /**
+         * This cue is not read from this camera view (or the body had turned to
+         * another view on its frame). Not a missing measurement: a side-on rep
+         * is not "partly seen" because a front-only cue was left out.
+         */
+        NotInThisView,
+
+        /** A joint the cue needs was hidden or untracked, or the view was unclear. */
+        NotSeen,
+    }
+
+    fun isSupported(cueId: CueId, angle: CameraAngle, frame: PoseFrame, resolvedSide: Side? = null): Boolean =
+        support(cueId, angle, frame, resolvedSide) == Support.Measurable
+
+    fun support(cueId: CueId, angle: CameraAngle, frame: PoseFrame, resolvedSide: Side? = null): Support {
+        if (angle == CameraAngle.Unknown) return Support.NotSeen
+        if (cueId in sideOnly && angle != CameraAngle.Side) return Support.NotInThisView
+        if (cueId in notSideOn && angle == CameraAngle.Side) return Support.NotInThisView
         // Preparation's higher wrist is the toss arm, not the hitting arm.
         // Without observed contact there is no trustworthy opposite-side cue.
-        if (cueId == CueId.ServeTossArmLift && resolvedSide == null) return false
+        // Side-on the guiding arm is usually the far one, hidden by the body.
+        if (cueId == CueId.ServeTossArmLift && resolvedSide == null) {
+            return if (angle == CameraAngle.Side) Support.NotInThisView else Support.NotSeen
+        }
         val observed = CameraOrientationDetector().detect(frame)
-        if (observed.angle == CameraAngle.Unknown || observed.confidence < 0.55f) return false
+        if (observed.angle == CameraAngle.Unknown || observed.confidence < 0.55f) {
+            // Side stage, turned between views mid-swing: the joints were seen, the
+            // view was not one the cue is validated for. A front stage keeps its
+            // stricter rule, so a front rep is never judged on what the view missed.
+            return if (angle == CameraAngle.Side && seen(cueId, frame, resolvedSide)) Support.NotInThisView else Support.NotSeen
+        }
         // Athletes naturally rotate during a serve/spike. Known alternate views
         // still support observed 3D limb angles, while facing-dependent cues
         // must stay within the stage's validated view.
-        if (cueId in facingDependent && (angle == CameraAngle.Rear || observed.angle == CameraAngle.Rear ||
-                observed.angle != angle || !isReliable(frame, BodyPoint.NOSE, 0.65f))) return false
-        if (cueId == CueId.PassShouldersLevel && observed.angle == CameraAngle.Side) return false
-        val points = affectedPoints(cueId, frame, resolvedSide)
-        return points.all { isReliable(frame, it) }
+        if (cueId in facingDependent) {
+            if (angle == CameraAngle.Rear || observed.angle == CameraAngle.Rear || observed.angle != angle) {
+                return Support.NotInThisView
+            }
+            if (!isReliable(frame, BodyPoint.NOSE, 0.65f)) return Support.NotSeen
+        }
+        if (cueId in notSideOn && observed.angle == CameraAngle.Side) return Support.NotInThisView
+        return if (seen(cueId, frame, resolvedSide)) Support.Measurable else Support.NotSeen
     }
+
+    /**
+     * Whether the joints [cueId] is read from were seen. One whole arm or leg is
+     * enough for the cues the analyzers read from the limbs they can see
+     * ([visibleSides]): side-on the far limb is behind the body, and asking for
+     * both turned off nearly every cue, so a side view said "only part of your
+     * form was visible" on almost every rep (a groupmate's side-on block, set,
+     * pass and spike: 100% of reps). The hitting-arm cues need the hitting arm.
+     */
+    /**
+     * The joints a review may mark for [cueId] on [frame]: those of its points that
+     * were seen and in the picture, or none when the cue could not be read. Side-on
+     * that is the near limb; a hidden joint is never marked.
+     */
+    fun reviewPoints(cueId: CueId, frame: PoseFrame, resolvedSide: Side?): Set<BodyPoint> =
+        if (!seen(cueId, frame, resolvedSide)) emptySet()
+        else affectedPoints(cueId, frame, resolvedSide).filterTo(mutableSetOf()) {
+            isReliable(frame, it) && frame.image(it).x in 0f..1f && frame.image(it).y in 0f..1f
+        }
+
+    /** Whether [angle] is a view [cueId] is read from at all. */
+    fun readsInView(cueId: CueId, angle: CameraAngle): Boolean =
+        !(cueId in sideOnly && angle != CameraAngle.Side) && !(cueId in notSideOn && angle == CameraAngle.Side)
+
+    private fun seen(cueId: CueId, frame: PoseFrame, resolvedSide: Side?): Boolean {
+        fun reliable(points: List<BodyPoint>) = points.all { isReliable(frame, it) }
+        fun arm(side: Side, withHip: Boolean = false) = listOf(
+            AnalyzerSupport.shoulder(side), AnalyzerSupport.elbow(side), AnalyzerSupport.wrist(side),
+        ) + if (withHip) listOf(AnalyzerSupport.hip(side)) else emptyList()
+        fun leg(side: Side) = listOf(AnalyzerSupport.hip(side), AnalyzerSupport.knee(side), AnalyzerSupport.ankle(side))
+        val hitting = resolvedSide ?: measuredSide(cueId, frame)
+        return when (cueId) {
+            CueId.ServeContactArmExtension, CueId.SpikeArmExtension ->
+                reliable(arm(hitting ?: AnalyzerSupport.hittingSide(frame)))
+            // A dropped elbow sits behind the body at the cocked arm, so the analyzer
+            // reads the tracker's estimate of the elbow and wrist there by design
+            // (see SpikeAnalyzer.cockedArm). Requiring them to be seen refused this cue
+            // on all 15 of a groupmate's dropped-elbow swings: the shoulder must be seen
+            // and the elbow and wrist inside the picture.
+            CueId.SpikeElbowHeight -> (hitting ?: AnalyzerSupport.hittingSide(frame)).let { side ->
+                isReliable(frame, AnalyzerSupport.shoulder(side)) &&
+                    listOf(AnalyzerSupport.elbow(side), AnalyzerSupport.wrist(side)).all { point ->
+                        frame.image(point).let { it.x in 0f..1f && it.y in 0f..1f && it.presence >= 0.50f }
+                    }
+            }
+            CueId.ServeReachHeight -> reliable(arm(hitting ?: AnalyzerSupport.hittingSide(frame), withHip = true))
+            CueId.PassPlatformStraight, CueId.PassPlatformHeight, CueId.SetElbowFlexion,
+            CueId.SetExtensionFollowThrough, CueId.BlockArmExtension -> Side.entries.any { reliable(arm(it)) }
+            CueId.PassKneeFlexion, CueId.SetKneeFlexion, CueId.SpikeApproachLoad, CueId.BlockKneeLoad ->
+                Side.entries.any { reliable(leg(it)) }
+            CueId.SetHandsAboveForehead -> isReliable(frame, BodyPoint.NOSE) &&
+                Side.entries.any { isReliable(frame, AnalyzerSupport.wrist(it)) }
+            CueId.BlockPenetration -> reliable(listOf(BodyPoint.LEFT_SHOULDER, BodyPoint.RIGHT_SHOULDER)) &&
+                Side.entries.any { isReliable(frame, AnalyzerSupport.wrist(it)) }
+            else -> affectedPoints(cueId, frame, resolvedSide).all { isReliable(frame, it) }
+        }
+    }
+
+    /**
+     * The sides whose [limb] joints were all seen on [frame]; both when neither
+     * was, so callers that measure without the gate keep their old reading.
+     */
+    fun visibleSides(frame: PoseFrame, limb: (Side) -> List<BodyPoint>): List<Side> =
+        Side.entries.filter { side -> limb(side).all { isReliable(frame, it) } }.ifEmpty { Side.entries }
 
     fun isReliable(frame: PoseFrame, point: BodyPoint, threshold: Float = 0.50f): Boolean {
         val image = frame.image(point)
@@ -213,9 +317,20 @@ object AngleCuePolicy {
             val hitting = measuredSide(CueId.ServeContactArmExtension, contact) ?: return null
             return if (hitting == Side.Left) Side.Right else Side.Left
         }
+        // The hitting-arm cues read the arm that was higher at contact, whatever frame
+        // they are read on (the cocked arm comes before contact, with that hand lower).
+        // Check that same arm, even when the far wrist was hidden at contact.
+        if (cueId in hittingArmCues) {
+            val contact = window.frameFor(RepPhase.Contact) ?: return null
+            return measuredSide(cueId, contact) ?: AnalyzerSupport.hittingSide(contact)
+        }
         val cue = com.volleyballlab.player.domain.model.FormCueCatalog.byId(cueId) ?: return null
         return window.frameFor(cue.phase)?.let { measuredSide(cueId, it) }
     }
+
+    private val hittingArmCues = setOf(
+        CueId.ServeContactArmExtension, CueId.ServeReachHeight, CueId.SpikeArmExtension, CueId.SpikeElbowHeight,
+    )
 
     fun affectedPoints(cueId: CueId, frame: PoseFrame? = null, resolvedSide: Side? = null): Set<BodyPoint> {
         val side = resolvedSide ?: frame?.let { measuredSide(cueId, it) }
