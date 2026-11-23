@@ -72,6 +72,7 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
         analyzer: SkillAnalyzer = SkillAnalyzers.forSkill(skill),
         receivingPostureEvaluator: ReceivingReadyPostureEvaluator? = null,
         angle: CameraAngle? = null,
+        liveSideView: Boolean = false,
     ): RepResult {
         val cues = FormCueCatalog.forSkill(skill)
         val measurements = cues.associate { cue ->
@@ -122,7 +123,8 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
                 }
                 val score = when {
                     measured == null -> null
-                    skill == Skill.Receiving && readinessCue && !receivingLegsReliable -> null
+                    // Side-view geometry already passed the per-cue visibility check. The front-facing readiness rule needs both legs.
+                    skill == Skill.Receiving && readinessCue && !(liveSideView && angle == CameraAngle.Side) && !receivingLegsReliable -> null
                     readinessCue && ready?.decision in setOf(
                         ReceivingReadyDecision.Uncertain, ReceivingReadyDecision.WarmingUp,
                         ReceivingReadyDecision.InsufficientQuality,

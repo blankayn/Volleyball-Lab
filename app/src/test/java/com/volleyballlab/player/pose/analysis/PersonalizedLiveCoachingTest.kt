@@ -54,7 +54,7 @@ class PersonalizedLiveCoachingTest {
         invalid.forEach { value ->
             val result = feedback(assessment(value, good = true))
             assertEquals(LiveRepVerdict.Unrated, result.verdict)
-            assertTrue(result.spokenText.contains("couldn't judge"))
+            assertTrue(result.spokenText.contains("full reach") || result.spokenText.contains("hands and feet"))
         }
         assertEquals(LiveRepVerdict.Unrated,
             feedback(assessment(status(175f), good = true), angle = CameraAngle.Unknown).verdict)

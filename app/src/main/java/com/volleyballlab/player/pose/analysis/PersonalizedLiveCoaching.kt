@@ -156,13 +156,28 @@ object PersonalizedLiveCoaching {
             compareByDescending<CueLiveStatus> { it.cue.id in plan.focusCueIds }.thenBy { it.score },
         ).firstOrNull()
         val verdict = when {
+            // Everything this view reads was read; it just reads too little to judge.
+            // "Only part of your form was visible" would blame a body that was in view.
             measured.isEmpty() -> LiveRepVerdict.Unrated
+            angle == CameraAngle.Side && assessment.viewLimited && fault == null -> LiveRepVerdict.Partial
+            assessment.viewLimited && fault == null -> LiveRepVerdict.Unrated
+            assessment.viewLimited -> LiveRepVerdict.Adjust
             !assessment.isAssessable || assessment.score?.isFinite() != true -> LiveRepVerdict.Partial
             fault != null || !assessment.isGood -> LiveRepVerdict.Adjust
             else -> LiveRepVerdict.Good
         }
-        val detail = direction?.text ?: when (verdict) {
-            LiveRepVerdict.Unrated -> "Counted. I couldn't judge your form from this view."
+        val sideCue = if (angle == CameraAngle.Side && !assessment.isAssessable) {
+            when {
+                measured.isEmpty() -> "Keep your whole body in frame for the next rep."
+                fault != null -> CoachPhrasebook.action(fault.cue.id, fault.measured!!) + "."
+                else -> {
+                    val cue = measured.firstOrNull { it.cue.id in plan.focusCueIds } ?: measured.first()
+                    "Your ${CoachPhrasebook.focusName(cue.cue.id)} looked good from the side."
+                }
+            }
+        } else null
+        val detail = direction?.text ?: sideCue ?: when (verdict) {
+            LiveRepVerdict.Unrated -> "Keep your hands and feet in frame for the next rep."
             LiveRepVerdict.Partial -> if (fault != null) "I could only check part of your form. Watch your ${CoachPhrasebook.focusName(fault.cue.id)}."
                 else "Counted. Only part of your form was visible."
             LiveRepVerdict.Adjust -> if (stageReps == 1 && fault != null) "Your ${CoachPhrasebook.focusName(fault.cue.id)} needs work."
@@ -172,7 +187,7 @@ object PersonalizedLiveCoaching {
         val count = CoachPhrasebook.repCount(stageReps, target, totalReps)
         // The rep after a director turn is a quiet retry: the count and nothing else.
         val quiet = direction == null && previous?.directed == true
-        val ack = if (direction != null || quiet) null else CoachPhrasebook.repAck(
+        val ack = if (direction != null || quiet) null else sideCue ?: CoachPhrasebook.repAck(
             verdict, fault?.cue?.id, totalReps, previous?.ack, firstOfStage = stageReps == 1,
             stayWithFocus = fault != null && fault.cue.id in plan.focusCueIds)
         return LiveRepFeedback(totalReps, stageReps, target, verdict, detail,

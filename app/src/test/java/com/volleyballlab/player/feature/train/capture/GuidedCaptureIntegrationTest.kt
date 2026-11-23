@@ -619,7 +619,7 @@ class GuidedCaptureIntegrationTest {
         }
     }
 
-    @Test fun `side setting still emits spoken rep guidance when bilateral cues are obscured`() = runTest(dispatcher) {
+    @Test fun `side setting with the far arm and leg hidden is assessed from the near side`() = runTest(dispatcher) {
         withCapture { vm, feed ->
             val events = mutableListOf<com.volleyballlab.player.pose.analysis.CoachingEvent>()
             val speech = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -634,8 +634,10 @@ class GuidedCaptureIntegrationTest {
                 assertEquals(3, (vm.uiState.value as CaptureUiState.Recording).stageMetrics.reps)
                 assertTrue("Side reps must not leave speech silent when correction measurements are unavailable",
                     events.any { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.RepMilestone })
-                assertFalse("Hidden bilateral cues must not generate invented corrections",
-                    events.any { it.type == com.volleyballlab.player.pose.analysis.CoachingEventType.Correction })
+                // Side-on the far limbs are always behind the body. The near arm and leg
+                // were in view, so no rep may be called only partly visible.
+                assertFalse("A side view must not report a fully visible near side as partly visible",
+                    events.any { "part of your form" in it.text || "part of that one" in it.text })
             } finally { speech.cancel() }
         }
     }
