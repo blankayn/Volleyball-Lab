@@ -13,3 +13,21 @@ expiry; the proposed seven-day retention was withdrawn. Switching providers late
 requires migrating those retained objects. Existing Firebase recording downloads
 remain supported on Android; account cleanup must be extended to R2 before the
 currently inactive Firebase account-deletion service is enabled.
+
+## Automatic private backup, 23 November 2026
+
+The owner requested cloud backups so recordings can survive reinstalling the app.
+This revises the original restriction to explicitly submitted coach recordings.
+Saving a signed-in training recording now schedules a persistent WorkManager
+upload of the video and feedback to the same private R2 objects. Opening the app
+also queues existing local recordings. A ready marker is acknowledged by the
+server before the result screen confirms backup. Transient failures retry with
+network connectivity; recordings larger than 90 MB remain local and are labelled.
+
+After signing into the same account on another installation, the existing session
+history restoration brings back the session summary. The result screen offers
+an authenticated download of the video and retained feedback. Coach visibility
+continues to require explicit session sharing. Removing a downloaded phone copy
+keeps the cloud recording available. Uninstalling before backup completes can
+still lose a local recording. Already deleted videos cannot be recovered by this
+feature. Existing session history limits still apply.

@@ -99,12 +99,17 @@ sealed interface ResultUiState {
         val session: SessionResult,
         val summaries: List<CueSummary>,
         val history: List<SessionResult> = emptyList(),
+        val cloudSaved: Boolean = false,
+        val downloading: Boolean = false,
+        val downloadFailed: Boolean = false,
     ) : ResultUiState
 }
 
 class SessionResultViewModel(
     private val sessionRepository: SessionRepository,
     private val sessionId: String,
+    private val cloudStatus: kotlinx.coroutines.flow.Flow<Boolean> = kotlinx.coroutines.flow.flowOf(false),
+    private val restoreVideo: suspend (SessionResult) -> String? = { null },
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ResultUiState>(ResultUiState.Loading)
@@ -117,6 +122,30 @@ class SessionResultViewModel(
                 ResultUiState.NotFound
             } else {
                 ResultUiState.Ready(session, summarise(session), sessionRepository.sessions.first())
+            }
+            if (session != null) cloudStatus.collect { saved ->
+                val ready = _uiState.value as? ResultUiState.Ready ?: return@collect
+                _uiState.value = ready.copy(cloudSaved = saved)
+            }
+        }
+    }
+
+    fun downloadVideo() {
+        val ready = _uiState.value as? ResultUiState.Ready ?: return
+        if (ready.downloading || !ready.cloudSaved) return
+        _uiState.value = ready.copy(downloading = true, downloadFailed = false)
+        viewModelScope.launch {
+            try {
+                val path = checkNotNull(restoreVideo(ready.session))
+                val restored = ready.session.copy(videoPath = path)
+                sessionRepository.save(restored)
+                val latest = _uiState.value as? ResultUiState.Ready ?: return@launch
+                _uiState.value = latest.copy(session = restored, downloading = false)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                val latest = _uiState.value as? ResultUiState.Ready ?: return@launch
+                _uiState.value = latest.copy(downloading = false, downloadFailed = true)
             }
         }
     }
@@ -164,7 +193,15 @@ class SessionResultViewModel(
     companion object {
         fun factory(sessionId: String): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                SessionResultViewModel(appContainer.sessionRepository, sessionId)
+                val app = appContainer
+                val uid = app.authRepository.currentUid
+                SessionResultViewModel(app.sessionRepository, sessionId,
+                    app.sharedRecordingStore.backupStatus(sessionId)) { session ->
+                    check(uid != null && app.authRepository.currentUid == uid)
+                    app.sharedRecordingStore.download(session, uid).also {
+                        check(app.authRepository.currentUid == uid)
+                    }
+                }
             }
         }
     }
@@ -206,6 +243,7 @@ fun SessionResultScreen(
             state = current,
             onDone = onDone,
             onDeleteVideo = viewModel::deleteVideo,
+            onDownloadVideo = viewModel::downloadVideo,
             contentPadding = contentPadding,
             modifier = modifier,
             assignmentId = assignmentId ?: current.session.assignmentId,
@@ -219,6 +257,7 @@ private fun ResultContent(
     state: ResultUiState.Ready,
     onDone: () -> Unit,
     onDeleteVideo: () -> Unit,
+    onDownloadVideo: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     assignmentId: String? = null,
@@ -266,12 +305,24 @@ private fun ResultContent(
 
         item {
             ResultSection(title = stringResource(R.string.result_review_video), modifier = side) {
+                if (state.cloudSaved) {
+                    Text(stringResource(R.string.recording_cloud_saved))
+                } else if (playableVideo != null) {
+                    val tooLarge = File(playableVideo).length() > com.volleyballlab.player.data.session.SharedRecordingStore.MAX_VIDEO_BYTES
+                    Text(stringResource(if (tooLarge) R.string.recording_cloud_too_large else R.string.recording_cloud_pending))
+                }
+                if (playableVideo == null && state.cloudSaved) {
+                    Button(onClick = onDownloadVideo, enabled = !state.downloading) {
+                        Text(stringResource(if (state.downloading) R.string.recording_cloud_downloading else R.string.recording_cloud_download))
+                    }
+                    if (state.downloadFailed) Text(stringResource(R.string.recording_cloud_download_failed))
+                }
                 if (playableVideo != null) {
                     AnnotatedSessionVideo(session, playableVideo)
                     TextButton(onClick = { confirmDeleteVideo = true }, modifier = Modifier.align(Alignment.End)) {
                         Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.session_delete_video), color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(if (state.cloudSaved) R.string.recording_remove_local else R.string.session_delete_video), color = MaterialTheme.colorScheme.error)
                     }
                 } else ResultPanel {
                     Text(
@@ -323,7 +374,7 @@ private fun ResultContent(
         AlertDialog(
             onDismissRequest = { confirmDeleteVideo = false },
             title = { Text(stringResource(R.string.session_delete_video_title)) },
-            text = { Text(stringResource(R.string.session_delete_video_body)) },
+            text = { Text(stringResource(if (state.cloudSaved) R.string.recording_remove_local_body else R.string.session_delete_video_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {

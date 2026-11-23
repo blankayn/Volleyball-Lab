@@ -72,10 +72,15 @@ class DataStoreSessionRepository internal constructor(
     private val cloud: SessionCloudStore?,
     private val deletePrivateVideo: (String) -> Unit,
     scope: CoroutineScope,
+    private val onSessionSaved: (String, SessionResult) -> Unit = { _, _ -> },
 ) : SessionRepository, SessionDirectory {
-    constructor(context: Context, authRepository: AuthRepository, cloud: SessionCloudStore? = null) :
-        this(context.sessionStore, authRepository, cloud, { deletePrivateVideo(context, it) },
-            CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    constructor(
+        context: Context,
+        authRepository: AuthRepository,
+        cloud: SessionCloudStore? = null,
+        onSessionSaved: (String, SessionResult) -> Unit = { _, _ -> },
+    ) : this(context.sessionStore, authRepository, cloud, { deletePrivateVideo(context, it) },
+        CoroutineScope(SupervisorJob() + Dispatchers.IO), onSessionSaved)
 
     private val cloudMirror = cloud?.let { SessionCloudMirror(it, { authRepository.currentUid }, scope) }
 
@@ -180,6 +185,7 @@ class DataStoreSessionRepository internal constructor(
         evictedVideos.forEach(deletePrivateVideo)
         // Save locally before attempting the cloud mirror.
         cloudMirror?.upload(ownerUid, session)
+        onSessionSaved(ownerUid, session)
     }
 
     override suspend fun byId(id: String): SessionResult? =
@@ -267,8 +273,9 @@ private fun deletedSessionsKey(scope: UserScope) =
 private fun deletePrivateVideo(context: Context, path: String) {
     runCatching {
         val directory = File(context.filesDir, "training_videos").canonicalFile
+        val restored = File(context.cacheDir, "shared_recordings").canonicalFile.toPath()
         val video = File(path).canonicalFile
-        if (video.parentFile == directory) {
+        if (video.parentFile == directory || video.toPath().startsWith(restored)) {
             VideoReviewCache.delete(context, path)
             video.delete()
         }

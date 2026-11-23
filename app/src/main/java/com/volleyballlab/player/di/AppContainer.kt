@@ -114,6 +114,13 @@ class AppContainer(private val context: Context) {
                             && authRepository.currentUid == uid) syncAccountName(uid)
                     }
                 }
+                launch {
+                    sessionRepository.sessions.collect { sessions ->
+                        sessions.filter { it.videoPath != null }.forEach { session ->
+                            com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+                        }
+                    }
+                }
                 launch { sessionRepository.sessions.collect { sessions -> notificationRepository.ingest(uid,
                     sessions.map(com.volleyballlab.player.domain.model.NotificationEvents::session) + com.volleyballlab.player.domain.model.NotificationEvents.milestones(sessions)) } }
                 launch { notificationRepository.connectionEvents(uid).collect { events -> notificationRepository.ingest(uid, events) } }
@@ -167,7 +174,11 @@ class AppContainer(private val context: Context) {
      * the app no longer forgets the athlete's training when the process dies.
      */
     val sessionRepository: SessionRepository by lazy {
-        DataStoreSessionRepository(context, authRepository, sessionCloudStore)
+        DataStoreSessionRepository(context, authRepository, sessionCloudStore) { uid, session ->
+            if (session.videoPath != null) {
+                com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+            }
+        }
     }
 
     /**
@@ -255,6 +266,17 @@ class AppContainer(private val context: Context) {
                 ?: error("This session is no longer on this phone.")
             sharedRecordingStore.upload(session, uid)
         })
+    }
+
+    suspend fun backupRecording(session: com.volleyballlab.player.domain.model.SessionResult, uid: String) {
+        check(authRepository.currentUid == uid)
+        if (sharedRecordingStore.isBackedUp(session.id, uid)) return
+        sessionCloudStore.upload(uid, session)
+        if (sessionRepository.byId(session.id) == null) {
+            sessionCloudStore.delete(uid, session.id)
+            return
+        }
+        sharedRecordingStore.upload(session, uid, createSession = false)
     }
 
     /** Best-effort mirror of the athlete's own sessions for coach review. */
