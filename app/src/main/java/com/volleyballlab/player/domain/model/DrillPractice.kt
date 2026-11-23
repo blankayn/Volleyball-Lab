@@ -10,11 +10,12 @@ object DrillAccessPolicy {
 
 @Serializable
 data class DrillWorkoutConfig(val sets: Int = 3, val reps: Int = 10, val restSeconds: Int = 30) {
-    init { require(sets in setRange && reps in repRange && restSeconds in 0..120) }
+    init { require(sets in setRange && reps in storedRepRange && restSeconds in 0..120) }
 
     companion object {
         val setRange = 1..5
-        val repRange = 1..100
+        val targetRepRange = 1..20
+        private val storedRepRange = 1..100 // Older drafts and history may exceed the current target limit.
     }
 }
 

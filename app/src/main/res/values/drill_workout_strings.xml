@@ -3,7 +3,8 @@
     <string name="drill_workout_setup">Workout setup</string>
     <string name="drill_workout_sets">Sets</string>
     <string name="drill_workout_reps_per_set">Reps per set</string>
-    <string name="drill_workout_range">Enter %1$d–%2$d</string>
+    <string name="drill_workout_increase">Increase %1$s</string>
+    <string name="drill_workout_decrease">Decrease %1$s</string>
     <string name="drill_workout_start">Start workout</string>
     <string name="drill_workout_manual">Log your reps after each set. Workouts are saved in Drill Library history.</string>
     <string name="drill_workout_unfinished">Unfinished workout: %1$s</string>

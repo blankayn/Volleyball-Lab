@@ -63,6 +63,22 @@ class DrillPracticeViewModelTest {
         assertNull(repository.draft.first())
     }
 
+    @Test fun newTargetsAreCappedAndOlderDraftsKeepTheirTargets() = workoutTest {
+        val aboveLimit = model(reps = DrillWorkoutConfig.targetRepRange.last + 1)
+        runCurrent()
+        assertNotNull(aboveLimit.state.value.error)
+        assertNull(repository.draft.first())
+
+        val olderConfig = DrillWorkoutConfig(reps = 35)
+        val draft = DrillPracticeDraft("older-workout", "set-wall-reps", "Wall setting reps",
+            Skill.Setting, olderConfig, 1000)
+        repository.checkpoint("athlete-a", draft)
+        val resumed = model(resume = draft.id)
+        runCurrent()
+        assertEquals(olderConfig, resumed.state.value.draft?.config)
+        assertNull(resumed.state.value.error)
+    }
+
     @Test fun confirmingPausesTimeAndRecordsActualRepsExactlyOnce() = workoutTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val vm = model()

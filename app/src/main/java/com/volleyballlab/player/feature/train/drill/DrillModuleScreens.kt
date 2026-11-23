@@ -1,6 +1,7 @@
 package com.volleyballlab.player.feature.train.drill
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -252,7 +255,7 @@ fun DrillDetailScreen(
                     Button({ upgrade = true }) { Text("View Pro") }
                 } }
             } else {
-                item(key = "workout-setup") {
+                item(key = "workout-targets") {
                     val draft = state.draft
                     if (draft == null) {
                         WorkoutSetupCard(drill, onPractice)
@@ -299,33 +302,30 @@ fun DrillDetailScreen(
 
 @Composable
 private fun WorkoutSetupCard(drill: Drill, onPractice: (DrillWorkoutConfig) -> Unit) {
-    var sets by rememberSaveable(drill.id) { mutableStateOf(DrillWorkoutConfig().sets.toString()) }
-    var reps by rememberSaveable(drill.id) { mutableStateOf(drill.targetReps.toString()) }
-    val setCount = sets.toIntOrNull()?.takeIf { it in DrillWorkoutConfig.setRange }
-    val repCount = reps.toIntOrNull()?.takeIf { it in DrillWorkoutConfig.repRange }
-    val workout = if (setCount != null && repCount != null) DrillWorkoutConfig(setCount, repCount) else null
+    val repRange = DrillWorkoutConfig.targetRepRange
+    var sets by rememberSaveable(drill.id) { mutableIntStateOf(DrillWorkoutConfig().sets) }
+    var reps by rememberSaveable(drill.id) { mutableIntStateOf(drill.targetReps.coerceIn(repRange)) }
 
     ModuleCard {
         Text(stringResource(R.string.drill_workout_setup), style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            WorkoutTargetField(
+            WorkoutTargetStepper(
                 label = stringResource(R.string.drill_workout_sets),
                 value = sets,
                 onChange = { sets = it },
                 allowed = DrillWorkoutConfig.setRange,
                 modifier = Modifier.weight(1f),
             )
-            WorkoutTargetField(
+            WorkoutTargetStepper(
                 label = stringResource(R.string.drill_workout_reps_per_set),
                 value = reps,
                 onChange = { reps = it },
-                allowed = DrillWorkoutConfig.repRange,
+                allowed = repRange,
                 modifier = Modifier.weight(1f),
             )
         }
         OutlinedButton(
-            onClick = { workout?.let(onPractice) },
-            enabled = workout != null,
+            onClick = { onPractice(DrillWorkoutConfig(sets, reps)) },
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.drill_workout_start)) }
         Text(stringResource(R.string.drill_workout_manual),
@@ -334,28 +334,47 @@ private fun WorkoutSetupCard(drill: Drill, onPractice: (DrillWorkoutConfig) -> U
 }
 
 @Composable
-private fun WorkoutTargetField(
+private fun WorkoutTargetStepper(
     label: String,
-    value: String,
-    onChange: (String) -> Unit,
+    value: Int,
+    onChange: (Int) -> Unit,
     allowed: IntRange,
     modifier: Modifier,
 ) {
-    val valid = value.toIntOrNull()?.let { it in allowed } == true
-    OutlinedTextField(
-        value = value,
-        onValueChange = { input ->
-            if (input.length <= allowed.last.toString().length && input.all(Char::isDigit)) onChange(input)
-        },
-        modifier = modifier,
-        label = { Text(label) },
-        singleLine = true,
-        isError = !valid,
-        supportingText = if (valid) null else {
-            { Text(stringResource(R.string.drill_workout_range, allowed.first, allowed.last)) }
-        },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-    )
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    IconButton(
+                        onClick = { onChange(value + 1) },
+                        enabled = value < allowed.last,
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowUp,
+                            contentDescription = stringResource(R.string.drill_workout_increase, label))
+                    }
+                    IconButton(
+                        onClick = { onChange(value - 1) },
+                        enabled = value > allowed.first,
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.drill_workout_decrease, label))
+                    }
+                }
+                Text(
+                    text = value.toString(),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
 }
 
 @Composable

@@ -44,8 +44,8 @@ Each step shows its best camera score against 80 (the Advanced band); a step at
 camera scores move the path; manual workouts never do. Each step links to its
 guide in the library, and Done after a camera session returns to the path. Guides include equipment, setup, numbered steps, common mistakes, and
 the existing skill illustrations. Manual workouts default to 3 sets, the drill's
-target reps, and 30 seconds of rest between sets. The setup accepts 1–5 sets and
-1–100 target reps per set.
+target reps, and 30 seconds of rest between sets. Use the arrow buttons to choose
+1–5 sets and 1–20 target reps per set. Older drafts keep their original targets.
 
 Only confirmed sets create reps. Actual reps may be 0–100 and can differ from
 the target. Rest ends at Ready; the next set starts explicitly. Pause, background,
