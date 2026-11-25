@@ -62,7 +62,9 @@ object CoachAssessmentEngine {
         val observed = observe(session)
         // Jump height is a performance estimate, not proof of faulty technique.
         val scored = observed.filter { it.cue.id != CueId.SpikeJumpHeight }
-        val expectedWeight = FormCueCatalog.forSkill(session.skill).filter { it.id != CueId.SpikeJumpHeight }
+        val notTrained = DrillFocus.excluded(session.drillId)
+        val expectedWeight = FormCueCatalog.forSkill(session.skill)
+            .filter { it.id != CueId.SpikeJumpHeight && it.id !in notTrained }
             .sumOf { it.weight.toDouble() }
         val observedWeight = scored.sumOf { it.cue.weight.toDouble() }
         val coverage = (observedWeight / expectedWeight).toFloat().coerceIn(0f, 1f)
@@ -118,7 +120,8 @@ object CoachAssessmentEngine {
         )
     }
 
-    private fun observe(session: SessionResult): List<ObservedCue> = FormCueCatalog.forSkill(session.skill).mapNotNull { cue ->
+    private fun observe(session: SessionResult): List<ObservedCue> = FormCueCatalog.forSkill(session.skill)
+        .filterNot { it.id in DrillFocus.excluded(session.drillId) }.mapNotNull { cue ->
         val measurements = session.reps.mapNotNull { rep ->
             if (rep.startMs >= rep.endMs || rep.contactMs !in rep.startMs..rep.endMs) return@mapNotNull null
             val candidates = rep.cueScores.filter { it.cueId == cue.id }
@@ -153,7 +156,7 @@ object CoachAssessmentEngine {
         Skill.Serving -> "serve-standing-float" to "Serving Stance"
         Skill.Receiving -> "receive-wall-platform" to "Passing Platform"
         Skill.Setting -> "set-wall-reps" to "Setting Stance"
-        Skill.Spiking -> "spike-standing-swing" to "Spiking Arm Position"
+        Skill.Spiking -> "spike-standing-swing" to "Standing Spike"
         Skill.Blocking -> "block-ready-jumps" to "Blocking Stance"
     }
 

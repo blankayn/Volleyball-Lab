@@ -11,6 +11,7 @@ object ProfileCloudSchema {
         "name" to profile.name.trim().take(AthleteProfile.MAX_NAME_LENGTH),
         "firstName" to profile.firstName.trim().take(AthleteProfile.MAX_NAME_PART_LENGTH),
         "lastName" to profile.lastName.trim().take(AthleteProfile.MAX_NAME_PART_LENGTH),
+        "middleName" to profile.middleName.trim().take(AthleteProfile.MAX_NAME_PART_LENGTH),
         "position" to profile.position?.name,
         // No longer collected. Null (which the rules allow) clears a value older builds synced.
         "dominantHand" to null,
@@ -25,7 +26,7 @@ object ProfileCloudSchema {
     )
     fun seed(profile: AthleteProfile): Map<String, Any?> = fields(profile).filter { (key, value) ->
         when (key) {
-            "name", "firstName", "lastName", "goalText" -> value is String && value.isNotBlank()
+            "name", "firstName", "lastName", "middleName", "goalText" -> value is String && value.isNotBlank()
             "weeklySessionGoal" -> profile.trainingSetup?.plan != null || profile.weeklySessionGoal != 3
             else -> value != null
         }
@@ -38,6 +39,7 @@ object ProfileCloudSchema {
         name = (fields["name"] as? String) ?: local.name,
         firstName = (fields["firstName"] as? String) ?: local.firstName,
         lastName = (fields["lastName"] as? String) ?: local.lastName,
+        middleName = (fields["middleName"] as? String) ?: local.middleName,
         address = if (!fields.containsKey("address")) local.address else address(fields["address"]),
         position = if (fields.containsKey("position")) enumValue<com.volleyballlab.player.domain.model.CourtPosition>(fields["position"]) else local.position,
         goalSkill = if (fields.containsKey("goalSkill")) enumValue<com.volleyballlab.player.domain.model.Skill>(fields["goalSkill"]) else local.goalSkill,

@@ -23,9 +23,9 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-internal fun CoachingUnreadBadge(count: Int, summary: Boolean = false) {
+internal fun CoachingUnreadBadge(count: Int, summary: Boolean = false, description: String = "$count unread messages") {
     if (count > 0) Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
-        shape = CircleShape, modifier = Modifier.semantics { contentDescription = "$count unread messages" }) {
+        shape = CircleShape, modifier = Modifier.semantics { contentDescription = description }) {
         Text((if (count > 99) "99+" else "$count") + if (summary) " Unread" else "", Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) }
 }

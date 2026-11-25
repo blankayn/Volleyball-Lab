@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -58,23 +59,12 @@ private val CardShape = RoundedCornerShape(20.dp)
  */
 @Composable
 internal fun MyCoachCard(coach: CoachPreview, summary: CoachPublicSummary, onViewProfile: () -> Unit) {
-    val media = com.volleyballlab.player.feature.profile.rememberProfileMedia(coach.coachUid, coach = true)
-    val primary = MaterialTheme.colorScheme.primary
+    val trust = rememberCoachTrust(coach)
     HubSurface(onClick = onViewProfile) {
-      Column {
-        // Cover photo, with the coach's portrait overlapping its bottom edge.
-        Box(Modifier.fillMaxWidth().height(150.dp)) {
-            Box(Modifier.fillMaxWidth().height(116.dp)
-                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(primary.copy(alpha = .30f), primary.copy(alpha = .10f))))) {
-                com.volleyballlab.player.feature.profile.ProfileMediaImage(media.banner, "Coach cover photo", Modifier.matchParentSize())
-            }
-            Surface(Modifier.align(Alignment.BottomStart).padding(start = 18.dp), shape = RoundedCornerShape(23.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLowest) {
-                CoachAvatar(coach.coachUid, coach.initials(), Modifier.padding(3.dp).size(64.dp))
-            }
-        }
-        Row(Modifier.padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically,
+        // No cover photo: the panel found it misleading (24 November 2026).
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            CoachAvatar(coach.coachUid, coach.initials(), Modifier.size(64.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(coach.displayName(stringResource(R.string.coach_coach_default)),
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
@@ -83,10 +73,10 @@ internal fun MyCoachCard(coach: CoachPreview, summary: CoachPublicSummary, onVie
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = coachCardMuted(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 CoachMetaLine(summary)
+                CoachVerifiedBadge(trust)
             }
             Icon(Icons.Rounded.ChevronRight, "View coach profile", Modifier.size(20.dp), tint = coachCardMuted())
         }
-      }
     }
 }
 
@@ -128,6 +118,8 @@ internal fun MyCoachHubSections(
         .sortedBy { it.dueAtEpochMs ?: Long.MAX_VALUE }
     val reviewed = state.submissions.count { !it.isPending }
     val pending = state.submissions.count { it.isPending }
+    val newFeedback = rememberUnreadFeedback().size
+    val newFeedbackDescription = pluralStringResource(R.plurals.coach_feedback_unread, newFeedback, newFeedback)
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (!active) {
@@ -140,10 +132,10 @@ internal fun MyCoachHubSections(
                 }
             }
             if (state.submissions.isNotEmpty()) {
-                HubSurface { HubRow(Icons.Rounded.RateReview, "Past feedback", "$reviewed reviewed") { onOpen(CoachWorkspaceTab.Feedback) } }
+                HubSurface { HubRow(Icons.Rounded.RateReview, "Past feedback", "$reviewed reviewed", newFeedback, newFeedbackDescription) { onOpen(CoachWorkspaceTab.Feedback) } }
             }
         } else {
-        HubLabel("Up next")
+        HubLabel("Assigned by your coach")
         val next = open.firstOrNull()
         if (next != null) NextDrillCard(next, more = open.size - 1) { onOpenAssignment(next.id) }
         else HubSurface {
@@ -163,7 +155,7 @@ internal fun MyCoachHubSections(
                     pending > 0 -> "$pending waiting"
                     reviewed > 0 -> "$reviewed reviewed"
                     else -> "None yet"
-                }) { onOpen(CoachWorkspaceTab.Feedback) }
+                }, newFeedback, newFeedbackDescription) { onOpen(CoachWorkspaceTab.Feedback) }
                 HorizontalDivider(Modifier.padding(start = 58.dp), color = coachCardOutline())
                 HubRow(Icons.Rounded.Forum, CoachWorkspaceTab.Overview.label, null, unread) { onOpen(CoachWorkspaceTab.Overview) }
             }
@@ -207,14 +199,15 @@ internal fun MyCoachHubSections(
 }
 
 /** One tappable line in a grouped list: icon, label, what is waiting there, chevron. */
-@Composable internal fun HubRow(icon: ImageVector, label: String, detail: String?, unread: Int = 0, onClick: () -> Unit) {
+@Composable internal fun HubRow(icon: ImageVector, label: String, detail: String?, unread: Int = 0,
+    unreadDescription: String = "$unread unread messages", onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 60.dp)
         .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = coachCardMuted()) }
-        CoachingUnreadBadge(unread)
+        CoachingUnreadBadge(unread, description = unreadDescription)
         Icon(Icons.Rounded.ChevronRight, null, Modifier.size(20.dp), tint = coachCardMuted())
     }
 }

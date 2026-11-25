@@ -36,7 +36,7 @@ const CUES: Record<string, CueDef[]> = {
     { id: "SetExtensionFollowThrough", weight: 0.20, label: "Finish extended", tip: "Extend both arms upward evenly, then return to your starting posture.", unit: "deg", target: [155, 180] },
   ],
   Spiking: [
-    { id: "SpikeApproachLoad", weight: 0.20, label: "Load the knees", tip: "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.", unit: "deg", target: [80, 115] },
+    { id: "SpikeApproachLoad", weight: 0.20, label: "Load the knees", tip: "Bend your knees from a balanced stance, then straighten into the swing with both feet planted.", unit: "deg", target: [80, 115] },
     { id: "SpikeArmExtension", weight: 0.25, label: "Swing through full extension", tip: "Extend the raised arm above your shoulder within a comfortable range.", unit: "deg", target: [155, 180] },
     { id: "SpikeElbowHeight", weight: 0.20, label: "Keep the hitting elbow high", tip: "As you draw the hitting arm back, keep the elbow at or above shoulder height.", unit: "deg", target: [0, 90] },
     { id: "SpikeJumpHeight", weight: 0.20, label: "Get off the floor", tip: "Drive the hips upward. Measured against your own standing hip height.", unit: "m", target: [0.3, 1.0] },

@@ -22,7 +22,7 @@ enum class Facing {
     /** A quarter turn to the athlete's right, which puts their left shoulder nearest the lens. */
     Right,
 
-    /** Back toward the lens. */
+    /** Back toward the lens. No live session asks for it; it describes a body seen from behind. */
     Away,
 }
 
@@ -61,22 +61,20 @@ object FacingGuide {
             Stance(angle, if (near == Side.Right) Facing.Left else Facing.Right, near,
                 enforced = oneArmed && hittingSide != null)
         }
-        CameraAngle.Rear -> Stance(angle, Facing.Away)
-        CameraAngle.Front, CameraAngle.Unknown -> Stance(CameraAngle.Front, Facing.Forward)
+        // Live sessions are performed from the front and the side only.
+        CameraAngle.Front, CameraAngle.Rear, CameraAngle.Unknown -> Stance(CameraAngle.Front, Facing.Forward)
     }
 
     /** The short label for the live screen. */
     fun label(facing: Facing): String = when (facing) {
-        Facing.Forward -> "Face forward"
+        Facing.Forward, Facing.Away -> "Face forward"
         Facing.Left -> "Face left"
         Facing.Right -> "Face right"
-        Facing.Away -> "Face away"
     }
 
     /** The instruction that sends the athlete into [stance], spoken at a view change. */
     fun instruction(skill: Skill, stance: Stance): String = when (stance.facing) {
-        Facing.Forward -> "Face forward, toward the camera, with your whole body in view."
-        Facing.Away -> "Now turn your back to the camera. Keep your whole body in view."
+        Facing.Forward, Facing.Away -> "Face forward, toward the camera, with your whole body in view."
         Facing.Left, Facing.Right -> when {
             // The hand is a guess, so say what decides the direction.
             handUnknown(skill, stance) ->
@@ -96,15 +94,11 @@ object FacingGuide {
 
     /** [correction] with its short cue, for an athlete who has already heard it once. */
     fun correctionCue(skill: Skill, stance: Stance, observed: OrientationEstimate): SpokenCue? = when (stance.facing) {
-        Facing.Forward -> when (observed.angle) {
+        Facing.Forward, Facing.Away -> when (observed.angle) {
             CameraAngle.Front -> null
             CameraAngle.Rear -> SpokenCue("Turn around and face forward, toward the camera.", "Turn around, face the camera.")
             CameraAngle.Side -> SpokenCue("Face forward again. Turn your chest toward the camera.", "Face the camera.")
             CameraAngle.Unknown -> SpokenCue("Square up and face forward, chest toward the camera.", "Face the camera.")
-        }
-        Facing.Away -> when (observed.angle) {
-            CameraAngle.Rear -> null
-            else -> SpokenCue("Turn your back to the camera again for this view.", "Back to the camera.")
         }
         Facing.Left, Facing.Right -> when {
             observed.angle != CameraAngle.Side ->
@@ -128,7 +122,9 @@ object FacingGuide {
     fun freePracticeCorrection(observed: OrientationEstimate): String? = freePracticeCue(observed)?.full
 
     fun freePracticeCue(observed: OrientationEstimate): SpokenCue? =
-        if (observed.angle == CameraAngle.Unknown) {
+        if (observed.angle == CameraAngle.Rear) {
+            SpokenCue("Turn around and face forward, toward the camera.", "Turn around, face the camera.")
+        } else if (observed.angle == CameraAngle.Unknown) {
             SpokenCue("Square up: face forward toward the camera, or turn fully side-on.", "Square up.")
         } else null
 
@@ -150,8 +146,7 @@ object FacingGuide {
         }
         if (stance == null) return when (observed.angle) {
             CameraAngle.Side -> profile ?: Facing.Forward
-            CameraAngle.Rear -> Facing.Away
-            CameraAngle.Front, CameraAngle.Unknown -> Facing.Forward
+            CameraAngle.Front, CameraAngle.Rear, CameraAngle.Unknown -> Facing.Forward
         }
         val sideOn = stance.facing == Facing.Left || stance.facing == Facing.Right
         return if (sideOn && !stance.enforced && profile != null) profile else stance.facing

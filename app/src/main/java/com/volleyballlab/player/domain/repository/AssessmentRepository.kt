@@ -1,5 +1,7 @@
 package com.volleyballlab.player.domain.repository
 
+import com.volleyballlab.player.domain.model.AssessmentAnswers
+import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.SkillAssessment
 import com.volleyballlab.player.domain.model.TrainingSetup
 import kotlinx.coroutines.flow.first
@@ -24,7 +26,11 @@ import kotlinx.coroutines.flow.Flow
 interface AssessmentRepository {
 
     val trainingSetup: Flow<TrainingSetup?> get() = flowOf(null)
-    suspend fun saveTrainingSetup(setup: TrainingSetup) { error("Training setup is unavailable.") }
+    /** Saves the onboarding answers and marks onboarding done. The plan itself is in athleteAssessments. */
+    suspend fun complete(answers: AssessmentAnswers) { error("The assessment is unavailable.") }
+
+    /** The skills a new plan focuses on, for screens that show one skill. */
+    suspend fun applyFocus(uid: String, focus: List<Skill>) = Unit
     suspend fun currentHasOnboarded(): Boolean = hasOnboarded.first()
 
     /** The stored answers. [SkillAssessment.Unanswered] when there are none. */

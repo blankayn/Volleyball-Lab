@@ -62,10 +62,11 @@ service cloud.firestore {
         && boundedString(data.displayName, 60) && boundedString(data.email, 254)
         && validDate(data.createdAt) && validDate(data.updatedAt);
     }
+    // Written with few expressions: one request may evaluate 1000, and a full
+    // profile with an address and a training setup comes close. matches() refuses
+    // anything that is not a string.
     function validAddressOption(data) {
-      return data is map && data.keys().hasAll(['id', 'name']) && data.keys().hasOnly(['id', 'name'])
-        && boundedString(data.id, 32) && data.id.size() > 0
-        && boundedString(data.name, 160) && data.name.size() > 0;
+      return data is map && data.size() == 2 && data.id.matches('.{1,32}') && data.name.matches('.{1,160}');
     }
     function nullableAddressOption(data) {
       return data == null || validAddressOption(data);
@@ -85,16 +86,28 @@ service cloud.firestore {
     }
     function validSelfRatings(data) {
       return data is map && data.keys().hasOnly(['Serving', 'Receiving', 'Setting', 'Spiking', 'Blocking'])
-        && (!('Serving' in data) || data.Serving in ['Struggling', 'Okay', 'Confident'])
-        && (!('Receiving' in data) || data.Receiving in ['Struggling', 'Okay', 'Confident'])
-        && (!('Setting' in data) || data.Setting in ['Struggling', 'Okay', 'Confident'])
-        && (!('Spiking' in data) || data.Spiking in ['Struggling', 'Okay', 'Confident'])
-        && (!('Blocking' in data) || data.Blocking in ['Struggling', 'Okay', 'Confident']);
+        && data.values().hasOnly(['Struggling', 'Okay', 'Confident']);
     }
     function validSetupAssessment(data) {
-      return data is map && data.keys().hasOnly(['ratings', 'experience', 'completedAtEpochMs'])
+      return data is map && data.keys().hasOnly(['ratings', 'experience', 'completedAtEpochMs', 'answers', 'focus'])
         && validSelfRatings(data.ratings) && validSetupExperience(data.experience)
+        && (!('answers' in data) || validSkillCheck(data.answers))
+        && (!('focus' in data) || validFocus(data.focus))
         && validDate(data.completedAtEpochMs);
+    }
+    // The four statements asked about each of the five skills.
+    function validSkillCheck(data) {
+      return data is map && data.size() <= 20
+        && data.keys().hasOnly(['serving_ready', 'serving_movement', 'serving_control', 'serving_moving',
+          'receiving_ready', 'receiving_movement', 'receiving_control', 'receiving_moving',
+          'setting_ready', 'setting_movement', 'setting_control', 'setting_moving',
+          'spiking_ready', 'spiking_movement', 'spiking_control', 'spiking_moving',
+          'blocking_ready', 'blocking_movement', 'blocking_control', 'blocking_moving'])
+        && data.values().hasOnly(['Yes', 'Sometimes', 'NotYet', 'NotTried']);
+    }
+    function validFocus(data) {
+      return data is list && data.size() <= 5
+        && data.hasOnly(['Serving', 'Receiving', 'Setting', 'Spiking', 'Blocking']);
     }
     function starterMatches(skill, drill) {
       return (skill == 'Serving' && drill == 'serve-standing-float')
@@ -122,11 +135,12 @@ service cloud.firestore {
     }
     function isValidPrivateProfile(data) {
       return data.keys().hasAll(['updatedAt'])
-        && data.keys().hasOnly(['name', 'firstName', 'lastName', 'address', 'updatedAt', 'position',
+        && data.keys().hasOnly(['name', 'firstName', 'middleName', 'lastName', 'address', 'updatedAt', 'position',
           'dominantHand', 'goalSkill', 'weeklySessionGoal', 'goalText', 'trainingSetup'])
         && (!('name' in data) || boundedString(data.name, 81))
         && (!('firstName' in data) || boundedString(data.firstName, 40))
         && (!('lastName' in data) || boundedString(data.lastName, 40))
+        && (!('middleName' in data) || boundedString(data.middleName, 40))
         && (!('address' in data) || validProfileAddress(data.address))
         && (!('position' in data) || data.position == null || data.position in ['Setter', 'OutsideHitter', 'MiddleBlocker', 'Opposite', 'Libero'])
         && (!('dominantHand' in data) || data.dominantHand == null || data.dominantHand in ['Left', 'Right'])
@@ -139,15 +153,22 @@ service cloud.firestore {
     function validSpecialisation(value) {
       return value == null || value == 'AllAround' || validSkill(value);
     }
+    function validCoachingRole(data) {
+      return !('coachingRole' in data) || data.coachingRole in [null, 'HeadCoach', 'AssistantCoach', 'Trainer', 'PETeacher'];
+    }
     function validExperience(value) {
       return value == null || (value is number && value >= 0 && value <= 70);
     }
     function isValidCoach(data) {
-      return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
-          'licenceNumber', 'notifySubmissions', 'notifyWeeklyDigest', 'notifySafetyAlerts', 'updatedAt'])
+      // Specialisation is written only by older app versions.
+      return data.keys().hasOnly(['name', 'firstName', 'middleName', 'lastName', 'teamName', 'organisation',
+          'specialisation', 'coachingRole', 'yearsExperience', 'licenceNumber', 'notifySubmissions', 'notifyWeeklyDigest', 'notifySafetyAlerts', 'updatedAt'])
         && boundedString(data.name, 60) && boundedString(data.teamName, 48)
         && boundedString(data.organisation, 48) && boundedString(data.licenceNumber, 40)
-        && validSpecialisation(data.specialisation) && validExperience(data.yearsExperience)
+        && (!('firstName' in data) || boundedString(data.firstName, 40))
+        && (!('middleName' in data) || boundedString(data.middleName, 40))
+        && (!('lastName' in data) || boundedString(data.lastName, 40))
+        && (!('specialisation' in data) || validSpecialisation(data.specialisation)) && validCoachingRole(data) && validExperience(data.yearsExperience)
         && data.notifySubmissions is bool && data.notifyWeeklyDigest is bool
         && data.notifySafetyAlerts is bool && validDate(data.updatedAt);
     }
@@ -173,14 +194,15 @@ service cloud.firestore {
     }
     function isValidDirectory(data) {
       // Optional legacy fields were published by the original web projection.
-      return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'yearsExperience',
+      return data.keys().hasOnly(['name', 'teamName', 'organisation', 'specialisation', 'coachingRole', 'yearsExperience',
           'rosterSize', 'notifySubmissions', 'notifyWeeklyDigest', 'notifySafetyAlerts', 'updatedAt'])
         && boundedString(data.name, 60) && boundedString(data.teamName, 48)
         && (!('organisation' in data) || boundedString(data.organisation, 48))
         && (!('notifySubmissions' in data) || data.notifySubmissions is bool)
         && (!('notifyWeeklyDigest' in data) || data.notifyWeeklyDigest is bool)
         && (!('notifySafetyAlerts' in data) || data.notifySafetyAlerts is bool)
-        && validSpecialisation(data.specialisation) && validExperience(data.yearsExperience)
+        && (!('specialisation' in data) || validSpecialisation(data.specialisation)) && validCoachingRole(data)
+        && validExperience(data.yearsExperience)
         && data.rosterSize is int && data.rosterSize >= 0 && data.rosterSize <= 10000
         && validDate(data.updatedAt);
     }
@@ -212,10 +234,18 @@ service cloud.firestore {
         && validDate(data.submittedAt) && nullableDate(data.reviewedAt);
     }
     function isValidNote(data, id) {
-      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'text', 'createdAt'])
+      return data.keys().hasOnly(['id', 'coachUid', 'playerUid', 'sessionId', 'text', 'createdAt', 'videoMs', 'repNumber', 'hasPhoto'])
         && data.id == id && boundedString(data.id, 128) && validUid(data.coachUid) && validUid(data.playerUid)
         && (data.sessionId == null || validUid(data.sessionId))
-        && boundedString(data.text, 800) && data.text.size() > 0 && validDate(data.createdAt);
+        && boundedString(data.text, 800) && data.text.size() > 0 && validDate(data.createdAt)
+        && validNoteMoment(data)
+        && (!('hasPhoto' in data) || data.hasPhoto == true);
+    }
+    // A moment points into the session's own recording, so it needs the session;
+    // a rep number only labels that moment.
+    function validNoteMoment(data) {
+      return (!('videoMs' in data) || (data.videoMs is int && data.videoMs >= 0 && data.videoMs <= 3600000 && data.sessionId is string))
+        && (!('repNumber' in data) || ('videoMs' in data && data.repNumber is int && data.repNumber >= 1 && data.repNumber <= 1000));
     }
     function validSharedWith(values) {
       return values is list && values.size() <= 10
@@ -299,6 +329,43 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---- The athlete's assessment and plans ---------------------------------
+    // Kept apart from the profile, which is close to the limit of one request.
+    function validAnswers(a) {
+      return a is map && a.keys().hasOnly(['experience', 'position', 'preferred', 'goal', 'goalNote', 'days', 'minutes',
+          'weakPoints', 'weakNote', 'statements', 'savedAtEpochMs'])
+        && a.experience in ['New', 'Developing', 'Experienced']
+        && a.goal in ['LearnBasics', 'BeConsistent', 'MakeTheTeam', 'CompeteBetter', 'StayActive']
+        && a.preferred is list && a.preferred.size() <= 5 && a.weakPoints is list && a.weakPoints.size() <= 8
+        && boundedString(a.goalNote, 160) && boundedString(a.weakNote, 160)
+        && a.days is int && a.days >= 1 && a.days <= 7 && a.minutes in [15, 30, 45, 60, 90]
+        && a.statements is map && a.statements.size() <= 20 && validDate(a.savedAtEpochMs);
+    }
+    function validPlan(p) {
+      return p is map && p.keys().hasOnly(['id', 'createdAtEpochMs', 'analysis', 'measured', 'checks', 'changes'])
+        && boundedString(p.id, 64) && validDate(p.createdAtEpochMs)
+        && p.analysis is map && p.analysis.keys().hasOnly(['summary', 'strengths', 'weaknesses', 'improvements', 'focus', 'practices', 'weeklyGoals'])
+        && boundedString(p.analysis.summary, 420) && p.analysis.practices.size() <= 3
+        && p.analysis.strengths.size() <= 3 && p.analysis.weaknesses.size() <= 3 && p.analysis.improvements.size() <= 3
+        && p.measured is list && p.measured.size() <= 5 && p.checks is list && p.checks.size() <= 22
+        && p.changes is list && p.changes.size() <= 6;
+    }
+    match /athleteAssessments/{uid} {
+      allow read: if isUser(uid);
+      allow create, update: if isUser(uid) && notDeleting(uid)
+        && request.resource.data.keys().hasOnly(['version', 'answers', 'plan', 'updatedAt'])
+        && request.resource.data.version == 1 && validAnswers(request.resource.data.answers)
+        && (request.resource.data.get('plan', null) == null || validPlan(request.resource.data.plan))
+        && validDate(request.resource.data.updatedAt);
+      allow delete: if isUser(uid);
+      match /plans/{planId} {
+        allow read: if isUser(uid);
+        allow create: if isUser(uid) && notDeleting(uid) && validPlan(request.resource.data) && request.resource.data.id == planId;
+        allow update: if false;
+        allow delete: if isUser(uid);
+      }
+    }
+
     // Device tokens for training push. Keyed by token; a signed-in account may
     // claim the token for its own UID, and only that UID may remove it.
     match /pushTokens/{tokenId} {
@@ -368,6 +435,80 @@ service cloud.firestore {
       allow delete: if isUser(coachUid);
     }
 
+    // ---- Coach checks --------------------------------------------------------
+    // A coach publishes only what their signed-in token proves: that the email is
+    // confirmed, and its domain when it is a restricted school or government one.
+    function institutionDomain(domain) {
+      return domain.matches('([a-z0-9-]+[.])+((edu|gov)([.][a-z]{2})?|(ac|sch)[.][a-z]{2})');
+    }
+    function isCoach(uid) {
+      return exists(/databases/$(database)/documents/coachDirectory/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.role in ['COACH', 'Coach'];
+    }
+    match /coachTrust/{coachUid} {
+      allow read: if signedIn();
+      allow create, update: if isUser(coachUid) && notDeleting(coachUid) && isCoach(coachUid)
+        && request.auth.token.get('email_verified', false) == true
+        && request.resource.data.keys().hasAll(['institutionDomain', 'confirmedAt'])
+        && request.resource.data.keys().hasOnly(['institutionDomain', 'confirmedAt'])
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.institutionDomain is string
+        && (request.resource.data.institutionDomain == ''
+          || (institutionDomain(request.resource.data.institutionDomain)
+            && request.auth.token.email.lower().split('@')[1] == request.resource.data.institutionDomain));
+      allow delete: if isUser(coachUid);
+    }
+    // Coaches the project owner knows, set by hand in the Firebase console only.
+    match /coachVerified/{coachUid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    // One coach saying they know another. Only a coach with an institution email may.
+    match /coachVouches/{vouchId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCoach(request.auth.uid)
+        && request.resource.data.keys().hasAll(['coachUid', 'voucherUid', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['coachUid', 'voucherUid', 'createdAt'])
+        && request.resource.data.voucherUid == request.auth.uid
+        && validUid(request.resource.data.coachUid) && request.resource.data.coachUid != request.auth.uid
+        && notDeleting(request.resource.data.coachUid)
+        && vouchId == request.resource.data.coachUid + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/coachDirectory/$(request.resource.data.coachUid))
+        && get(/databases/$(database)/documents/coachTrust/$(request.auth.uid)).data.institutionDomain != ''
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.voucherUid == request.auth.uid;
+    }
+
+    // ---- Places on a coach's team ------------------------------------------
+    // Rules cannot count documents, so the players holding a place are listed here and
+    // accepting one commits both. Free holds three; Pro has no limit. A name leaves the
+    // list only when that player is no longer active, and at most five leave at once.
+    match /coachSlots/{coachUid} {
+      function shape() {
+        return request.resource.data.keys().hasAll(['players', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['players', 'updatedAt'])
+          && request.resource.data.players is list && request.resource.data.players.size() <= 500
+          && validDate(request.resource.data.updatedAt);
+      }
+      function withinPlan() {
+        return request.resource.data.players.size() <= 3 || hasPro();
+      }
+      function gone(removed, index) {
+        return removed.size() <= index
+          || getAfter(/databases/$(database)/documents/roster/$(coachUid)/members/$(removed[index])).data.status != 'Active';
+      }
+      function onlyDeparted(removed) {
+        return removed.size() <= 5 && gone(removed, 0) && gone(removed, 1) && gone(removed, 2) && gone(removed, 3) && gone(removed, 4);
+      }
+      allow get: if isUser(coachUid);
+      allow create: if isUser(coachUid) && notDeleting(coachUid) && shape() && withinPlan();
+      allow update: if isUser(coachUid) && notDeleting(coachUid) && shape()
+        && onlyDeparted(resource.data.players.removeAll(request.resource.data.players))
+        && (withinPlan() || request.resource.data.players.removeAll(resource.data.players).size() == 0);
+      allow delete: if false;
+    }
+
     // ---- Roster ------------------------------------------------------------
     // Player creates their OWN pending request; the coach answers; the player
     // may only ever move their own row to Ended (leave).
@@ -381,7 +522,10 @@ service cloud.firestore {
         && request.resource.data.status == 'Pending' && request.resource.data.decidedAt == null;
       allow update: if isValidMember(request.resource.data, playerUid)
         && notDeleting(coachUid) && notDeleting(playerUid)
-        && ((isUser(coachUid) && unchanged(['playerUid', 'playerName', 'position', 'requestedAt']))
+        && ((isUser(coachUid) && unchanged(['playerUid', 'playerName', 'position', 'requestedAt'])
+              // Accepting a player needs a place for them, see coachSlots.
+              && (request.resource.data.status != 'Active' || resource.data.status == 'Active'
+                || playerUid in getAfter(/databases/$(database)/documents/coachSlots/$(coachUid)).data.players))
           || (isUser(playerUid) && resource.data.playerUid == playerUid
             && ((request.resource.data.status == 'Ended'
                 && unchanged(['playerUid', 'playerName', 'position', 'requestedAt']))
@@ -633,6 +777,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---- Coach marks on reps ---------------------------------------------------
+    // A connected coach's Right or Wrong on one rep. The player's own app reads it and
+    // lets it outrank the camera. Nobody else can read it. Only the website checks that
+    // the coach is verified, because reviews and vouches cannot be counted here. Pro only.
+    function validRepLabel(data, labelId) {
+      let session = get(/databases/$(database)/documents/sessions/$(data.sessionId)).data;
+      return data.keys().hasAll(['sessionId', 'playerUid', 'coachUid', 'skill', 'repNumber', 'verdict', 'cueIds', 'createdAt'])
+        && data.keys().hasOnly(['sessionId', 'playerUid', 'coachUid', 'skill', 'repNumber', 'verdict', 'cueIds', 'createdAt'])
+        && data.createdAt == request.time && data.playerUid != data.coachUid
+        && session.ownerUid == data.playerUid && data.coachUid in session.sharedWith && session.skill == data.skill
+        && data.repNumber is int && data.repNumber >= 1 && data.repNumber <= session.repCount
+        && labelId == data.sessionId + '_' + string(data.repNumber) + '_' + data.coachUid
+        && data.cueIds is list && data.cueIds.size() <= 6
+        && (data.verdict == 'Wrong' || (data.verdict == 'Right' && data.cueIds.size() == 0))
+        && data.cueIds.hasOnly(['ServeContactArmExtension', 'ServeReachHeight', 'ServeTrunkLean', 'ServeTossArmLift', 'PassPlatformStraight',
+          'PassPlatformHeight', 'PassKneeFlexion', 'PassTrunkAngle', 'PassShouldersLevel', 'SetHandsAboveForehead',
+          'SetElbowFlexion', 'SetKneeFlexion', 'SetExtensionFollowThrough', 'SpikeApproachLoad', 'SpikeArmExtension',
+          'SpikeElbowHeight', 'SpikeTrunkDrive', 'BlockArmExtension', 'BlockHandSeparation', 'BlockPenetration',
+          'BlockKneeLoad']);
+    }
+    match /repLabels/{labelId} {
+      allow read: if signedIn()
+        && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+      allow create, update: if signedIn() && request.resource.data.coachUid == request.auth.uid
+        && hasPro()
+        && isActiveMember(request.auth.uid, request.resource.data.playerUid)
+        && validRepLabel(request.resource.data, labelId);
+      allow delete: if signedIn()
+        && (resource.data.coachUid == request.auth.uid || resource.data.playerUid == request.auth.uid);
+    }
+
     match /submissions/{submissionId} {
       // Transactions must be able to check for a receipt before creating it.
       // This grants no access to existing submissions or collection lists.
@@ -666,8 +841,40 @@ service cloud.firestore {
         && request.resource.data.coachUid == request.auth.uid
         && isValidNote(request.resource.data, noteId)
         && notDeleting(request.resource.data.playerUid)
-        && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(request.resource.data.playerUid));
+        && exists(/databases/$(database)/documents/roster/$(request.auth.uid)/members/$(request.resource.data.playerUid))
+        // A note that says it has a photo commits together with that photo.
+        && (!('hasPhoto' in request.resource.data) || existsAfter(/databases/$(database)/documents/noteMedia/$(noteId)));
       allow update, delete: if false;
+    }
+
+    // ---- Feedback photos ---------------------------------------------------
+    // One JPEG per note, kept apart so note lists stay small. Only the note's
+    // coach and player can open it. It is created in the same commit as its note
+    // and never replaced; the coach may remove it, leaving the written feedback.
+    match /noteMedia/{noteId} {
+      function noteAfter() {
+        return getAfter(/databases/$(database)/documents/notes/$(noteId)).data;
+      }
+      allow get: if signedIn() && (resource == null
+        || resource.data.coachUid == request.auth.uid
+        || resource.data.playerUid == request.auth.uid);
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll(['coachUid', 'playerUid', 'photo', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['coachUid', 'playerUid', 'photo', 'createdAt'])
+        && request.resource.data.coachUid == request.auth.uid
+        && validUid(request.resource.data.playerUid) && validDate(request.resource.data.createdAt)
+        && boundedString(request.resource.data.photo, 300000)
+        && request.resource.data.photo.matches('data:image/jpeg;base64,[A-Za-z0-9+/]+=*')
+        && !exists(/databases/$(database)/documents/notes/$(noteId))
+        && existsAfter(/databases/$(database)/documents/notes/$(noteId))
+        && noteAfter().coachUid == request.auth.uid
+        && noteAfter().playerUid == request.resource.data.playerUid
+        && noteAfter().hasPhoto == true
+        && hasPro()
+        && isActiveMember(request.auth.uid, request.resource.data.playerUid);
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.coachUid == request.auth.uid;
     }
 
     match /accountDeletions/{uid} {

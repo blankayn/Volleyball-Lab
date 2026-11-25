@@ -1,10 +1,13 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.AdaptiveCoaching
 import com.volleyballlab.player.domain.model.AthleteProfile
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.DrillFocus
 import com.volleyballlab.player.domain.model.CueId
+import com.volleyballlab.player.domain.model.CueTrend
 import com.volleyballlab.player.domain.model.ExperienceLevel
+import com.volleyballlab.player.domain.model.LearnedCue
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.TrainingSetupQuestions
@@ -22,6 +25,8 @@ data class LiveCoachingPlan(
     val lastTotalReps: Int? = null,
     val assignmentTitle: String? = null,
     val humanCoachName: String? = null,
+    /** What the player's own reps show about the first focus, or null while that is unknown. */
+    val learned: LearnedCue? = null,
 ) {
     val title: String get() = if (athleteName.isEmpty()) "Your live coach" else "$athleteName’s live coach"
 
@@ -29,11 +34,12 @@ data class LiveCoachingPlan(
      * The opening brief, one sentence per segment so speech can pause between
      * them. Every optional segment appears only when its stored fact exists.
      */
-    fun opening(skill: Skill, repsPerAngle: Int? = null): List<String> = buildList {
+    fun opening(skill: Skill, repsPerAngle: Int? = null, drillId: String? = null): List<String> = buildList {
         val returning = sessionsOnSkill > 0
         if (athleteName.isNotEmpty()) add(if (returning) "Welcome back, $athleteName." else "Hi $athleteName.")
         else if (returning) add("Welcome back.")
-        if (returning && lastSessionFocus != null) {
+        val learnedLine = learned?.let(::learnedLine)
+        if (learnedLine != null) add(learnedLine) else if (returning && lastSessionFocus != null) {
             add("Last time your ${CoachPhrasebook.focusName(lastSessionFocus)} needed the most work, so let's see it early.")
         }
         // A coach's title for the drill is read out. A free-text note never is.
@@ -41,8 +47,16 @@ data class LiveCoachingPlan(
             val who = humanCoachName?.let { "Coach $it" } ?: "Your coach"
             add("$who set this one: $title.")
         }
-        focusCueIds.firstOrNull()?.let { add("Today's about your ${CoachPhrasebook.focusName(it)}.") }
+        // The learned line already named the focus.
+        focusCueIds.firstOrNull()?.takeIf { learnedLine == null }?.let { add("Today's about your ${CoachPhrasebook.focusName(it)}.") }
         add(CoachPhrasebook.opening(skill, sessionsOnSkill))
+        val excluded = DrillFocus.excluded(drillId)
+        if (skill == Skill.Spiking && CueId.SpikeJumpHeight in excluded) {
+            add("Keep both feet planted throughout the swing.")
+            if (CueId.SpikeApproachLoad !in excluded) {
+                add("Bend your knees to load, then straighten as you swing overhead.")
+            }
+        }
         // Which way to face, before anything can be counted.
         add(FacingGuide.opening(repsPerAngle))
         // True: the director stays silent on form for the first two reps of a view.
@@ -57,7 +71,7 @@ data class LiveCoachingPlan(
         val earlier = sessions.filter { it.skill == skill && it.drillId == drillId }.sortedBy { it.startedAtEpochMs }
         val last = earlier.lastOrNull() ?: return copy(sessionsOnSkill = 0, lastSessionFocus = null,
             lastValidReps = null, lastTotalReps = null)
-        return copy(sessionsOnSkill = earlier.size, lastSessionFocus = last.weakestCue(),
+        return copy(sessionsOnSkill = earlier.size, lastSessionFocus = last.weakestCue()?.takeUnless { it in DrillFocus.excluded(drillId) },
             lastValidReps = last.angleStages.takeIf { it.isNotEmpty() }?.sumOf { it.validRepCount },
             lastTotalReps = last.repCount)
     }
@@ -68,8 +82,35 @@ data class LiveCoachingPlan(
      */
     fun withDrill(drillId: String): LiveCoachingPlan {
         val drill = DrillFocus.cues(drillId).takeIf { it.isNotEmpty() } ?: return this
-        return copy(focusCueIds = LinkedHashSet(drill + focusCueIds),
+        return copy(focusCueIds = LinkedHashSet(drill + (focusCueIds - DrillFocus.excluded(drillId))),
             focusLabel = "Your focus: ${CoachPhrasebook.focusName(drill.first())}")
+    }
+
+    /**
+     * Adapts the focus to what this player gets right and wrong. Called after [withDrill].
+     * Nothing known changes nothing.
+     */
+    fun withLearned(learned: List<LearnedCue>): LiveCoachingPlan {
+        if (learned.all { it.trend == CueTrend.Learning }) return this
+        val focus = AdaptiveCoaching.focus(focusCueIds, learned)
+        val first = focus.firstOrNull() ?: return this
+        val known = learned.firstOrNull { it.cue.id == first }?.takeIf { it.trend != CueTrend.Learning }
+        return copy(focusCueIds = focus, learned = known, focusLabel = "Your focus: ${CoachPhrasebook.focusName(first)}" + when (known?.trend) {
+            CueTrend.Improving -> " · improving"
+            CueTrend.Slipping -> " · slipping"
+            CueTrend.Solid -> " · solid"
+            else -> ""
+        })
+    }
+
+    private fun learnedLine(item: LearnedCue): String? = CoachPhrasebook.focusName(item.cue.id).let { name ->
+        when (item.trend) {
+            CueTrend.Slipping -> "Your $name has slipped lately, so we'll start there."
+            CueTrend.Improving -> "Your $name is getting better, so let's keep building it."
+            CueTrend.WorkOn -> "Your $name still has the most to gain, so we'll start there."
+            CueTrend.Solid -> "Your $name has been solid. Let's keep it that way."
+            CueTrend.Learning -> null
+        }
     }
 
     /** Only a short, speakable drill title and a first name come from the linked coach. */
@@ -115,8 +156,9 @@ data class LiveCoachingPlan(
     }
 }
 
+/** How a **counted** rep went. A rep that was wrong is not counted and has no verdict here; see [RepJudge]. */
 enum class LiveRepVerdict(val label: String) {
-    Good("Form target met"), Adjust("Needs work"), Partial("Partly assessed"), Unrated("Not assessed"),
+    Good("Form target met"), Adjust("Good rep, can improve"), Partial("Partly assessed"), Unrated("Not assessed"),
 }
 
 data class LiveRepFeedback(
@@ -132,6 +174,8 @@ data class LiveRepFeedback(
     val ack: String? = null,
     /** True when the director took this turn; the next rep is then a quiet count. */
     val directed: Boolean = false,
+    /** True when [ack] asked for a change or noted a limited view, rather than praising. */
+    val remarked: Boolean = false,
 ) {
     val countText: String get() = if (target == null) "Rep $totalReps" else "Rep $stageReps of $target"
 }
@@ -155,28 +199,59 @@ object PersonalizedLiveCoaching {
         val fault = measured.filter { it.score!! < 0.8f }.sortedWith(
             compareByDescending<CueLiveStatus> { it.cue.id in plan.focusCueIds }.thenBy { it.score },
         ).firstOrNull()
+        // A cue only a little outside its range is worth showing, not worth a remark
+        // on every rep: correct technique in coaching clips often has one.
+        val spokenFault = fault?.takeIf { it.score!! < SPOKEN_FAULT }
         val verdict = when {
+            // Everything this view reads was read; it just reads too little to judge.
+            // "Only part of your form was visible" would blame a body that was in view.
             measured.isEmpty() -> LiveRepVerdict.Unrated
+            angle == CameraAngle.Side && assessment.viewLimited && fault == null -> LiveRepVerdict.Partial
+            assessment.viewLimited && fault == null -> LiveRepVerdict.Unrated
+            assessment.viewLimited -> LiveRepVerdict.Adjust
             !assessment.isAssessable || assessment.score?.isFinite() != true -> LiveRepVerdict.Partial
             fault != null || !assessment.isGood -> LiveRepVerdict.Adjust
             else -> LiveRepVerdict.Good
         }
-        val detail = direction?.text ?: when (verdict) {
-            LiveRepVerdict.Unrated -> "Counted. I couldn't judge your form from this view."
+        val sideCue = if (angle == CameraAngle.Side && !assessment.isAssessable) {
+            when {
+                measured.isEmpty() -> "Keep your whole body in frame for the next rep."
+                spokenFault != null -> "Next rep: " + CoachPhrasebook.action(spokenFault.cue.id, spokenFault.measured!!)
+                    .replaceFirstChar { it.lowercase() } + "."
+                fault != null -> null
+                else -> {
+                    val cue = measured.firstOrNull { it.cue.id in plan.focusCueIds } ?: measured.first()
+                    "Your ${CoachPhrasebook.focusName(cue.cue.id)} looked good from the side."
+                }
+            }
+        } else null
+        val detail = direction?.text ?: sideCue ?: when (verdict) {
+            LiveRepVerdict.Unrated -> "Keep your hands and feet in frame for the next rep."
             LiveRepVerdict.Partial -> if (fault != null) "I could only check part of your form. Watch your ${CoachPhrasebook.focusName(fault.cue.id)}."
-                else "Counted. Only part of your form was visible."
-            LiveRepVerdict.Adjust -> if (stageReps == 1 && fault != null) "Your ${CoachPhrasebook.focusName(fault.cue.id)} needs work."
-                else "Form needs work."
+                else "Only part of your form was visible."
+            LiveRepVerdict.Adjust -> when {
+                fault == null -> "Keep refining your form."
+                spokenFault == null -> "Good rep. To polish: your ${CoachPhrasebook.focusName(fault.cue.id)}."
+                else -> "Next rep, work on your ${CoachPhrasebook.focusName(fault.cue.id)}."
+            }
             LiveRepVerdict.Good -> "Form target met."
         }
         val count = CoachPhrasebook.repCount(stageReps, target, totalReps)
         // The rep after a director turn is a quiet retry: the count and nothing else.
-        val quiet = direction == null && previous?.directed == true
-        val ack = if (direction != null || quiet) null else CoachPhrasebook.repAck(
-            verdict, fault?.cue?.id, totalReps, previous?.ack, firstOfStage = stageReps == 1,
-            stayWithFocus = fault != null && fault.cue.id in plan.focusCueIds)
+        // So is the one after a remark of the same kind, so it is never every rep. Praise may repeat.
+        val remark = verdict != LiveRepVerdict.Good && !(verdict == LiveRepVerdict.Adjust && spokenFault == null)
+        val quiet = direction == null && (previous?.directed == true ||
+            remark && stageReps > 1 && previous?.remarked == true)
+        val ack = if (direction != null || quiet) null else sideCue ?: CoachPhrasebook.repAck(
+            verdict, spokenFault?.cue?.id, totalReps, previous?.ack, firstOfStage = stageReps == 1,
+            stayWithFocus = spokenFault != null && spokenFault.cue.id in plan.focusCueIds)
         return LiveRepFeedback(totalReps, stageReps, target, verdict, detail,
             direction?.type ?: CoachingEventType.RepMilestone,
-            spokenText = CoachPhrasebook.repTurn(count, direction?.text ?: ack), ack = ack, directed = direction != null)
+            // The number is said first, so it is already clear that this rep counted.
+            spokenText = CoachPhrasebook.repTurn(count, direction?.text ?: ack), ack = ack, directed = direction != null,
+            remarked = remark && ack != null)
     }
+
+    /** A measured cue scoring below this is named aloud; above it, only on the card. */
+    private const val SPOKEN_FAULT = 0.5f
 }

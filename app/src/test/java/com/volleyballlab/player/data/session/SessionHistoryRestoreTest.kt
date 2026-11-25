@@ -81,6 +81,23 @@ class SessionHistoryRestoreTest {
         assertEquals(emptyList<SessionResult>(), repository.sessionsOf("original").first())
     }
 
+    @Test fun restoredVideoAttachesOnlyToTheExistingAccountSession() = runTest {
+        val auth = DrillTestAuth("player")
+        val repository = DataStoreSessionRepository(DrillTestStore(), auth, null, {}, backgroundScope)
+        repository.save(saved)
+        repository.attachRestoredVideo("player", saved.id, "/private/restored.mp4")
+        assertEquals("/private/restored.mp4", repository.byId(saved.id)?.videoPath)
+        repository.delete(saved.id)
+        repository.attachRestoredVideo("player", saved.id, "/private/late.mp4")
+        assertEquals(null, repository.byId(saved.id))
+        auth.switch("other")
+        repository.save(saved)
+        repository.attachRestoredVideo("player", saved.id, "/private/other.mp4")
+        assertEquals(null, repository.byId(saved.id)?.videoPath)
+        repository.attachRestoredVideo("other", "missing", "/private/missing.mp4")
+        assertEquals(null, repository.byId("missing"))
+    }
+
     private class TestCloud(private val load: suspend (String) -> List<SessionResult>) : SessionCloudStore {
         val uploads = mutableListOf<String>()
         override suspend fun loadHistory(ownerUid: String) = load(ownerUid)

@@ -6,7 +6,7 @@ import com.volleyballlab.player.domain.model.CoachAssignment
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.CoachPreview
 import com.volleyballlab.player.domain.model.CoachProfile
-import com.volleyballlab.player.domain.model.CoachSpecialisation
+import com.volleyballlab.player.domain.model.CoachingRole
 import com.volleyballlab.player.domain.model.CourtPosition
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.CueScore
@@ -44,9 +44,11 @@ object CloudSchema {
     const val DIRECTORY = "coachDirectory"
     const val ROSTER = "roster"
     const val MEMBERS = "members"
+    const val COACH_SLOTS = "coachSlots"
     const val ASSIGNMENTS = "assignments"
     const val SUBMISSIONS = "submissions"
     const val NOTES = "notes"
+    const val NOTE_MEDIA = "noteMedia"
     const val SESSIONS = "sessions"
 
     fun submissionId(coachUid: String, sessionId: String) = "${coachUid}_${sessionId}"
@@ -119,7 +121,7 @@ object CloudSchema {
         "name" to profile.name,
         "teamName" to profile.teamName,
         "organisation" to profile.organisation,
-        "specialisation" to profile.specialisation?.name,
+        "coachingRole" to profile.coachingRole?.name,
         "yearsExperience" to profile.yearsExperience,
         "licenceNumber" to profile.licenceNumber,
         "notifySubmissions" to profile.notifySubmissions,
@@ -132,9 +134,7 @@ object CloudSchema {
         name = str(data, "name"),
         teamName = str(data, "teamName"),
         organisation = str(data, "organisation"),
-        specialisation = strOrNull(data, "specialisation")?.let { raw ->
-            CoachSpecialisation.entries.firstOrNull { it.name == raw }
-        },
+        coachingRole = CoachingRole.of(strOrNull(data, "coachingRole")),
         yearsExperience = numOrNull(data, "yearsExperience")?.toInt(),
         licenceNumber = str(data, "licenceNumber"),
         notifySubmissions = bool(data, "notifySubmissions"),
@@ -147,7 +147,7 @@ object CloudSchema {
         "name" to profile.name,
         "teamName" to profile.teamName,
         "organisation" to profile.organisation,
-        "specialisation" to profile.specialisation?.name,
+        "coachingRole" to profile.coachingRole?.name,
         "yearsExperience" to profile.yearsExperience,
         "rosterSize" to rosterSize,
         "updatedAt" to nowMs,
@@ -262,16 +262,37 @@ object CloudSchema {
         "sessionId" to n.sessionId,
         "text" to n.text,
         "createdAt" to n.createdAtEpochMs,
+    ) + listOfNotNull(
+        // Written only when used, so a plain note is the same document as ever.
+        n.videoMs?.let { "videoMs" to it },
+        n.repNumber?.let { "repNumber" to it },
+        if (n.hasPhoto) "hasPhoto" to true else null,
     )
 
-    fun noteOf(data: Map<String, Any?>): CoachNote = CoachNote(
-        id = str(data, "id"),
-        coachUid = str(data, "coachUid"),
-        playerUid = str(data, "playerUid"),
-        sessionId = strOrNull(data, "sessionId"),
-        text = str(data, "text"),
-        createdAtEpochMs = num(data, "createdAt"),
+    /** `noteMedia/{noteId}`: the note's photo, committed together with the note. */
+    fun noteMediaDoc(n: CoachNote, photo: String): Map<String, Any?> = mapOf(
+        "coachUid" to n.coachUid,
+        "playerUid" to n.playerUid,
+        "photo" to photo,
+        "createdAt" to n.createdAtEpochMs,
     )
+
+    fun noteOf(data: Map<String, Any?>): CoachNote {
+        val sessionId = strOrNull(data, "sessionId")
+        // Unusable attachment values drop the attachment, never the written note.
+        val videoMs = numOrNull(data, "videoMs")?.takeIf { sessionId != null && it in 0..CoachNote.MAX_VIDEO_MS }
+        return CoachNote(
+            id = str(data, "id"),
+            coachUid = str(data, "coachUid"),
+            playerUid = str(data, "playerUid"),
+            sessionId = sessionId,
+            text = str(data, "text"),
+            createdAtEpochMs = num(data, "createdAt"),
+            videoMs = videoMs,
+            repNumber = numOrNull(data, "repNumber")?.takeIf { videoMs != null && it in 1..CoachNote.MAX_REP }?.toInt(),
+            hasPhoto = data["hasPhoto"] == true,
+        )
+    }
 
     // ------------------------------------------------------------------
     // sessions/{id} — scores only; pose data never leaves the phone.

@@ -13,10 +13,15 @@ class FacingGuideTest {
     private val detector = CameraOrientationDetector()
     private fun seen(view: Facing) = detector.detect(Rig.Standing.frame(0L, view))
 
-    @Test fun `every skill faces forward for the front view and away for the rear view`() {
+    @Test fun `every skill faces forward for the front view and no live view turns the back to the camera`() {
         Skill.All.forEach { skill ->
             assertEquals(Facing.Forward, FacingGuide.stance(skill, CameraAngle.Front).facing)
-            assertEquals(Facing.Away, FacingGuide.stance(skill, CameraAngle.Rear).facing)
+            CameraAngle.entries.forEach { angle ->
+                val stance = FacingGuide.stance(skill, angle)
+                assertTrue(stance.facing != Facing.Away)
+                val words = FacingGuide.instruction(skill, stance) + FacingGuide.label(stance.facing)
+                assertFalse(words, Regex("\\b(back to|your back|away|rear)\\b", RegexOption.IGNORE_CASE).containsMatchIn(words))
+            }
             assertTrue(FacingGuide.instruction(skill, FacingGuide.stance(skill, CameraAngle.Front)).startsWith("Face forward"))
         }
     }
@@ -77,8 +82,9 @@ class FacingGuideTest {
             .startsWith("Turn side-on again. Turn to your left"))
     }
 
-    @Test fun `free practice accepts any readable view and refuses a half turn`() {
-        Facing.entries.forEach { assertNull(FacingGuide.freePracticeCorrection(seen(it))) }
+    @Test fun `free practice accepts the front and either side and refuses the back and a half turn`() {
+        listOf(Facing.Forward, Facing.Left, Facing.Right).forEach { assertNull(FacingGuide.freePracticeCorrection(seen(it))) }
+        assertTrue(FacingGuide.freePracticeCorrection(seen(Facing.Away))!!.startsWith("Turn around and face forward"))
         val halfTurned = OrientationEstimate(CameraAngle.Unknown)
         assertTrue(FacingGuide.freePracticeCorrection(halfTurned)!!.startsWith("Square up"))
     }

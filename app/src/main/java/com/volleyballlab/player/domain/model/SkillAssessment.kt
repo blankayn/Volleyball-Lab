@@ -2,6 +2,8 @@ package com.volleyballlab.player.domain.model
 
 import androidx.annotation.StringRes
 import com.volleyballlab.player.R
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -48,12 +50,24 @@ enum class ExperienceLevel(@param:StringRes val label: Int) {
  *   "said Okay".
  * @param completedAtEpochMs when the questionnaire was finished, so the dashboard
  *   can say how old the advice it is giving actually is.
+ *
+ * ## Ratings and experience are no longer asked
+ *
+ * [ratings] and [experience] were labels the player had to pick for themselves
+ * (Struggling, Okay, Confident; New, Developing, Experienced). Since 25 November 2026
+ * the setup asks [SkillCheck]'s statements instead. Both are kept so accounts that
+ * answered earlier are not lost, and are used only where there are no [answers].
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SkillAssessment(
     val ratings: Map<Skill, SelfRating> = emptyMap(),
     val experience: ExperienceLevel? = null,
     val completedAtEpochMs: Long = 0L,
+    /** Answers to [SkillCheck]. Left out of the saved form when there are none. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val answers: Map<String, CanDo> = emptyMap(),
+    /** The skills the player chose to work on, in their order. */
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val focus: List<Skill> = emptyList(),
 ) {
     val isComplete: Boolean get() = ratings.size == Skill.All.size
 

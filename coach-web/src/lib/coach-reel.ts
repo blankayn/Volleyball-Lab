@@ -1,5 +1,4 @@
-import { cueDefinition, formatMeasured, formatTarget } from "./cues";
-import { esc } from "./format";
+import { cueDefinition } from "./cues";
 
 type Point = { x: number; y: number; confidence: number };
 type Frame = { timestampMs: number; points: Point[] };
@@ -61,12 +60,12 @@ export function buildCoachReel(data: unknown): ReelClip[] {
 export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data: unknown): () => void {
   const clips = buildCoachReel(data);
   host.hidden = false;
-  host.innerHTML = `<h4>Coach Reel</h4><p class="muted">Selected measured corrections from this recording. Automated practice guidance; add your professional assessment in Coach Feedback below.</p>`;
+  host.innerHTML = `<h4>Coach Reel</h4>`;
   if (!clips.length) {
-    host.innerHTML += `<p>No eligible correction clips in the saved pose data. You can still review the full recording and provide Coach Feedback.</p>`;
+    host.innerHTML += `<p class="muted">No reps need a closer look in the saved pose data. You can still watch the full recording.</p>`;
     return () => { host.replaceChildren(); host.hidden = true; };
   }
-  host.innerHTML += `<div class="chip-row"><button type="button" class="btn btn-primary btn-sm" data-reel-play>Play Coach Reel</button><button type="button" class="btn btn-ghost btn-sm" data-reel-full>Full Recording</button></div><div class="chip-row" style="margin-top:8px">${clips.map((c, i) => `<button type="button" class="btn btn-ghost btn-sm" data-reel-clip="${i}">${esc(c.rep.angle && c.rep.angle !== "Unknown" ? c.rep.angle + " · " : "")}Rep ${c.rep.repNumber}</button>`).join("")}</div><p data-reel-comment role="status" aria-live="polite"></p>`;
+  host.innerHTML += `<div class="reel-bar"><p class="muted">${clips.length === 1 ? `Plays rep ${clips[0]!.rep.repNumber}, the one to work on.` : `Plays the ${clips.length} reps to work on, most important first.`}</p><div class="chip-row"><button type="button" class="btn btn-primary btn-sm" data-reel-play>Play Coach Reel</button><button type="button" class="btn btn-ghost btn-sm" data-reel-full>Back to start</button></div></div><p data-reel-comment role="status" aria-live="polite"></p>`;
   let current = -1, running = false, disposed = false;
   let animation = 0, frozen = -1;
   let hold: ReturnType<typeof setTimeout> | undefined;
@@ -76,9 +75,9 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
   const show = (index: number) => {
     const clip = clips[index]!;
     const cue = cueDefinition(clip.issue.cueId);
-    comment.textContent = cue ? `${cue.label}: ${formatMeasured(clip.issue.measured, cue.unit)} (practice range ${formatTarget(cue.target, cue.unit)}). ${cue.tip}` : "This measured position was outside the practice range.";
+    comment.textContent = `Rep ${clip.rep.repNumber} (${index + 1} of ${clips.length}): ${cue ? cue.label : "outside the practice range"}.`;
+    video.dispatchEvent(new CustomEvent("reelrep", { detail: clip.rep.repNumber }));
     video.dispatchEvent(new CustomEvent("reelhighlight", { detail: clip.issue.points }));
-    host.querySelectorAll<HTMLButtonElement>("[data-reel-clip]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.reelClip) === index)));
   };
   const play = () => { void video.play().catch(() => { stop(); comment.textContent = "Playback could not start. Use the video controls to retry."; }); };
   const start = (index: number) => {
@@ -109,11 +108,10 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
     if (!button) return;
     stop();
     if (button.hasAttribute("data-reel-full")) {
-      current = -1; video.pause(); video.currentTime = 0; comment.textContent = "Full recording selected. Use the video controls to play or scrub.";
+      current = -1; video.pause(); video.currentTime = 0; comment.textContent = "";
       video.dispatchEvent(new CustomEvent("reelhighlight", { detail: [] }));
-      host.querySelectorAll("[data-reel-clip]").forEach(b => b.setAttribute("aria-pressed", "false"));
-    } else if (button.hasAttribute("data-reel-play") || button.dataset.reelClip !== undefined) {
-      running = true; start(Number(button.dataset.reelClip ?? 0)); animation = window.requestAnimationFrame(update);
+    } else if (button.hasAttribute("data-reel-play")) {
+      running = true; start(0); animation = window.requestAnimationFrame(update);
     }
   };
   // Pause keeps the current clip; play resumes its bounds. Scrubbing outside it returns to full recording.
@@ -127,13 +125,12 @@ export function attachCoachReel(video: HTMLVideoElement, host: HTMLElement, data
   const onRepSeek = () => {
     stop(); current = -1; comment.textContent = "";
     video.dispatchEvent(new CustomEvent("reelhighlight", { detail: [] }));
-    host.querySelectorAll("[data-reel-clip]").forEach(b => b.setAttribute("aria-pressed", "false"));
   };
   const onSeek = () => {
     const clip = clips[current];
     if (clip && (video.currentTime * 1000 < clip.startMs - 100 || video.currentTime * 1000 > clip.endMs + 100)) {
       stop(); video.dispatchEvent(new CustomEvent("reelhighlight", { detail: [] }));
-      comment.textContent = "Full recording selected after seeking outside the clip.";
+      comment.textContent = "";
     }
   };
   host.addEventListener("click", onClick);

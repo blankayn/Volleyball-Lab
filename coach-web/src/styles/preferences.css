@@ -227,3 +227,35 @@ html[data-portal-motion="reduced"] { scroll-behavior: auto; }
   .profile-photo-row { gap: 14px; }
   .settings-select-row { gap: 10px; }
 }
+
+/* Coach checks */
+.trust-status { display: inline-flex; align-items: center; gap: 8px; margin: 14px 0 6px; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.trust-status svg { width: 15px; height: 15px; }
+.trust-team, .trust-institution, .trust-passed { background: color-mix(in srgb, #1f7a4d 16%, transparent); }
+.trust-intro { font-size: 13px; line-height: 1.55; margin: 6px 0; }
+.trust-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 12px; }
+.trust-list li { display: flex; gap: 10px; align-items: flex-start; }
+.trust-list strong { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+.trust-list small { color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
+.trust-mark { flex: 0 0 20px; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; }
+.trust-mark svg { width: 13px; height: 13px; }
+.trust-list .is-passed .trust-mark { border-color: #1f7a4d; background: #1f7a4d; color: #fff; }
+.trust-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 14px; }
+.trust-row .field { flex: 1 1 200px; min-width: 0; margin: 0; }
+.trust-row small { display: block; margin-top: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.trust-mine { list-style: none; padding: 0; margin: 10px 0 0; font-size: 13px; }
+.trust-message { min-height: 1.4em; margin: 10px 0 0; font-size: 13px; color: var(--ink); }
+
+/* Plan */
+.plan-now { margin: 14px 0 10px; }
+.plan-table-wrap { overflow-x: auto; }
+.plan-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.plan-table th, .plan-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.plan-table thead th { color: var(--ink-faint); font-weight: 600; }
+.plan-table thead .is-current { color: var(--rust); }
+.plan-table tbody th { font-weight: 500; color: var(--ink); }
+.plan-table .is-off { color: var(--ink-faint); }
+.plan-price { margin: 16px 0 10px; font-weight: 600; }
+.plan-message { min-height: 1.4em; margin: 10px 0 0; font-size: 13px; }
+.plan-limit { margin: 0 0 16px; color: var(--ink-soft); }
+.plan-hint { align-self: center; font-size: 13px; }

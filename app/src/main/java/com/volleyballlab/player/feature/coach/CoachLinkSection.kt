@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -304,6 +305,15 @@ fun CoachLinkSection(
                 Spacer(Modifier.height(12.dp))
                 Text("Your assignments, feedback history, and coaching questions are in your coach workspace.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
+                val newFeedback = rememberUnreadFeedback().size
+                if (newFeedback > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CoachingUnreadBadge(newFeedback, description = "")
+                        Text(pluralStringResource(R.plurals.coach_feedback_unread_line, newFeedback),
+                            style = MaterialTheme.typography.titleSmall)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
                 Button(onClick = onMyCoach, modifier = Modifier.fillMaxWidth()) { Text("Open My coach") }
             }
 

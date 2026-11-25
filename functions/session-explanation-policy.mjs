@@ -25,7 +25,7 @@ export const SESSION_CUES = {
     cue("SetExtensionFollowThrough", "Finish extended", "deg", [155, 180], "Extend both arms upward evenly, then return to your starting posture."),
   ],
   Spiking: [
-    cue("SpikeApproachLoad", "Load the knees", "deg", [80, 115], "Bend the knees from a balanced stance before an in-place jump. Take off from the same spot."),
+    cue("SpikeApproachLoad", "Load the knees", "deg", [80, 115], "Bend your knees from a balanced stance, then straighten into the swing with both feet planted."),
     cue("SpikeArmExtension", "Swing through full extension", "deg", [155, 180], "Extend the raised arm above your shoulder within a comfortable range."),
     cue("SpikeJumpHeight", "Get off the floor", "m", [0.3, 1], "Drive the hips upward through the jump."),
     cue("SpikeTrunkDrive", "Control the trunk", "deg", [-5, 25], "Keep your trunk controlled as your raised arm extends overhead."),

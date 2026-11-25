@@ -1,7 +1,10 @@
-import { getProfile, getRoster, saveProfile } from "../lib/cloud";
+import { SLOW_SAVE, withSlowNotice } from "../lib/pending";
+import { COACHING_ROLES, displayName, getProfile, getRoster, saveProfile } from "../lib/cloud";
 import { profileHeader } from "../lib/profile-header";
 import { sendEmailVerification } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { trustSection, wireTrust } from "./account-trust";
+import { planSection, wirePlan } from "./account-plan";
 import { loadPreferences, savePreferences } from "../lib/account-settings";
 import { esc, initials } from "../lib/format";
 import { icon, type IconName } from "../lib/icons";
@@ -18,11 +21,14 @@ function toggle(key: keyof PortalPreferences, title: string, description: string
 export async function renderAccount(coachUid: string): Promise<string> {
   const profile = await getProfile(coachUid);
   const prefs = getPreferences();
-  const specOptions = ["AllAround", "Serving", "Receiving", "Setting", "Spiking", "Blocking"]
-    .map((name) => `<option value="${name}"${(profile.specialisation ?? "AllAround") === name ? " selected" : ""}>${name === "AllAround" ? "All-around" : name}</option>`).join("");
+  const roleOptions = `<option value=""${profile.coachingRole ? "" : " selected"}>Not set</option>` + COACHING_ROLES
+    .map(([role, label]) => `<option value="${role}"${profile.coachingRole === role ? " selected" : ""}>${label}</option>`).join("");
+  // Accounts made before names were split start from the name they have.
+  const words = profile.name.trim().split(/\s+/).filter(Boolean);
+  const names = { first: profile.firstName || words.slice(0, words.length > 1 ? -1 : undefined).join(" "), middle: profile.middleName, last: profile.lastName || (words.length > 1 ? words[words.length - 1]! : "") };
   return `<div class="account-settings">
     <div class="settings-intro"><div><p class="eyebrow">Make it yours</p><h2>Your account &amp; preferences</h2><p class="muted">Your coaching profile, your workspace, your way.</p></div><span class="settings-save-status" id="preferences-status" role="status" aria-live="polite"></span></div>
-    <nav class="settings-nav" aria-label="Account sections"><a href="#profile-settings">Profile &amp; team</a><a href="#appearance-settings">Appearance</a><a href="#accessibility-settings">Accessibility</a><a href="#notification-settings">Notifications</a></nav>
+    <nav class="settings-nav" aria-label="Account sections"><a href="#profile-settings">Profile &amp; team</a><a href="#plan-settings">Plan</a><a href="#trust-settings">Verification</a><a href="#appearance-settings">Appearance</a><a href="#accessibility-settings">Accessibility</a><a href="#notification-settings">Notifications</a></nav>
     <div class="settings-columns">
       <section class="settings-card settings-profile" aria-labelledby="profile-settings">
         ${heading("profile-settings", "01", "Profile &amp; team", "user")}
@@ -41,30 +47,32 @@ export async function renderAccount(coachUid: string): Promise<string> {
           </dialog>
           <div class="profile-media-toolbar"><button class="photo-remove" type="button" id="remove-profile-photo"${prefs.photo ? "" : " hidden"}>Remove profile picture</button><button class="photo-remove" type="button" id="remove-profile-banner"${prefs.banner ? "" : " hidden"}>Remove cover photo</button></div>
           <div id="photo-status" role="status" aria-live="polite"></div><div id="banner-status" role="status" aria-live="polite"></div>
-          <div class="form-grid"><div class="field"><label for="p-name">Display name</label><input id="p-name" required maxlength="60" value="${esc(profile.name)}" autocomplete="name" /></div><div class="field"><label for="p-team">Team name</label><input id="p-team" maxlength="48" value="${esc(profile.teamName)}" /></div></div>
+          <div class="form-grid"><div class="field"><label for="p-first">First name</label><input id="p-first" required maxlength="40" value="${esc(names.first)}" autocomplete="given-name" /></div><div class="field"><label for="p-middle">Middle name</label><input id="p-middle" maxlength="40" value="${esc(names.middle)}" autocomplete="additional-name" /></div></div>
+          <div class="form-grid"><div class="field"><label for="p-last">Last name</label><input id="p-last" required maxlength="40" value="${esc(names.last)}" autocomplete="family-name" /></div><div class="field"><label for="p-team">Team name</label><input id="p-team" maxlength="48" value="${esc(profile.teamName)}" /></div></div>
           <div class="field"><label for="p-org">School or club</label><input id="p-org" maxlength="48" value="${esc(profile.organisation)}" autocomplete="organization" /></div>
-          <div class="form-grid"><div class="field"><label for="p-spec">Coaching specialization</label><select id="p-spec">${specOptions}</select></div><div class="field"><label for="p-years">Years coaching</label><input id="p-years" type="number" min="0" max="70" step="1" value="${profile.yearsExperience ?? ""}" /></div></div>
+          <div class="form-grid"><div class="field"><label for="p-role">Coaching role</label><select id="p-role">${roleOptions}</select></div><div class="field"><label for="p-years">Years coaching</label><input id="p-years" type="number" min="0" max="70" step="1" value="${profile.yearsExperience ?? ""}" /></div></div>
           <div class="field"><label for="p-certifications">Certifications</label><textarea id="p-certifications" maxlength="1200" rows="3" placeholder="Coaching qualifications, courses or accreditations">${esc(prefs.certifications)}</textarea></div>
-          <div class="field"><label for="p-licence">Certification / licence number</label><input id="p-licence" maxlength="40" value="${esc(profile.licenceNumber)}" /></div>
           <div class="settings-form-footer"><button class="btn btn-primary" type="submit">Save profile ${icon("check")}</button><span id="profile-saved" role="status" aria-live="polite"></span></div>
         </form>
       </section>
       <div class="settings-stack">
+        ${planSection(heading("plan-settings", "02", "Plan", "shield"))}
+        ${trustSection(heading("trust-settings", "03", "Verification", "shield"))}
         <section class="settings-card" aria-labelledby="appearance-settings">
-          ${heading("appearance-settings", "02", "Appearance", "palette")}
+          ${heading("appearance-settings", "04", "Appearance", "palette")}
           <fieldset class="settings-fieldset"><legend>Theme</legend><div class="theme-options">${([ ["light", "Light", "sun"], ["dark", "Dark", "moon"], ["system", "System", "monitor"] ] as const).map(([value, label, symbol]) => `<label class="theme-option"><input type="radio" name="theme" value="${value}" data-preference="theme"${prefs.theme === value ? " checked" : ""} /><span>${icon(symbol)}${label}</span></label>`).join("")}</div></fieldset>
           <fieldset class="settings-fieldset"><legend>Interface color</legend><div class="accent-options">${([ ["rust", "Terracotta"], ["forest", "Forest"], ["plum", "Plum"] ] as const).map(([value, label]) => `<label class="accent-option accent-${value}"><input type="radio" name="accent" value="${value}" data-preference="accent"${prefs.accent === value ? " checked" : ""} /><span><i aria-hidden="true"></i>${label}</span></label>`).join("")}</div></fieldset>
           <div class="settings-select-row"><label for="setting-density">Layout density</label><select id="setting-density" data-preference="density"><option value="comfortable"${prefs.density === "comfortable" ? " selected" : ""}>Comfortable</option><option value="compact"${prefs.density === "compact" ? " selected" : ""}>Compact</option></select></div>
         </section>
         <section class="settings-card" aria-labelledby="accessibility-settings">
-          ${heading("accessibility-settings", "03", "Accessibility", "accessibility")}
+          ${heading("accessibility-settings", "05", "Accessibility", "accessibility")}
           <div class="settings-select-row"><label for="setting-textSize">Text size</label><select id="setting-textSize" data-preference="textSize"><option value="normal"${prefs.textSize === "normal" ? " selected" : ""}>Default · 100%</option><option value="large"${prefs.textSize === "large" ? " selected" : ""}>Large · 110%</option><option value="larger"${prefs.textSize === "larger" ? " selected" : ""}>Larger · 120%</option></select></div>
           ${toggle("highContrast", "High contrast", "Stronger text and clearer borders", prefs.highContrast)}
           ${toggle("reduceMotion", "Reduce animations", "Keep movement to a minimum", prefs.reduceMotion)}
           ${toggle("enhancedFocus", "Enhanced keyboard focus", "A clearer outline as you use Tab", prefs.enhancedFocus)}
         </section>
         <section class="settings-card" aria-labelledby="notification-settings">
-          ${heading("notification-settings", "04", "Notifications", "bell")}
+          ${heading("notification-settings", "06", "Notifications", "bell")}
           ${toggle("submissionAlerts", "Player submissions", "New sessions ready for your review", prefs.submissionAlerts)}
           ${toggle("deadlineReminders", "Assignment deadlines", "Drills due within the next 24 hours", prefs.deadlineReminders)}
           ${toggle("trainingNotifications", "Training sessions", "New training shared with your team", prefs.trainingNotifications)}
@@ -101,6 +109,8 @@ async function photoData(file: File): Promise<string> {
 export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity: () => void): () => void {
   const account = root.querySelector<HTMLElement>(".account-settings");
   if (!account) return () => {};
+  wirePlan(account, coachUid);
+  wireTrust(account, coachUid);
   const status = account.querySelector<HTMLElement>("#preferences-status")!;
   let timer = 0;
   let revision = 0;
@@ -264,7 +274,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
   });
   function coverStatusClear() { bannerStatus.textContent = ""; }
   const showPhoto = () => {
-    preview.innerHTML = pendingPhoto ? `<img src="${esc(pendingPhoto)}" alt="Your profile picture" />` : `<span>${esc(initials((account.querySelector<HTMLInputElement>("#p-name")?.value || "Coach")))}</span>`;
+    preview.innerHTML = pendingPhoto ? `<img src="${esc(pendingPhoto)}" alt="Your profile picture" />` : `<span>${esc(initials(["#p-first", "#p-last"].map((id) => account.querySelector<HTMLInputElement>(id)?.value ?? "").join(" ").trim() || "Coach"))}</span>`;
     remove.hidden = !pendingPhoto;
   };
   photoInput.addEventListener("change", async () => {
@@ -306,7 +316,7 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
     if (processingPhoto || processingBanner) return;
     const result = account.querySelector<HTMLElement>("#profile-saved")!;
     const value = (id: string) => (form.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`#${id}`)?.value ?? "").trim();
-    if (!value("p-name")) { result.textContent = "Enter your display name."; return; }
+    if (!value("p-first") || !value("p-last")) { result.textContent = "Enter your first and last name."; return; }
     submit.disabled = true;
     photoInput.disabled = true;
     bannerInput.disabled = true; bannerRemove.disabled = true;
@@ -324,9 +334,10 @@ export function wireAccount(root: HTMLElement, coachUid: string, refreshIdentity
       const [profile, roster] = await Promise.all([getProfile(coachUid), getRoster(coachUid)]);
       const years = Number.parseInt(value("p-years"), 10);
       const next = { ...getPreferences(), photo: pendingPhoto, banner: pendingBanner, certifications: value("p-certifications") };
-      const outcome = await saveProfile(coachUid, { ...profile, name: value("p-name"), teamName: value("p-team"), organisation: value("p-org"), specialisation: value("p-spec") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, licenceNumber: value("p-licence"), notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next, portraitChanged, bannerChanged);
+      const outcome = await withSlowNotice(saveProfile(coachUid, { ...profile, name: displayName(value("p-first"), value("p-middle"), value("p-last")), firstName: value("p-first"), middleName: value("p-middle"), lastName: value("p-last"), teamName: value("p-team"), organisation: value("p-org"), coachingRole: value("p-role") || null, yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null, notifySubmissions: next.submissionAlerts }, roster.filter((member) => member.status === "Active").length, next, portraitChanged, bannerChanged), () => { result.textContent = SLOW_SAVE; result.classList.add("is-warning"); });
       if (outcome.preferencesSaved) { portraitChanged = false; bannerChanged = false; }
       updatePreferences(coachUid, next);
+      result.classList.remove("is-warning");
       result.textContent = outcome.preferencesSaved
         ? "Profile saved"
         : "Profile saved. Photo and certifications are kept on this browser; cloud sync is unavailable.";

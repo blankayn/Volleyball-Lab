@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="score_how_title">How this score was computed</string>
+    <string name="score_how_open">Show the computation</string>
+    <string name="score_how_close">Hide the computation</string>
+    <string name="score_how_intro">Each check gets a score from 0 to 100. That score is multiplied by the check’s share, and the points are added together.</string>
+    <string name="score_how_points">%1$s points</string>
+    <string name="score_how_measured">Middle value %1$s · range %2$s to %3$s · inside in %4$d of %5$d reps</string>
+    <string name="score_how_working">Check score %1$d × share %2$s%%</string>
+    <string name="score_how_total">%1$s = %2$d</string>
+    <string name="score_how_no_total">No score: the camera measured %1$d%% of this drill’s checks by weight. It needs %2$d%%.</string>
+    <string name="score_how_coverage">The camera measured %1$d%% of this drill’s checks by weight (needs %2$d%%).</string>
+    <string name="score_how_empty">No check was measured in at least %1$d reps, so nothing was scored.</string>
+    <string name="score_how_limits">A rep scores 100 on a check inside the range and loses points evenly outside it. A check counts after %1$d measured reps; unmeasured checks are left out, not scored zero. The ranges are provisional until coaches review them.</string>
+</resources>

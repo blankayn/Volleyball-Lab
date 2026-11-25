@@ -45,6 +45,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
+import com.volleyballlab.player.domain.model.CoachPlan
+import com.volleyballlab.player.domain.model.UserPlan
 import com.volleyballlab.player.domain.model.PlayerSnapshot
 import com.volleyballlab.player.domain.model.RosterMember
 import com.volleyballlab.player.domain.repository.CoachRepository
@@ -105,6 +107,7 @@ fun CoachRosterScreen(
 ) {
     val viewModel: CoachRosterViewModel = viewModel(factory = CoachRosterViewModel.Factory)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val plan = rememberCoachPlan()
     val now = remember { System.currentTimeMillis() }
 
     if (!state.loaded) {
@@ -157,6 +160,12 @@ fun CoachRosterScreen(
         // them. That is the ranking this screen argues for: answering a request is
         // something only the coach can do and the player is blocked until they do
         // it, whereas reading a roster row can wait.
+        val students = state.snapshots.count { it.member.isActive }
+        if (plan != UserPlan.Pro && tab != 2) item(key = "plan-limit") {
+            Text(if (CoachPlan.canAccept(plan, students)) stringResource(R.string.coach_plan_students, students, CoachPlan.FREE_STUDENTS)
+                else stringResource(R.string.coach_plan_full, CoachPlan.FREE_STUDENTS),
+                Modifier.padding(horizontal = CoachGutter), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         if (tab == 1 && requests.isNotEmpty()) {
             item {
                 EntranceAnimation(index = 1) {
@@ -173,6 +182,7 @@ fun CoachRosterScreen(
                         now = now,
                         onApprove = { viewModel.approve(member.playerUid) },
                         onDecline = { viewModel.decline(member.playerUid) },
+                        canApprove = CoachPlan.canAccept(plan, students),
                         modifier = Modifier.padding(horizontal = CoachGutter),
                     )
                 }
@@ -268,6 +278,7 @@ private fun RequestRow(
     onApprove: () -> Unit,
     onDecline: () -> Unit,
     modifier: Modifier = Modifier,
+    canApprove: Boolean = true,
 ) {
     CoachCard(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -296,7 +307,7 @@ private fun RequestRow(
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CoachPillButton(
+            if (canApprove) CoachPillButton(
                 label = stringResource(R.string.coach_roster_approve),
                 onClick = onApprove,
                 modifier = Modifier.weight(1f),

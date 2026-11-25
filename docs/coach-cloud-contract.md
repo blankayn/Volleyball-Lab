@@ -344,3 +344,25 @@ or **Feedback Provided**, and displays feedback inside its matching session.
 Storage remains in `notes`; sending feedback retains the existing atomic queue
 acknowledgement. Android session details subscribe to that session's feedback.
 Automated reel guidance is separate from the professional coach's assessment.
+
+## Feedback attachments (23 November 2026)
+
+`notes/{noteId}` has three optional fields, written only when used:
+
+- `videoMs`: a moment in the session's own recording, 0 to 3,600,000. Needs `sessionId`.
+- `repNumber`: 1 to 1000, the repetition at that moment when the review names one. Needs `videoMs`.
+- `hasPhoto`: `true` only, when the note was sent with a photo.
+
+`noteMedia/{noteId}` holds the photo: `coachUid`, `playerUid`, `photo` (a
+`data:image/jpeg;base64,` value up to 300,000 characters) and `createdAt`. It must be
+created in the same commit as its note, by a coach with an Active link to the player.
+Only that coach and player can open it. It cannot be replaced, listed or added later;
+the coach can delete it, which leaves the written note and shows "Photo removed".
+Account cleanup deletes it with the notes of either party.
+
+Both clients shrink and re-encode the picked image on the device, which removes its
+metadata. Damaged attachment values drop the attachment, never the note. Older app
+versions show the text alone. The player's chip opens their own recording at the
+moment; the composer reminds coaches to send photos only with consent.
+
+Attachments need the matching `firestore.rules` deployed. Plain notes do not.

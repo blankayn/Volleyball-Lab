@@ -146,6 +146,8 @@ class DrillPracticeViewModel(
                 DrillPracticeEngine.recover(requireNotNull(previous))
             } else {
                 check(previous == null) { "You have an unfinished workout. Resume or discard it in Drill library first." }
+                val range = DrillWorkoutConfig.targetRepRange
+                require(reps in range) { "Choose ${range.first}–${range.last} reps per set." }
                 DrillPracticeDraft(UUID.randomUUID().toString(), drill.id, drill.name, drill.skill,
                     DrillWorkoutConfig(sets, reps, restSeconds), System.currentTimeMillis())
             }

@@ -26,7 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = null) {
+fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = null, coach: Boolean = false) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val repository = graph.planRepository as FirestorePlanRepository
@@ -56,8 +56,8 @@ fun ProPlanCard(modifier: Modifier = Modifier, onBrowseCoaches: (() -> Unit)? = 
                     style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
 
-            PlanComparison(isPro = plan.isPro)
-            if (!plan.isPro) {
+            PlanComparison(isPro = plan.isPro, rows = if (coach) coachPlanRows else planRows)
+            if (!plan.isPro && !coach) {
                 Text("Free reports reset every Monday.", style = MaterialTheme.typography.bodySmall,
                     color = colors.onSurfaceVariant)
             }
@@ -154,16 +154,26 @@ private val planRows = listOf(
     PlanRow("Coach connection", PlanValue.NotIncluded, PlanValue.Included),
 )
 
+/** Kept in step with coach-web/src/lib/plan.ts. */
+private val coachPlanRows = listOf(
+    PlanRow("Students", PlanValue.Label("${CoachPlan.FREE_STUDENTS}"), PlanValue.Label("Unlimited")),
+    PlanRow("Session review and written feedback", PlanValue.Included, PlanValue.Included),
+    PlanRow("Drills and chat", PlanValue.Included, PlanValue.Included),
+    PlanRow("Photos in feedback", PlanValue.NotIncluded, PlanValue.Included),
+    PlanRow("Right / Wrong marks on reps (website)", PlanValue.NotIncluded, PlanValue.Included),
+    PlanRow("AI session explanations (website)", PlanValue.NotIncluded, PlanValue.Included),
+)
+
 /**
  * Each feature sits above its Free and Pro values, so no label shares a line with them.
  * Nothing has a fixed height: text wraps and the pair grows together. On a very narrow
  * screen or with enlarged text the two values stack instead of sharing the width.
  */
 @Composable
-private fun PlanComparison(isPro: Boolean) {
+private fun PlanComparison(isPro: Boolean, rows: List<PlanRow>) {
     val stacked = LocalDensity.current.fontScale > 1.15f || LocalConfiguration.current.screenWidthDp < 340
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        planRows.forEach { row ->
+        rows.forEach { row ->
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(row.feature, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 if (stacked) {

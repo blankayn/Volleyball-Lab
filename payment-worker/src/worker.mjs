@@ -5,8 +5,21 @@ import { firestoreBillingStore } from "./firestore-billing-store.mjs";
 import { checkoutUser, firestoreAccessToken } from "./google.mjs";
 import { handleXenditCallback, startXenditCheckout, validXenditCallbackToken, xenditClient } from "./xendit.mjs";
 
+/** The coach website. The app calls without an Origin, and Xendit's webhook is never cross-origin. */
+const webOrigins = new Set(["https://volleyball-lab.pages.dev", "https://vblab.pages.dev", "https://volleyball-lab.web.app", "http://localhost:5173"]);
+
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function cors(request, response) {
+  const origin = request.headers.get("origin");
+  if (!webOrigins.has(origin)) return response;
+  response.headers.set("Access-Control-Allow-Origin", origin);
+  response.headers.set("Vary", "Origin");
+  response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  response.headers.set("Access-Control-Allow-Methods", "POST");
+  return response;
 }
 
 async function readBody(request, limit) {
@@ -38,6 +51,14 @@ async function database(env) {
 
 export default {
   async fetch(request, env) {
+    const checkout = new URL(request.url).pathname === "/createGcashCheckout";
+    if (!checkout) return handle(request, env);
+    if (request.method === "OPTIONS") return cors(request, new Response(null, { status: 204 }));
+    return cors(request, await handle(request, env));
+  },
+};
+
+async function handle(request, env) {
     const path = new URL(request.url).pathname;
     const checkout = path === "/createGcashCheckout";
     if (!checkout && path !== "/xenditWebhook") return json({ error: "not_found" }, 404);
@@ -70,5 +91,4 @@ export default {
       console.error("Payment request failed", error.name === "Error" ? error.message : error.name);
       return json({ error: checkout ? "checkout_unavailable" : "webhook_unavailable" }, checkout ? 502 : 500);
     }
-  },
-};
+}

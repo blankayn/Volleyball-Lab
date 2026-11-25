@@ -596,7 +596,7 @@ private fun SkillProgressRow(progress: SkillProgress, modifier: Modifier = Modif
                     com.volleyballlab.player.feature.home.ScoreBar(
                         fraction = progress.meanScore / 100f,
                         color = scoreColor(progress.meanScore),
-                        height = 6.dp,
+                        height = com.volleyballlab.player.feature.home.ThinBar,
                     )
                 }
             }

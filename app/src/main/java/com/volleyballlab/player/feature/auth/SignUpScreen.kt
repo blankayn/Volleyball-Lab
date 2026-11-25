@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.volleyballlab.player.R
-import com.volleyballlab.player.domain.model.UserRole
 import com.volleyballlab.player.domain.model.AddressOption
 
 /**
@@ -50,11 +49,12 @@ import com.volleyballlab.player.domain.model.AddressOption
  * survives both a reinstall and being offline.
  *
  * Address selections use the account-scoped profile store.
- * Account roles are resolved after registration rather than chosen on this form.
+ * Account roles are resolved at sign-in rather than chosen on this form.
+ * A new account returns to the login form; it is never signed in from here.
  */
 @Composable
 fun SignUpScreen(
-    onAuthenticated: (UserRole) -> Unit,
+    onRegistered: (email: String) -> Unit,
     onBackToLogin: () -> Unit,
     modifier: Modifier = Modifier,
     model: AuthViewModel = viewModel(factory = AuthViewModel.Factory),
@@ -73,6 +73,15 @@ fun SignUpScreen(
             placeholder = R.string.auth_first_name_placeholder,
             value = state.firstName,
             onValueChange = viewModel::onFirstNameChange,
+            leadingIcon = Icons.Rounded.PersonOutline,
+            enabled = !state.submitting,
+        )
+        Spacer(Modifier.height(16.dp))
+        AuthField(
+            label = R.string.auth_middle_name_label,
+            placeholder = R.string.auth_middle_name_placeholder,
+            value = state.middleName,
+            onValueChange = viewModel::onMiddleNameChange,
             leadingIcon = Icons.Rounded.PersonOutline,
             enabled = !state.submitting,
         )
@@ -146,7 +155,7 @@ fun SignUpScreen(
         Spacer(Modifier.height(20.dp))
         AuthPrimaryButton(
             label = R.string.auth_signup_action,
-            onClick = { viewModel.signUp(onAuthenticated) },
+            onClick = { viewModel.signUp(onRegistered) },
             enabled = state.canSubmitSignUp,
             busy = state.submitting,
         )

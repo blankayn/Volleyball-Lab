@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="coach_plan_students">Free plan: %1$d of %2$d students.</string>
+    <string name="coach_plan_full">Your Free plan covers %1$d students. Get Pro in Profile, under Plan &amp; limits, to accept more.</string>
+    <string name="coach_plan_photos">Photos in feedback are part of Pro.</string>
+</resources>

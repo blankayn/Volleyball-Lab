@@ -40,14 +40,18 @@ object CoachPhrasebook {
             LiveRepVerdict.Good -> listOf("Clean.", "That's the shape.", "Good, same again.",
                 "That one was in range.", "Yes. Hold that.")
             LiveRepVerdict.Adjust -> {
-                if (firstOfStage && faultId != null) return "Your ${focusName(faultId)} needs work."
-                listOf("Not quite.", "That one was off.", "Reset and go again.") +
-                    if (stayWithFocus && faultId != null) listOf("Stay with your ${focusName(faultId)}.") else emptyList()
+                // The rep was counted, so nothing here may say it was wrong: a
+                // movement that was wrong is refused and never reaches this line.
+                // The number before it already says it counted.
+                if (faultId == null) listOf("Good rep.", "Nice, keep going.", "Good, same again.")
+                else if (firstOfStage) return "Next, your ${focusName(faultId)}."
+                else listOf("A little cleaner next time.", "Keep refining.", "Make the next one sharper.") +
+                    if (stayWithFocus) listOf("Stay with your ${focusName(faultId)}.") else emptyList()
             }
             LiveRepVerdict.Partial -> listOf("Only part of that one was in view.",
-                "Counted. Only part of your form was visible.")
-            LiveRepVerdict.Unrated -> listOf("Counted. I couldn't judge that one from here.",
-                "I couldn't judge that one. Keep going.")
+                "Only part of your form was visible.")
+            LiveRepVerdict.Unrated -> listOf("Keep your hands and feet in frame for the next rep.",
+                "Leave enough room for the camera to see your full reach.")
         }
         val start = Math.floorMod(index, variants.size)
         return variants.indices.map { variants[(start + it) % variants.size] }.first { it != previous || variants.size == 1 }
@@ -66,9 +70,9 @@ object CoachPhrasebook {
         Skill.Serving to listOf("Balance your feet and raise your guiding arm steadily.",
             "Steady feet, then lift your guiding arm.",
             "Find your balance before you lift your arm."),
-        Skill.Spiking to listOf("Start balanced, bend your knees, and prepare your raised elbow.",
-            "Balanced start, knees bent, hitting elbow high.",
-            "Load your knees and lift your hitting elbow."),
+        Skill.Spiking to listOf("Start balanced, guiding arm up, hitting elbow drawn back.",
+            "Balanced start, guiding arm up, hitting elbow high.",
+            "Lift your guiding arm and your hitting elbow."),
         Skill.Blocking to listOf("Set your feet and bring both hands up ready.",
             "Feet set, hands up in front of you.",
             "Start low and ready with both hands up."),
@@ -319,6 +323,13 @@ object CoachPhrasebook {
             else listOf(seen, rehearse, reset, struggle, feel)
     }
 
+    /** Which [TeachingStyle] each rung of [instructions] is, in order. */
+    fun styles(experience: ExperienceLevel?): List<TeachingStyle> =
+        if (experience == ExperienceLevel.New) listOf(TeachingStyle.Rehearse, TeachingStyle.Direct, TeachingStyle.Reset, TeachingStyle.Short, TeachingStyle.Feel)
+        else TeachingStyle.entries
+
+    fun inStyle(id: CueId, measured: Float, style: TeachingStyle): String = instructions(id, measured)[style.ordinal]
+
     fun improvement(id: CueId, inRange: Boolean): List<String> {
         val name = focusName(id)
         return if (inRange) listOf(
@@ -390,6 +401,15 @@ object CoachPhrasebook {
         MovementFault.PlatformTooHigh -> "Keep your joined forearms below your shoulders."
         MovementFault.ArmsNotVisible -> "I lost sight of your arms. Keep your hands inside the picture."
         MovementFault.LegsNotVisible -> "I lost sight of your legs. Step back so your feet are in view."
+        MovementFault.SwingOneHand -> "Swing with your hitting hand only. The other arm guides, then comes down."
+        MovementFault.DrawElbowBack -> "Draw your hitting elbow back before you swing."
+        MovementFault.LiftGuidingArm -> "Lift your guiding arm before you swing."
+        MovementFault.HandsTogether -> "Bring your hands closer together above your forehead."
+        MovementFault.PushToExtend -> "Push up and straighten both arms from your forehead."
+        MovementFault.BendKnees -> "Bend your knees, then reach up."
+        MovementFault.UseBothArms -> "Use both arms. Join your forearms and keep them level."
+        MovementFault.StraightenPlatform -> "Straighten both arms to make a flat platform."
+        MovementFault.PostureOff -> "Reset your position and try that again."
     }
 
     /** [notCounted] once it has been heard: the same fix, in as few words as still name it. */
@@ -404,9 +424,27 @@ object CoachPhrasebook {
         MovementFault.PlatformTooHigh -> "Forearms lower."
         MovementFault.ArmsNotVisible -> "Keep your arms in view."
         MovementFault.LegsNotVisible -> "Step back."
+        MovementFault.SwingOneHand -> "One hand swings."
+        MovementFault.DrawElbowBack -> "Elbow back first."
+        MovementFault.LiftGuidingArm -> "Guiding arm up."
+        MovementFault.HandsTogether -> "Hands closer."
+        MovementFault.PushToExtend -> "Push up."
+        MovementFault.BendKnees -> "Bend your knees."
+        MovementFault.UseBothArms -> "Both arms."
+        MovementFault.StraightenPlatform -> "Straighten both arms."
+        MovementFault.PostureOff -> "Reset and try again."
     }
 
     fun notCountedCue(fault: MovementFault) = SpokenCue(notCounted(fault), notCountedShort(fault))
+
+    /** For a refusal that names a posture cue, the change that cue asks for. */
+    fun notCountedCue(refusal: MovementVerdict.NotCounted): SpokenCue {
+        val cue = refusal.cue
+        val measured = refusal.measured
+        if (refusal.fault != MovementFault.PostureOff || cue == null || measured == null) return notCountedCue(refusal.fault)
+        val action = action(cue, measured)
+        return SpokenCue("$NOT_COUNTED_PREFIX$action.", "$NOT_COUNTED_PREFIX${focusName(cue).replaceFirstChar { it.uppercase() }}.")
+    }
 
     const val NOT_COUNTED_PREFIX = "Not counted. "
 
@@ -418,7 +456,7 @@ object CoachPhrasebook {
         Skill.Serving -> "I'm waiting for a serve. Swing your hitting hand up above your head."
         Skill.Receiving -> "I'm waiting for a pass. Join your forearms in front and bend your knees."
         Skill.Setting -> "I'm waiting for a set. Bring both hands up above your forehead with your elbows bent."
-        Skill.Spiking -> "I'm waiting for a spike. Load your knees, then swing your hitting hand up overhead."
+        Skill.Spiking -> "I'm waiting for a spike. Lift your guiding arm, draw your elbow back, then swing overhead."
         Skill.Blocking -> "I'm waiting for a block. Reach both hands up above your head."
     }
 
@@ -427,7 +465,7 @@ object CoachPhrasebook {
         Skill.Serving -> "hand above your head."
         Skill.Receiving -> "forearms together, knees bent."
         Skill.Setting -> "hands above your forehead."
-        Skill.Spiking -> "load, then reach high."
+        Skill.Spiking -> "elbow back, then swing high."
         Skill.Blocking -> "both hands up high."
     }
 

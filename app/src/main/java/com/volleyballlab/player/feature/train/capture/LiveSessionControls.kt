@@ -44,6 +44,7 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.pose.analysis.CoachPhrasebook
 import com.volleyballlab.player.pose.analysis.Facing
+import com.volleyballlab.player.domain.repository.DominantArm
 import com.volleyballlab.player.pose.analysis.FacingGuide
 import com.volleyballlab.player.pose.analysis.LivePostureUi
 import com.volleyballlab.player.pose.analysis.LiveCoachingPlan
@@ -93,6 +94,8 @@ internal fun CaptureControls(
     onSayAgain: () -> Unit = {},
     /** Why the movement that just ended was not counted as a rep, while that is still current. */
     notCounted: String? = null,
+    dominantArm: DominantArm = DominantArm.Right,
+    onDominantArmChanged: (DominantArm) -> Unit = {},
 ) {
     var confirmEarly by remember { mutableStateOf(false) }
     if (confirmEarly) AlertDialog(
@@ -191,7 +194,7 @@ internal fun CaptureControls(
                             LivePostureCard(livePosture, state.suspensionHint ?: coachingText, Modifier.fillMaxWidth())
                         }
                         if (compact) SessionMetricsLine(state, Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
-                        if (coachContext.hasHumanCoach) SessionCoachContext(coachContext)
+                        if (coachContext.hasCoachContent) SessionCoachContext(coachContext)
                     }
                     state.blockedReason?.let { Text(it, color = Color.White) }
                     if (guidedOptions.enabled && (state.blockedReason != null || state.rotation?.required == true)) {
@@ -214,6 +217,8 @@ internal fun CaptureControls(
                     }
                 }
                 is CaptureUiState.Framing -> {
+                    // Outside the scrolling guidance: which way the side view faces depends on it.
+                    if (guidedOptions.enabled) DominantArmRow(dominantArm, onDominantArmChanged)
                     Column(Modifier.fillMaxWidth().heightIn(max = guidanceHeight).clip(RoundedCornerShape(20.dp))
                         .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GuidedSetupCard(guidedOptions, state.angleReady, onGuidedChanged, onRepTargetChanged)
@@ -236,6 +241,23 @@ internal fun CaptureControls(
                 }
                 else -> Unit
             }
+        }
+    }
+}
+
+/** Which arm the athlete hits with, so the side view keeps that arm toward the camera. */
+@Composable
+private fun DominantArmRow(selected: DominantArm, onSelect: (DominantArm) -> Unit) {
+    Row(Modifier.fillMaxWidth().testTag("capture-dominant-arm"), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.capture_dominant_arm), style = MaterialTheme.typography.labelLarge, color = Color.White)
+            Text(stringResource(R.string.capture_dominant_arm_note), style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted)
+        }
+        listOf(DominantArm.Left to R.string.capture_arm_left, DominantArm.Right to R.string.capture_arm_right).forEach { (arm, label) ->
+            FilterChip(selected = selected == arm, onClick = { onSelect(arm) }, label = { Text(stringResource(label)) },
+                colors = FilterChipDefaults.filterChipColors(labelColor = Color.White,
+                    selectedLabelColor = Color.White, selectedContainerColor = com.volleyballlab.player.ui.theme.RustPrimary40))
         }
     }
 }
@@ -441,6 +463,10 @@ private fun SessionCoachContext(context: LiveCoachContext) {
                 style = MaterialTheme.typography.bodySmall, color = Color.White)
         }
         context.latestNote?.text?.takeIf { it.isNotBlank() }?.let {
+            context.noteSessionAtEpochMs?.let { at ->
+                Text(stringResource(R.string.live_coach_note_session, java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(at))),
+                    style = MaterialTheme.typography.labelSmall, color = LiveSessionMuted)
+            }
             Text(it, style = MaterialTheme.typography.bodySmall, color = LiveSessionProgress)
         }
     }
@@ -463,6 +489,6 @@ private fun SessionPrimaryButton(onClick: () -> Unit, text: String, enabled: Boo
 private fun viewLabel(angle: CameraAngle): String = stringResource(when (angle) {
     CameraAngle.Front -> R.string.capture_front_view
     CameraAngle.Side -> R.string.capture_side_view
-    CameraAngle.Rear -> R.string.capture_rear_view
-    CameraAngle.Unknown -> R.string.capture_setup_label
+    // No live session asks for a rear view.
+    CameraAngle.Rear, CameraAngle.Unknown -> R.string.capture_setup_label
 })

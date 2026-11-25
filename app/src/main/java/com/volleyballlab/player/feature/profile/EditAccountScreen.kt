@@ -36,6 +36,8 @@ internal fun AccountIdentityEditor(onDone: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(state.firstName, model::onFirstNameChange, label = { Text("First name") },
             singleLine = true, enabled = !state.submitting, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(state.middleName, model::onMiddleNameChange, label = { Text("Middle name") },
+            singleLine = true, enabled = !state.submitting, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(state.lastName, model::onLastNameChange, label = { Text("Last name") },
             singleLine = true, enabled = !state.submitting, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
         SignUpLocationFields(state, model)

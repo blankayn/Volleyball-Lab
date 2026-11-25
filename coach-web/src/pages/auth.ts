@@ -2,6 +2,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   setPersistence,
@@ -14,7 +15,7 @@ import {
   provisionCoachAccount,
   repairMissingCoachRole,
 } from "../lib/cloud";
-import { SPECIALISATIONS } from "../lib/cloud";
+import { COACHING_ROLES, displayName } from "../lib/cloud";
 import { esc } from "../lib/format";
 import { go } from "../lib/router";
 import { footer, topbar } from "../lib/ui";
@@ -78,6 +79,9 @@ function friendly(code: string): string {
   return "Something went wrong. Please try again.";
 }
 
+/** Set by a registration that just finished, for the login page to greet. */
+let registeredEmail = "";
+
 export function renderLogin(root: HTMLElement): void {
   document.title = "Login — Volleyball Lab";
   root.innerHTML = authLayout("login", `<div class="auth-card">
@@ -104,6 +108,12 @@ export function renderLogin(root: HTMLElement): void {
   const err = root.querySelector<HTMLElement>("#form-error");
   const emailField = root.querySelector<HTMLInputElement>("#email");
   const passwordField = root.querySelector<HTMLInputElement>("#password");
+  if (registeredEmail && emailField) {
+    emailField.value = registeredEmail;
+    if (err) err.innerHTML = '<div class="login-status" role="status">Account created. We sent a link to confirm your email. Log in to continue.</div>';
+    registeredEmail = "";
+    passwordField?.focus();
+  }
   const validate = (field: HTMLInputElement | null): boolean => {
     if (!field) return false;
     const message = field.id === "email"
@@ -195,13 +205,11 @@ export function renderLogin(root: HTMLElement): void {
   });
 }
 
-const FIELD_ERROR = "Please fill in your name, a valid email and a password of 6+ characters.";
+const FIELD_ERROR = "Please fill in your first, middle and last name, a valid email and a password of 6+ characters.";
 
 export function renderRegister(root: HTMLElement): void {
   document.title = "Register — Volleyball Lab";
-  const specOptions = SPECIALISATIONS.map(
-    (s) => `<option value="${s}">${s === "AllAround" ? "All-around" : s}</option>`,
-  ).join("");
+  const roleOptions = COACHING_ROLES.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
 
   root.innerHTML = authLayout("register", `<div class="auth-card">
     <p class="eyebrow">Account registration</p>
@@ -211,27 +219,29 @@ export function renderRegister(root: HTMLElement): void {
     <form id="register-form">
       <div class="form-section-title"><span>01</span><h2>Your account &amp; team</h2></div>
       <div class="form-grid">
-        <div class="field"><label for="name">Your name</label>
-          <input id="name" autocomplete="name" required maxlength="60" placeholder="Alex Rivera" /></div>
+        <div class="field"><label for="first-name">First name</label>
+          <input id="first-name" autocomplete="given-name" required maxlength="40" placeholder="Maria" /></div>
+        <div class="field"><label for="middle-name">Middle name</label>
+          <input id="middle-name" autocomplete="additional-name" required maxlength="40" placeholder="Cruz" /></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label for="last-name">Last name</label>
+          <input id="last-name" autocomplete="family-name" required maxlength="40" placeholder="Santos" /></div>
         <div class="field"><label for="team">Team name</label>
           <input id="team" maxlength="48" placeholder="UC Junior Spikers" /></div>
       </div>
       <div class="form-grid">
         <div class="field"><label for="email">Email</label>
-          <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu" /></div>
+          <input id="email" type="email" autocomplete="email" required placeholder="you@school.edu.ph" aria-describedby="email-hint" /><small class="muted" id="email-hint">Use your school or institution email if you have one. It helps you get verified.</small></div>
         <div class="field"><label for="password">Password</label>
           <div class="password-input"><input id="password" type="password" autocomplete="new-password" required minlength="6" placeholder="6+ characters" /><button id="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="password">${icon("eye")}</button></div></div>
       </div>
       <div class="form-section-title"><span>02</span><h2>Your profile</h2></div>
+      <div class="field"><label for="org">School or club</label>
+        <input id="org" maxlength="48" placeholder="University of Cebu" /></div>
       <div class="form-grid">
-        <div class="field"><label for="org">School or club</label>
-          <input id="org" maxlength="48" placeholder="University of Cebu" /></div>
-        <div class="field"><label for="licence">Certification / licence no.</label>
-          <input id="licence" maxlength="40" placeholder="Optional" /></div>
-      </div>
-      <div class="form-grid">
-        <div class="field"><label for="spec">Specialisation</label>
-          <select id="spec">${specOptions}</select></div>
+        <div class="field"><label for="role">Coaching role</label>
+          <select id="role">${roleOptions}</select></div>
         <div class="field"><label for="years">Years of experience</label>
           <input id="years" type="number" min="0" max="70" placeholder="e.g. 6" /></div>
       </div>
@@ -251,10 +261,11 @@ export function renderRegister(root: HTMLElement): void {
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (button) button.disabled = true;
     if (err) err.innerHTML = "";
-    const name = val("name");
+    const first = val("first-name"), middle = val("middle-name"), last = val("last-name");
+    const name = displayName(first, middle, last);
     const email = val("email");
     const password = (form.querySelector("#password") as HTMLInputElement).value;
-    if (!name || !email.includes("@") || password.length < 6) {
+    if (!first || !middle || !last || !email.includes("@") || password.length < 6) {
       if (err) err.innerHTML = `<div class="form-error" role="alert">${FIELD_ERROR}</div>`;
       if (button) button.disabled = false;
       return;
@@ -272,14 +283,22 @@ export function renderRegister(root: HTMLElement): void {
       const profile = {
         ...emptyProfile(),
         name,
+        firstName: first,
+        middleName: middle,
+        lastName: last,
         teamName: val("team"),
         organisation: val("org"),
-        specialisation: val("spec") || null,
+        coachingRole: val("role") || null,
         yearsExperience: Number.isFinite(years) ? Math.min(70, Math.max(0, years)) : null,
-        licenceNumber: val("licence"),
+        licenceNumber: "",
       };
       await provisionCoachAccount(uid, email, profile);
-      go("/app");
+      // The account works without it; players see "Not verified" until it is opened.
+      if (!user.emailVerified) await sendEmailVerification(user).catch(() => undefined);
+      // A new account never goes straight to the dashboard: it signs in like any other.
+      registeredEmail = email;
+      await auth.signOut();
+      go("/login");
     } catch (failure) {
       const code = failure instanceof Error ? failure.message : String((failure as { code?: string }).code ?? failure);
       if (err) err.innerHTML = `<div class="form-error" role="alert">${esc(friendly(code))}</div>`;

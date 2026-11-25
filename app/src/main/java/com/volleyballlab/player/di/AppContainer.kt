@@ -81,6 +81,7 @@ fun interface PoseDetectorFactory {
  * through a constructor, that migration is mechanical.
  */
 class AppContainer(private val context: Context) {
+    val notePhotos by lazy { com.volleyballlab.player.data.coach.NotePhotos(firestore, authRepository) }
     val coachPhotoStore by lazy { com.volleyballlab.player.data.coach.CoachPhotoStore(firestore, authRepository) }
     val coachPresenceReporter by lazy { com.volleyballlab.player.data.coach.CoachPresenceReporter(context, firestore, authRepository) }
     val coachingHubRepository by lazy { com.volleyballlab.player.data.coach.CoachingHubRepository(firestore, authRepository) }
@@ -114,6 +115,20 @@ class AppContainer(private val context: Context) {
                             && authRepository.currentUid == uid) syncAccountName(uid)
                     }
                 }
+                launch {
+                    val queuedRestores = mutableSetOf<String>()
+                    val queuedBackups = mutableSetOf<String>()
+                    sessionRepository.sessions.collect { sessions ->
+                        sessions.forEach { session ->
+                            if (queuedRestores.add(session.id)) {
+                                com.volleyballlab.player.data.session.RecordingRestoreWorker.schedule(context, uid, session.id)
+                            }
+                            if (session.videoPath != null && queuedBackups.add(session.id)) {
+                                com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+                            }
+                        }
+                    }
+                }
                 launch { sessionRepository.sessions.collect { sessions -> notificationRepository.ingest(uid,
                     sessions.map(com.volleyballlab.player.domain.model.NotificationEvents::session) + com.volleyballlab.player.domain.model.NotificationEvents.milestones(sessions)) } }
                 launch { notificationRepository.connectionEvents(uid).collect { events -> notificationRepository.ingest(uid, events) } }
@@ -134,6 +149,23 @@ class AppContainer(private val context: Context) {
     }
     val notificationRepository by lazy {
         com.volleyballlab.player.data.notifications.TrainingNotificationRepository(context, authRepository, firestore)
+    }
+    val adaptiveCoachRepository: com.volleyballlab.player.data.coaching.AdaptiveCoachRepository by lazy {
+        com.volleyballlab.player.data.coaching.LocalAdaptiveCoachRepository(context, authRepository, firestore)
+    }
+    val athleteAssessmentRepository: com.volleyballlab.player.data.assessment.AthleteAssessmentRepository by lazy {
+        com.volleyballlab.player.data.assessment.FirestoreAthleteAssessmentRepository(firestore, authRepository)
+    }
+    val athletePlanner by lazy {
+        com.volleyballlab.player.data.assessment.AthletePlanner(athleteAssessmentRepository,
+            com.volleyballlab.player.data.ai.CloudAthleteAnalyst(), com.volleyballlab.player.data.assessment.ContainerPlannerSources(this))
+    }
+    val coachTrustStore by lazy { com.volleyballlab.player.data.coach.CoachTrustStore(firestore) }
+
+    /** Notes from the coach the player has not read yet, by id. */
+    val unreadFeedback: kotlinx.coroutines.flow.Flow<Set<String>> by lazy {
+        combine(notificationRepository.inbox, coachRepository.notesForMe,
+            com.volleyballlab.player.domain.model.NotificationEvents::unreadFeedback).distinctUntilChanged()
     }
     val trainingWorkspaceRepository by lazy {
         com.volleyballlab.player.data.training.TrainingWorkspaceRepository(context, authRepository)
@@ -167,7 +199,11 @@ class AppContainer(private val context: Context) {
      * the app no longer forgets the athlete's training when the process dies.
      */
     val sessionRepository: SessionRepository by lazy {
-        DataStoreSessionRepository(context, authRepository, sessionCloudStore)
+        DataStoreSessionRepository(context, authRepository, sessionCloudStore) { uid, session ->
+            if (session.videoPath != null) {
+                com.volleyballlab.player.data.session.RecordingBackupWorker.schedule(context, uid, session.id)
+            }
+        }
     }
 
     /**
@@ -255,6 +291,17 @@ class AppContainer(private val context: Context) {
                 ?: error("This session is no longer on this phone.")
             sharedRecordingStore.upload(session, uid)
         })
+    }
+
+    suspend fun backupRecording(session: com.volleyballlab.player.domain.model.SessionResult, uid: String) {
+        check(authRepository.currentUid == uid)
+        if (sharedRecordingStore.isBackedUp(session.id, uid)) return
+        sessionCloudStore.upload(uid, session)
+        if (sessionRepository.byId(session.id) == null) {
+            sessionCloudStore.delete(uid, session.id)
+            return
+        }
+        sharedRecordingStore.upload(session, uid, createSession = false)
     }
 
     /** Best-effort mirror of the athlete's own sessions for coach review. */

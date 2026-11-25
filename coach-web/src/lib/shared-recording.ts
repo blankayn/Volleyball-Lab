@@ -2,13 +2,15 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { esc } from "./format";
 import { attachCoachReel } from "./coach-reel";
-import { attachRepNotes } from "./rep-notes";
+import { attachRepNotes, buildRepReports } from "./rep-notes";
+import { attachRepMarks } from "./rep-marks";
+import { setRecordingReports } from "./note-moment";
 import { attachRecordingSkeleton } from "./recording-skeleton";
 
 const DEFAULT_ENDPOINT = "https://volleyball-lab-session-ai.volleyball-lab-session-ai.workers.dev";
 
 export function sharedRecordingPanel(sessionId: string): string {
-  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><div class="recording-stage" data-recording-stage><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;object-fit:contain;background:#111;border-radius:12px;vertical-align:top"></video><canvas data-recording-skeleton aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas></div><div class="recording-options"><label data-skeleton-option hidden><input type="checkbox" checked> Show MediaPipe skeleton</label><label data-notes-option hidden><input type="checkbox" checked> Show rep notes on video</label><button class="btn btn-ghost btn-sm" type="button" data-recording-full hidden>Full screen with notes</button></div><section data-rep-notes hidden aria-label="Rep notes"></section><section data-coach-reel hidden aria-label="Coach Reel"></section></section>`;
+  return `<section data-recording-panel="${esc(sessionId)}" aria-label="Player recording" style="margin:16px 0"><h4>Player recording</h4><p class="muted">Watch the video the player sent with this session.</p><button class="btn btn-ghost btn-sm" type="button" data-load-recording>Load video</button><p data-recording-status role="status" aria-live="polite"></p><div class="recording-review"><div class="recording-main"><div class="recording-stage" data-recording-stage><video data-recording-video controls playsinline preload="metadata" hidden style="width:100%;max-height:560px;object-fit:contain;background:#111;border-radius:12px;vertical-align:top"></video><canvas data-recording-skeleton aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas></div><div class="recording-options"><label data-skeleton-option hidden><input type="checkbox" checked> Show MediaPipe skeleton</label><label data-notes-option hidden><input type="checkbox" checked> Show rep notes on video</label><button class="btn btn-ghost btn-sm" type="button" data-recording-full hidden>Full screen with notes</button></div><section data-coach-reel hidden aria-label="Coach Reel"></section></div><section data-rep-notes hidden aria-label="Reps"></section></div></section>`;
 }
 
 export function wireSharedRecordings(root: HTMLElement): () => void {
@@ -83,6 +85,7 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
         const canvas = panel.querySelector<HTMLCanvasElement>("[data-recording-skeleton]")!;
         const option = panel.querySelector<HTMLElement>("[data-skeleton-option]")!;
         const toggle = option.querySelector<HTMLInputElement>("input")!;
+        setRecordingReports(video, buildRepReports(data));
         const reelHost = panel.querySelector<HTMLElement>("[data-coach-reel]");
         if (reelHost) overlays.add(attachCoachReel(video, reelHost, data));
         const detach = attachRecordingSkeleton(video, canvas, toggle, data);
@@ -91,6 +94,7 @@ export function wireSharedRecordings(root: HTMLElement): () => void {
         const notesOption = panel.querySelector<HTMLElement>("[data-notes-option]");
         const notesToggle = notesOption?.querySelector<HTMLInputElement>("input");
         if (stage && notesHost && notesOption && notesToggle) {
+          overlays.add(attachRepMarks(notesHost, sessionId, viewer));
           overlays.add(attachRepNotes(video, stage, notesHost, notesToggle, data));
           notesOption.hidden = false;
           const full = panel.querySelector<HTMLElement>("[data-recording-full]");

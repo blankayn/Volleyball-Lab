@@ -93,7 +93,7 @@ private fun LatestFormCard(summary: HomeProgressSummary, noSessions: Boolean) {
                 }
                 SkillIconTile(skill)
             }
-            if (score != null) ScoreBar(score / 100f, ScoreGreen, 10.dp)
+            if (score != null) ScoreBar(score / 100f, ScoreGreen, ThinBar)
             Text(
                 text = when {
                     noSessions -> "Record a session to see your form here."
@@ -169,13 +169,13 @@ private fun SkillPerformanceCard(summary: HomeProgressSummary) {
                 val accent = skillVisual(skill).accent
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(accent))
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
                         Text(stringResource(skill.displayName), style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f))
                         Text("$score%", style = MaterialTheme.typography.bodyLarge.merge(VbTabularNumerals),
                             fontWeight = FontWeight.Medium)
                     }
-                    ScoreBar(score / 100f, accent, 10.dp)
+                    ScoreBar(score / 100f, accent, ThinBar)
                 }
             }
             if (summary.unscored.isNotEmpty()) {
@@ -231,13 +231,15 @@ private fun WeeklyActivityCard(week: List<DayActivity>) {
     }
 }
 
+internal val ThinBar = 4.dp
+
 /** A rounded progress bar that grows in from zero the first time it is shown. */
 @Composable
 internal fun ScoreBar(fraction: Float, color: Color, height: Dp) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val animated by animateFloatAsState(if (shown) fraction.coerceIn(0f, 1f) else 0f, label = "scoreBar")
-    Box(Modifier.fillMaxWidth().height(height).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .07f))) {
+    Box(Modifier.fillMaxWidth().height(height).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .10f))) {
         Box(Modifier.fillMaxWidth(animated).fillMaxHeight().clip(CircleShape).background(color))
     }
 }

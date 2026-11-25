@@ -55,7 +55,8 @@ object DrillRecommendations {
             .groupingBy { it }.eachCount()
         val skillCounts = (cameraSessions.map { it.skill } + manualWorkouts.map { it.skill })
             .groupingBy { it }.eachCount()
-        val relevant = Skill.All.filter { position == null || it in position.relevantSkills }.ifEmpty { Skill.All }
+        // Position never hides a skill (panel, 24 November 2026).
+        val relevant = Skill.All
         val ladder = compareBy<Drill>({ it.level.ordinal }, { drillCounts[it.id] ?: 0 })
 
         val picks = mutableListOf<DrillPick>()

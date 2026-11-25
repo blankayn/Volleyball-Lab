@@ -181,9 +181,15 @@ fun PlayerAssignmentScreen(
                     }
                 }
                 if (state.notes.isNotEmpty()) item {
+                    val fresh = rememberSeenFeedback(state.notes)
                     TaskCard {
                         Text("Coach feedback", style = MaterialTheme.typography.titleMedium)
-                        state.notes.forEach { Text(it.text) }
+                        state.notes.forEach { note ->
+                            NewFeedbackChip(note, fresh)
+                            Text(note.text)
+                            NoteMomentChip(note)
+                            NotePhoto(note)
+                        }
                     }
                 }
             }

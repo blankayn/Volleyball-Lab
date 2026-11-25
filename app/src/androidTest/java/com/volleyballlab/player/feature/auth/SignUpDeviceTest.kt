@@ -51,8 +51,9 @@ class SignUpDeviceTest {
         compose.setContent { VolleyballLabTheme { SignUpScreen({}, {}, model = model) } }
         compose.waitUntil(10_000) { model.state.value.countries.size >= 200 }
         compose.onNodeWithContentDescription("First name").performScrollTo().performTextInput("Kirt Deniel")
+        compose.onNodeWithContentDescription("Middle name").performScrollTo().performTextInput("Libres")
         compose.onNodeWithContentDescription("Last name").performScrollTo().performTextInput("Magno")
-        assertEquals("Kirt Deniel Magno", model.state.value.name)
+        assertEquals("Kirt Deniel L. Magno", model.state.value.name)
         choose("Country", "Philippines", "PH")
         compose.waitUntil(10_000) { model.state.value.areas.isNotEmpty() && !model.state.value.loadingAreas }
         val area = model.state.value.areas.first { it.name == "Cebu" }

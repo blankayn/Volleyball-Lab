@@ -91,7 +91,7 @@ object GuidedCaptureProgress {
     val angles = listOf(CameraAngle.Front, CameraAngle.Side)
     val requiredAngles = setOf(CameraAngle.Front, CameraAngle.Side)
     fun isRequired(index: Int) = angles.getOrNull(index) in requiredAngles
-    fun canSkip(index: Int) = angles.getOrNull(index) == CameraAngle.Rear
+    fun canSkip(index: Int) = index in angles.indices && !isRequired(index)
     sealed interface StopDecision {
         data object Finish : StopDecision
         data class ContinueToSide(val stageIndex: Int = 1) : StopDecision

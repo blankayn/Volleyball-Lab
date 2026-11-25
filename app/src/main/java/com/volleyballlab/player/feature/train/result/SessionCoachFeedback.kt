@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.combine
 
 /** Professional feedback stays attached to the session that was shared. */
 @Composable
-internal fun SessionCoachFeedback(sessionId: String, modifier: Modifier = Modifier) {
+internal fun SessionCoachFeedback(sessionId: String, modifier: Modifier = Modifier, onOpenMoment: ((Long) -> Unit)? = null) {
     val context = LocalContext.current
     val coaches = remember(context) { (context.applicationContext as VolleyballLabApplication).container.coachRepository }
     val feedback by remember(coaches, sessionId) {
@@ -27,6 +27,7 @@ internal fun SessionCoachFeedback(sessionId: String, modifier: Modifier = Modifi
                 submissions.filter { it.sessionId == sessionId }
         }
     }.collectAsStateWithLifecycle(initialValue = null)
+    val fresh = com.volleyballlab.player.feature.coach.rememberSeenFeedback(feedback?.first.orEmpty())
     StudentCard(modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Coach Feedback", style = MaterialTheme.typography.titleMedium)
@@ -35,7 +36,12 @@ internal fun SessionCoachFeedback(sessionId: String, modifier: Modifier = Modifi
                 current == null -> Text("Loading coach feedback…")
                 current.first.isNotEmpty() -> {
                     Text("Feedback Provided", style = MaterialTheme.typography.labelLarge)
-                    current.first.forEach { Text(it.text) }
+                    current.first.forEach { note ->
+                        com.volleyballlab.player.feature.coach.NewFeedbackChip(note, fresh)
+                        Text(note.text)
+                        com.volleyballlab.player.feature.coach.NoteMomentChip(note, onOpenMoment)
+                        com.volleyballlab.player.feature.coach.NotePhoto(note)
+                    }
                 }
                 current.second.isNotEmpty() -> Text("Awaiting Coach Feedback")
                 else -> Text("Share this session with your coach from My Coach to receive professional feedback.")

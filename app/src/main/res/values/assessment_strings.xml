@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assessment_title">Your assessment</string>
+    <string name="assessment_about">About you</string>
+    <string name="assessment_about_body">Your position helps the AI understand you. All five skills are always looked at.</string>
+    <string name="assessment_experience">How long have you played?</string>
+    <string name="assessment_position">Your position</string>
+    <string name="assessment_position_none">No fixed position</string>
+    <string name="assessment_goals">Your goal</string>
+    <string name="assessment_goals_body">Choose what matters most to you now.</string>
+    <string name="assessment_preferred">Skills you want to work on</string>
+    <string name="assessment_goal">Main goal</string>
+    <string name="assessment_days">Days a week</string>
+    <string name="assessment_minutes">Time for each practice</string>
+    <string name="assessment_minutes_value">%1$d min</string>
+    <string name="assessment_weak">What feels hard?</string>
+    <string name="assessment_weak_body">Choose any that fit, or none.</string>
+    <string name="assessment_weak_choose">I find this hard</string>
+    <string name="assessment_weak_note">Anything else that feels hard (optional)</string>
+    <string name="assessment_ai_note">Your answers and camera scores go to our AI (Groq) without your name, account or video.</string>
+    <string name="assessment_submit">Get my assessment</string>
+    <string name="assessment_done">Done</string>
+    <string name="assessment_by_ai">Written by AI from your answers</string>
+    <string name="assessment_strengths">What you do well</string>
+    <string name="assessment_weaknesses">What holds you back</string>
+    <string name="assessment_improve">What to improve next</string>
+    <string name="assessment_from">From: %1$s</string>
+    <string name="assessment_fact_score">%1$s camera score %2$d</string>
+    <string name="assessment_fact_check">Camera check: %1$s</string>
+    <string name="assessment_basis_answers">This is based on your answers. Record sessions to add what the camera measures.</string>
+    <string name="assessment_basis_measured">Scores come from your recorded sessions. The AI explains them and cannot change them.</string>
+    <string name="assessment_start">Take the assessment</string>
+    <string name="assessment_start_body">Answer a few questions and get a plan made for you.</string>
+    <string name="assessment_retake">Retake the assessment</string>
+    <string name="plan_title">This week’s plan</string>
+    <string name="plan_minutes">About %1$d minutes</string>
+    <string name="plan_drill">%1$s · %2$d × %3$d reps · %4$s</string>
+    <string name="plan_closest">Closest drill you can open to the %1$s level.</string>
+    <string name="plan_done">Done this week</string>
+    <string name="plan_progress">%1$d of %2$d drills done this week</string>
+    <string name="plan_goals">Goals this week</string>
+    <string name="plan_changes">What changed</string>
+    <string name="plan_working">Your AI coach is writing your plan…</string>
+    <string name="plan_unavailable">The AI is unavailable right now. Your answers are saved and your plan will be made when it is back.</string>
+    <string name="plan_limited">Today’s AI limit is reached. Your answers are saved and your plan will be made tomorrow.</string>
+    <string name="plan_retry">Try again</string>
+</resources>

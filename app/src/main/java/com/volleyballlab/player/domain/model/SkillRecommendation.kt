@@ -86,7 +86,9 @@ data class SkillRecommendation(
             profile: AthleteProfile,
             sessions: List<SessionResult>,
         ): SkillRecommendation? {
-            val skill = profile.goalSkill ?: assessment.weakestSkill(profile.position) ?: return null
+            val skill = profile.goalSkill ?: assessment.focus.firstOrNull()
+                ?: NextSkills.rank(SkillEvidence.from(assessment.answers, sessions)).takeIf { assessment.answers.isNotEmpty() }?.firstOrNull()?.skill
+                ?: assessment.weakestSkill(null) ?: return null
             val measured = recentScoreFor(skill, sessions)
             val level = when {
                 measured != null -> SkillLevel.fromScore(measured)

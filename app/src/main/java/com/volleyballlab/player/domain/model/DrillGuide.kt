@@ -107,7 +107,7 @@ object DrillGuideCatalog {
             "Clear practice space and a stable camera position",
             "Keep your whole body visible. Move slowly within a comfortable range and reset between repetitions.",
             listOf(
-                "Keep both feet grounded in a balanced stance.",
+                "Keep both feet planted in a balanced stance.",
                 "Draw one elbow back and lift the guiding arm.",
                 "Reach overhead with a slow arm swing and controlled trunk rotation.",
                 "Lower your arm and reset your shoulders and stance.",
@@ -118,9 +118,9 @@ object DrillGuideCatalog {
             "Keep your whole body visible. Move slowly within a comfortable range and reset between repetitions.",
             listOf(
                 "Start with balanced feet in one spot and a comfortably upright trunk.",
-                "Draw one elbow back and lift the guiding arm. Bend your knees before an in-place jump.",
-                "Extend the raised arm above the shoulder while keeping your trunk controlled.",
-                "Lower the arm and regain balance. If jumping, return to the same spot with softened knees.",
+                "Bend your knees as you draw your hitting elbow back and lift your guiding arm.",
+                "Straighten through the knees and swing overhead with both feet planted.",
+                "Lower your arm and reset in the same spot.",
             ),
         ),
         "spike-four-step-lines" to Setup(
@@ -128,9 +128,9 @@ object DrillGuideCatalog {
             "Keep your whole body visible. Move slowly within a comfortable range and reset between repetitions.",
             listOf(
                 "Begin with balanced feet and square shoulders.",
-                "Bend your knees and hips before a small vertical jump.",
-                "Extend your raised arm with a slow swing and controlled trunk rotation.",
-                "Return to the same spot with softly bent knees and reset your stance.",
+                "Bend your knees and hips while staying balanced over both feet.",
+                "Let your chest turn with the overhead swing as you straighten through the knees.",
+                "Keep both feet planted as you finish and reset your shoulders.",
             ),
         ),
         "block-ready-jumps" to Setup(

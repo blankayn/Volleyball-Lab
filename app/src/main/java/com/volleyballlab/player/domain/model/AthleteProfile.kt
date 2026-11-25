@@ -35,6 +35,8 @@ enum class CourtPosition(@param:StringRes val displayName: Int) {
  *
  * Dominant hand was removed on 19 Nov 2026: the serve and spike analyzers find
  * the hitting arm from each rep, so a stored hand only ever acted as a fallback.
+ * Which arm faces the camera in a side view is a training preference instead, chosen
+ * on the session setup screen (CoachingPreferences.dominantArm).
  */
 data class AthleteProfile(
     val name: String = "",
@@ -45,6 +47,7 @@ data class AthleteProfile(
     val photoPath: String? = null,
     val firstName: String = "",
     val lastName: String = "",
+    val middleName: String = "",
     val address: ProfileAddress? = null,
     val trainingSetup: SavedTrainingSetup? = null,
 ) {
@@ -74,6 +77,13 @@ data class AthleteProfile(
          */
         const val MAX_NAME_PART_LENGTH = 40
         const val MAX_NAME_LENGTH = MAX_NAME_PART_LENGTH * 2 + 1
+
+        /** "Maria C. Santos": the middle name is kept in full but shown as an initial. */
+        fun displayName(first: String, middle: String, last: String): String = listOfNotNull(
+            first.trim().takeIf { it.isNotEmpty() },
+            middle.trim().firstOrNull()?.let { "${it.uppercaseChar()}." },
+            last.trim().takeIf { it.isNotEmpty() },
+        ).joinToString(" ").take(MAX_NAME_LENGTH)
 
         private val WHITESPACE = Regex("\\s+")
     }

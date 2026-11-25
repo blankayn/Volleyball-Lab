@@ -173,7 +173,7 @@ class ReactiveCoachingEngine(
             CueId.SetElbowFlexion -> "Keep your elbows comfortably bent before extending your arms."
             CueId.SetKneeFlexion -> "Soften your knees before extending upward."
             CueId.SetExtensionFollowThrough -> "Extend your arms upward through the finish."
-            CueId.SpikeApproachLoad -> "Load your knees before taking off."
+            CueId.SpikeApproachLoad -> "Bend your knees before swinging, with both feet planted."
             CueId.SpikeJumpHeight -> "Extend upward from a balanced knee bend."
             CueId.SpikeTrunkDrive -> "Keep your trunk controlled during the overhead reach."
             CueId.BlockArmExtension -> "Reach with straighter arms at the top of your block."

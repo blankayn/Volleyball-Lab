@@ -71,7 +71,53 @@ class CoachFeedbackFlowTest {
         assertTrue(model.noteDelivery.value.failed)
     }
 
+    @Test fun momentAndPhotoTravelWithTheNoteAndStayWithTheDraftWhenSendingFails() = runTest(dispatcher) {
+        val coaches = FakeCoaches()
+        val model = CoachReviewViewModel(coaches, DrillTestAuth("coach"), sessions)
+        model.attachPhoto { "data:image/jpeg;base64,AAAA" }
+        advanceUntilIdle()
+        coaches.fail = true
+        model.postNote("player", "session", "Straighter arms.", videoMs = 12_400, repNumber = 4) { fail("Not sent") }
+        advanceUntilIdle()
+        assertTrue(model.noteDelivery.value.failed)
+        assertEquals("data:image/jpeg;base64,AAAA", model.photoDraft.value.source)
+        coaches.fail = false
+        model.postNote("player", "session", "Straighter arms.", videoMs = 12_400, repNumber = 4) {}
+        advanceUntilIdle()
+        val note = coaches.saved.single()
+        assertEquals(12_400L to 4, note.videoMs to note.repNumber)
+        assertTrue(note.hasPhoto)
+        assertEquals("data:image/jpeg;base64,AAAA", coaches.photo)
+        assertNull(model.photoDraft.value.source)
+    }
+
+    @Test fun aPhotoThatCannotBePreparedIsExplainedAndNothingIsSentWhilePreparing() = runTest(dispatcher) {
+        val coaches = FakeCoaches()
+        val model = CoachReviewViewModel(coaches, DrillTestAuth("coach"), sessions)
+        model.attachPhoto { error("Choose a photo smaller than 15 MB.") }
+        advanceUntilIdle()
+        assertEquals("Choose a photo smaller than 15 MB.", model.photoDraft.value.error)
+        val gate = CompletableDeferred<String>()
+        model.attachPhoto { gate.await() }
+        advanceUntilIdle()
+        model.postNote("player", "session", "Reach high.") { fail("Sent without its photo") }
+        advanceUntilIdle()
+        assertEquals(0, coaches.attempts)
+        gate.complete("data:image/jpeg;base64,BBBB")
+        advanceUntilIdle()
+        model.removePhotoDraft()
+        model.postNote("player", "session", "Reach high.") {}
+        advanceUntilIdle()
+        assertFalse(coaches.saved.single().hasPhoto)
+        assertNull(coaches.photo)
+    }
+
     private class FakeCoaches : CoachRepository {
+        var photo: String? = null
+        override suspend fun postNote(note: CoachNote, photo: String?) {
+            postNote(note)
+            this.photo = photo
+        }
         var fail = false
         var attempts = 0
         var beforeSave: suspend () -> Unit = {}

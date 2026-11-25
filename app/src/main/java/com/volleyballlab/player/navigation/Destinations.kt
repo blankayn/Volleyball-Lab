@@ -72,7 +72,9 @@ data class CaptureRoute(val skill: Skill, val drillId: String, val returnToDrill
 @Serializable
 data class SessionResultRoute(val sessionId: String, val returnToDrillId: String? = null,
     val assignmentId: String? = null, val returnToSummary: Boolean = false,
-    val summaryFromProgress: Boolean = false)
+    val summaryFromProgress: Boolean = false,
+    /** Opened from coach feedback: Done goes back there. [startAtMs] is the moment it points at, or negative. */
+    val returnToCoach: Boolean = false, val startAtMs: Long = -1L)
 
 @Serializable
 data class SessionSummaryRoute(val sessionId: String, val fromProgress: Boolean = false)

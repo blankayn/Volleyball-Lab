@@ -267,7 +267,7 @@ private fun MainShell(start: StartDestination, hasOnboarded: () -> Boolean) {
                                 TopLevelDestination.Progress else TopLevelDestination.Home
                         currentDestination?.hasRoute<PlayerAssignmentRoute>() == true ||
                             (currentDestination?.hasRoute<SessionResultRoute>() == true &&
-                                backStackEntry?.toRoute<SessionResultRoute>()?.assignmentId != null) -> TopLevelDestination.Coach
+                                backStackEntry?.toRoute<SessionResultRoute>()?.let { it.assignmentId != null || it.returnToCoach } == true) -> TopLevelDestination.Coach
                         else -> null
                     },
                 )
@@ -583,10 +583,14 @@ private fun VbBottomBar(
                 selected = selected,
                 onClick = { navController.navigateToTopLevel(destination) },
                 icon = {
-                    Icon(
-                        imageVector = destination.icon,
-                        contentDescription = null,
-                    )
+                    val icon = @Composable {
+                        Icon(
+                            imageVector = destination.icon,
+                            contentDescription = null,
+                        )
+                    }
+                    if (destination == TopLevelDestination.Coach) com.volleyballlab.player.feature.coach.FeedbackBadged { icon() }
+                    else icon()
                 },
                 label = { Text(stringResource(destination.titleRes)) },
                 colors = NavigationBarItemDefaults.colors(
@@ -615,13 +619,21 @@ internal fun NavHostController.navigateToTopLevel(destination: TopLevelDestinati
             // History feedback shares the result screen, but selecting Train
             // should still open the training tab rather than stay in history.
             popBackStack(SessionSummaryRoute(feedback.sessionId, feedback.summaryFromProgress), inclusive = false)
-        }
+        } else if (feedback.returnToCoach) popBackStack()
     }
     if (currentDestination?.hierarchy?.any { it.hasRoute(destination.graphClass) } == true) return
     navigate(destination.route) {
         popUpTo<HomeRoute> { saveState = true }
         launchSingleTop = true
         restoreState = destination != TopLevelDestination.Home
+    }
+}
+
+/** Sign-up can open from the welcome page, so a login form is not always underneath it. */
+private fun NavHostController.backToLogin() {
+    if (!popBackStack<LoginRoute>(inclusive = false)) navigate(LoginRoute) {
+        popUpTo<SignUpRoute> { inclusive = true }
+        launchSingleTop = true
     }
 }
 
@@ -654,6 +666,7 @@ private fun VbNavHost(
     val quick = VbMotion.tween<Float>(VbMotion.Short, reduceMotion = reduceMotion)
 
     val setupScope = rememberCoroutineScope()
+    var registeredEmail by rememberSaveable { mutableStateOf<String?>(null) }
     val setupGraph = (LocalContext.current.applicationContext as com.volleyballlab.player.VolleyballLabApplication).container
 
     NavHost(
@@ -709,18 +722,19 @@ private fun VbNavHost(
                     }
                 },
                 onSignUp = { navController.navigate(SignUpRoute) },
+                registeredEmail = registeredEmail,
+                onRegisteredShown = { registeredEmail = null },
             )
         }
 
         composable<SignUpRoute> {
             SignUpScreen(
-                // A brand-new account has by definition not been onboarded, so it
-                // goes to the questionnaire rather than consulting the flag - which
-                // could still be true from whoever used this phone last.
-                onAuthenticated = { role ->
-                    if (role == UserRole.Player) navController.leaveAuth(onboarded = false)
+                // A new account signs in on the login form like any other.
+                onRegistered = { email ->
+                    registeredEmail = email
+                    navController.backToLogin()
                 },
-                onBackToLogin = { navController.popBackStack() },
+                onBackToLogin = { navController.backToLogin() },
             )
         }
 
@@ -740,10 +754,12 @@ private fun VbNavHost(
                 onStartTraining = { navController.navigateToTopLevel(TopLevelDestination.Train) },
                 onSkillSelected = { skill -> navController.navigate(DrillSelectRoute(skill)) },
                 onTakeAssessment = { navController.navigate(AssessmentRoute) },
+                onOpenDrill = { navController.navigate(DrillDetailRoute(it)) },
                 onViewAllSessions = {
                     navController.navigateToTopLevel(TopLevelDestination.Progress)
                 },
                 onViewAssignments = { navController.navigateToTopLevel(TopLevelDestination.Coach) },
+                onOpenAssignment = { navController.navigate(PlayerAssignmentRoute(it)) },
                 onOpenSession = { navController.navigate(SessionSummaryRoute(it)) },
                 contentPadding = contentPadding,
             )
@@ -799,6 +815,16 @@ private fun VbNavHost(
                 val route = entry.toRoute<DrillDetailRoute>()
                 DrillDetailScreen(route.drillId,
                     onCamera = { drill -> navController.navigate(CaptureRoute(drill.skill, drill.id, route.drillId)) },
+                    onPractice = { workout ->
+                        navController.navigate(DrillPracticeRoute(route.drillId, workout.sets, workout.reps, workout.restSeconds)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onResume = { draft ->
+                        navController.navigate(DrillPracticeRoute(draft.drillId, draft.config.sets, draft.config.reps, draft.config.restSeconds, draft.id)) {
+                            launchSingleTop = true
+                        }
+                    },
                     onBack = { navController.popBackStack() }, contentPadding = contentPadding,
                 )
             }
@@ -840,7 +866,9 @@ private fun VbNavHost(
                         // or its skill path; Done goes back to whichever one opened it.
                         val fromGuide = route.returnToDrillId != null &&
                             runCatching { navController.getBackStackEntry<DrillDetailRoute>() }.isSuccess
-                        if (route.returnToSummary) {
+                        if (route.returnToCoach) {
+                            navController.popBackStack()
+                        } else if (route.returnToSummary) {
                             navController.popBackStack(SessionSummaryRoute(route.sessionId, route.summaryFromProgress), inclusive = false)
                         } else if (route.assignmentId != null) {
                             navController.popBackStack(PlayerAssignmentRoute(route.assignmentId), inclusive = false)
@@ -853,7 +881,17 @@ private fun VbNavHost(
                             if (!returned) navController.navigate(SkillSelectRoute) { popUpTo<SkillSelectRoute> { inclusive = true } }
                         }
                     },
-                    doneLabel = if (route.returnToSummary) stringResource(R.string.session_summary_back_from_feedback) else null,
+                    doneLabel = when {
+                        route.returnToCoach -> stringResource(R.string.result_back_to_coach)
+                        route.returnToSummary -> stringResource(R.string.session_summary_back_from_feedback)
+                        else -> null
+                    },
+                    startAtMs = route.startAtMs,
+                    onNextStep = { step ->
+                        val drill = step.drill
+                        if (drill != null && step.reason != com.volleyballlab.player.domain.model.NextStepReason.OtherSkill) navController.navigate(DrillDetailRoute(drill.id))
+                        else navController.navigate(DrillSelectRoute(step.skill))
+                    },
                     contentPadding = contentPadding,
                 )
             }
@@ -925,6 +963,9 @@ private fun VbNavHost(
                     contentPadding = contentPadding,
                     onOpenProfile = { navController.navigate(CoachProfileRoute(it)) },
                     section = entry.toRoute<MyCoachSectionRoute>().section,
+                    onOpenMoment = { sessionId, at ->
+                        navController.navigate(SessionResultRoute(sessionId, returnToCoach = true, startAtMs = at))
+                    },
                     onOpenSection = navController::openMyCoachSection,
                 )
             }

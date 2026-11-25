@@ -2,17 +2,17 @@ package com.volleyballlab.player.feature.assessment
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.platform.LocalContext
-import com.volleyballlab.player.VolleyballLabApplication
+import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.ui.component.StudentCard
 
@@ -20,104 +20,126 @@ import com.volleyballlab.player.ui.component.StudentCard
 fun AssessmentScreen(onFinished: () -> Unit, contentPadding: PaddingValues, modifier: Modifier = Modifier, model: AssessmentViewModel = viewModel(factory = AssessmentViewModel.Factory)) {
     val state by model.state.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
-    LaunchedEffect(state.step) { scroll.scrollTo(0) }
+    LaunchedEffect(state.page) { scroll.scrollTo(0) }
+    val result = state.kind == AssessmentPage.Result
     Column(modifier.fillMaxSize().padding(contentPadding).imePadding()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (state.aiEnabled) "AI-guided setup" else "Quick setup", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                TextButton(onClick = { model.onSkip(onFinished) }, enabled = !state.busy) { Text("Skip") }
+                Text(stringResource(R.string.assessment_title), Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
+                if (!result) TextButton(onClick = { model.onSkip(onFinished) }, enabled = !state.busy) { Text(stringResource(R.string.skill_check_skip)) }
             }
-            Text("Let's build your starting plan", style = MaterialTheme.typography.headlineSmall)
-            Text("Card ${state.step.ordinal + 1} of 5", style = MaterialTheme.typography.labelMedium)
-            LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+            if (!result) {
+                Text(stringResource(R.string.skill_check_step, state.page + 1, state.pages - 1), style = MaterialTheme.typography.labelMedium)
+                LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+            }
         }
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            when (state.step) {
-                AssessmentStep.Goal -> {
-                    Heading("What would you like to work on?", "Choose a skill or tell us what feels difficult.")
-                    SkillChoices(state.goal, { model.onGoalSelected(it) }, !state.busy, state.goalChosen)
-                    FilterChip(selected = state.goalChosen && state.goal == null, onClick = { model.onGoalSelected(null) }, enabled = !state.busy, label = { Text("I'm not sure yet") })
-                    OutlinedTextField(value = state.note, onValueChange = model::onNoteChanged, enabled = !state.busy,
-                        label = { Text("Describe your goal (optional)") }, placeholder = { Text("My serves keep going out") },
-                        supportingText = { Text("English, Filipino, or Taglish · ${state.note.length}/160") },
-                        modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4)
-                }
-                AssessmentStep.Experience -> {
-                    Heading("How much have you played?", "This is your own experience, not a test of your ability.")
-                    ExperienceLevel.entries.forEach { level ->
-                        Choice(stringResource(level.label), state.experience == level, !state.busy) { model.onExperienceSelected(level) }
-                    }
-                    Text("You can add your position later in Profile.", style = MaterialTheme.typography.bodySmall)
-                }
-                AssessmentStep.FollowUp -> {
-                    val follow = state.followUp
-                    val question = TrainingSetupQuestions.question(follow?.questionId.orEmpty())
-                    if (!follow?.acknowledgment.isNullOrBlank()) Text(follow!!.acknowledgment, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                    Heading(question?.prompt ?: "What would help you get started?", "Pick the answer that sounds most like you.")
-                    question?.options?.forEach { option -> Choice(option.label, state.optionId == option.id, !state.busy) { model.onOptionSelected(option.id) } }
-                }
-                AssessmentStep.Schedule -> {
-                    Heading("How often would you like to practice?", "Choose a realistic weekly target. You can change it later.")
-                    WeeklyChoices(state.weeklyGoal, model::onWeeklyGoalSelected, !state.busy)
-                }
-                AssessmentStep.Review -> {
-                    val suggestion = state.suggestion
-                    if (suggestion != null) {
-                        Heading("Your starting plan", "Based on your answers")
-                        Text(suggestion.summary, style = MaterialTheme.typography.titleMedium)
-                        Text(suggestion.reason, style = MaterialTheme.typography.bodyMedium)
-                        Text("Your focus", style = MaterialTheme.typography.titleSmall)
-                        SkillChoices(suggestion.focusSkill, model::onReviewGoalSelected, !state.busy)
-                        Text("Practices per week", style = MaterialTheme.typography.titleSmall)
-                        WeeklyChoices(state.weeklyGoal, model::onReviewWeeklyGoalSelected, !state.busy)
-                        val graph = (LocalContext.current.applicationContext as VolleyballLabApplication).container
-                        val drill by produceState<Drill?>(null, suggestion.focusSkill) { value = graph.drillRepository.byId(TrainingSetupQuestions.starterDrill(suggestion.focusSkill)) }
-                        StudentCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Your first drill · Free", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                Text(drill?.name ?: "Loading starter drill…", style = MaterialTheme.typography.titleMedium)
-                                drill?.let { Text("${it.estimatedMinutes} minutes · ${it.targetReps} repetitions", style = MaterialTheme.typography.bodySmall) }
-                            }
-                        }
-                        Text("This is a starting suggestion, not a measured skill level. Your recorded sessions will show your form feedback.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            when (state.kind) {
+                AssessmentPage.About -> AboutPage(state, model)
+                AssessmentPage.Goals -> GoalsPage(state, model)
+                AssessmentPage.Time -> TimePage(state, model)
+                AssessmentPage.Skill -> SkillPage(state, model)
+                AssessmentPage.Weak -> WeakPage(state, model)
+                AssessmentPage.Result -> AssessmentResult(state.result, state.answers, state.drills, state.planner, model::retryPlan)
             }
-            if (state.busy) Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                Text(if (state.step == AssessmentStep.Review) "Saving your plan…" else "Getting your next card ready…", style = MaterialTheme.typography.bodySmall)
-            }
+            if (state.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (state.step != AssessmentStep.Goal) OutlinedButton(onClick = model::onBack, enabled = !state.busy) { Text("Back") }
+            if (state.page > 0 && !result) OutlinedButton(onClick = model::onBack, enabled = !state.busy) { Text(stringResource(R.string.skill_check_back)) }
             Button(onClick = { model.onNext(onFinished) }, enabled = state.canAdvance, modifier = Modifier.weight(1f)) {
-                Text(when { state.step == AssessmentStep.Review -> "Save my plan"; state.step == AssessmentStep.Goal && state.aiEnabled -> "Continue with AI"; else -> "Next" })
+                Text(stringResource(when (state.kind) {
+                    AssessmentPage.Result -> R.string.assessment_done
+                    AssessmentPage.Weak -> R.string.assessment_submit
+                    else -> R.string.skill_check_next
+                }))
             }
         }
     }
 }
 
 @Composable
-private fun Heading(title: String, body: String) {
-    Text(title, style = MaterialTheme.typography.titleLarge)
-    Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-@Composable
-private fun SkillChoices(selected: Skill?, onSelected: (Skill) -> Unit, enabled: Boolean, hasSelection: Boolean = true) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Skill.All.forEach { skill -> FilterChip(selected = hasSelection && selected == skill, enabled = enabled, onClick = { onSelected(skill) }, label = { Text(stringResource(skill.displayName)) }) }
+private fun AboutPage(state: AssessmentUiState, model: AssessmentViewModel) {
+    Heading(stringResource(R.string.assessment_about), stringResource(R.string.assessment_about_body))
+    Question(stringResource(R.string.assessment_experience)) {
+        ExperienceLevel.entries.forEach { Choice(stringResource(it.label), state.experience == it, !state.busy) { model.onExperience(it) } }
+    }
+    Question(stringResource(R.string.assessment_position)) {
+        Choice(stringResource(R.string.assessment_position_none), state.position == null, !state.busy) { model.onPosition(null) }
+        CourtPosition.entries.forEach { Choice(stringResource(it.displayName), state.position == it, !state.busy) { model.onPosition(it) } }
     }
 }
+
 @Composable
-private fun WeeklyChoices(selected: Int, onSelected: (Int) -> Unit, enabled: Boolean) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        (listOf(1, 2, 3, 4, 5, 6, 7) + if (selected > 7) listOf(selected) else emptyList()).forEach { count ->
-            FilterChip(selected = selected == count, enabled = enabled, onClick = { onSelected(count) }, label = { Text("$count / week") })
+private fun GoalsPage(state: AssessmentUiState, model: AssessmentViewModel) {
+    Heading(stringResource(R.string.assessment_goals), stringResource(R.string.assessment_goals_body))
+    Question(stringResource(R.string.assessment_preferred)) {
+        Skill.All.forEach { Choice(stringResource(it.displayName), it in state.preferred, !state.busy) { model.onPreferred(it) } }
+    }
+    Question(stringResource(R.string.assessment_goal)) {
+        MainGoal.entries.forEach { Choice(it.label, state.goal == it, !state.busy) { model.onGoal(it) } }
+    }
+    Note(state.goalNote, stringResource(R.string.skill_check_goal), !state.busy, model::onGoalNote)
+}
+
+@Composable
+private fun TimePage(state: AssessmentUiState, model: AssessmentViewModel) {
+    Heading(stringResource(R.string.skill_check_schedule), stringResource(R.string.skill_check_schedule_body))
+    Question(stringResource(R.string.assessment_days)) {
+        (1..7).forEach { Choice("$it", state.days == it, !state.busy) { model.onDays(it) } }
+    }
+    Question(stringResource(R.string.assessment_minutes)) {
+        AssessmentAnswers.MINUTES.forEach { Choice(stringResource(R.string.assessment_minutes_value, it), state.minutes == it, !state.busy) { model.onMinutes(it) } }
+    }
+}
+
+@Composable
+private fun SkillPage(state: AssessmentUiState, model: AssessmentViewModel) {
+    val skill = state.skill ?: return
+    Heading(stringResource(skill.displayName), stringResource(R.string.skill_check_body))
+    SkillCheck.forSkill(skill).forEach { statement ->
+        StudentCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(statement.text, style = MaterialTheme.typography.bodyLarge)
+                FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CanDo.entries.forEach { Choice(it.label, state.statements[statement.id] == it, !state.busy) { model.onAnswer(statement.id, it) } }
+                }
+            }
         }
     }
 }
+
 @Composable
-private fun Choice(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    FilterChip(selected = selected, enabled = enabled, onClick = onClick, label = { Text(label, Modifier.padding(vertical = 8.dp)) }, modifier = Modifier.fillMaxWidth())
+private fun WeakPage(state: AssessmentUiState, model: AssessmentViewModel) {
+    Heading(stringResource(R.string.assessment_weak), stringResource(R.string.assessment_weak_body))
+    Question(stringResource(R.string.assessment_weak_choose)) {
+        WeakPoint.entries.forEach { Choice(it.label, it in state.weakPoints, !state.busy) { model.onWeakPoint(it) } }
+    }
+    Note(state.weakNote, stringResource(R.string.assessment_weak_note), !state.busy, model::onWeakNote)
+    Text(stringResource(R.string.assessment_ai_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Question(title: String, choices: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { choices() }
+    }
+}
+
+@Composable
+private fun Choice(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) =
+    FilterChip(selected = selected, enabled = enabled, onClick = onClick, label = { Text(label) })
+
+@Composable
+private fun Note(value: String, label: String, enabled: Boolean, onChange: (String) -> Unit) =
+    OutlinedTextField(value = value, onValueChange = onChange, enabled = enabled, label = { Text(label) },
+        supportingText = { Text("${value.length}/${AssessmentAnswers.MAX_NOTE}") }, modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4)
+
+@Composable
+private fun Heading(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }

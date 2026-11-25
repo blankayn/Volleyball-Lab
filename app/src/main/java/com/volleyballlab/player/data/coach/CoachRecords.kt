@@ -4,7 +4,7 @@ import com.volleyballlab.player.domain.model.AssignmentStatus
 import com.volleyballlab.player.domain.model.CoachAssignment
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.CoachProfile
-import com.volleyballlab.player.domain.model.CoachSpecialisation
+import com.volleyballlab.player.domain.model.CoachingRole
 import com.volleyballlab.player.domain.model.CourtPosition
 import com.volleyballlab.player.domain.model.DrillLevel
 import com.volleyballlab.player.domain.model.MembershipStatus
@@ -32,7 +32,7 @@ internal data class CoachProfileRecord(
     val name: String = "",
     val teamName: String = "",
     val organisation: String = "",
-    val specialisation: String? = null,
+    val coachingRole: String? = null,
     val yearsExperience: Int? = null,
     val licenceNumber: String = "",
     val notifySubmissions: Boolean = true,
@@ -85,6 +85,8 @@ internal data class NoteRecord(
     val sessionId: String? = null,
     val text: String = "",
     val createdAtEpochMs: Long = 0L,
+    val videoMs: Long? = null,
+    val repNumber: Int? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -95,7 +97,7 @@ internal fun CoachProfile.toRecord() = CoachProfileRecord(
     name = name,
     teamName = teamName,
     organisation = organisation,
-    specialisation = specialisation?.name,
+    coachingRole = coachingRole?.name,
     yearsExperience = yearsExperience,
     licenceNumber = licenceNumber,
     notifySubmissions = notifySubmissions,
@@ -144,6 +146,8 @@ internal fun CoachNote.toRecord() = NoteRecord(
     sessionId = sessionId,
     text = text,
     createdAtEpochMs = createdAtEpochMs,
+    videoMs = videoMs,
+    repNumber = repNumber,
 )
 
 // ---------------------------------------------------------------------------
@@ -154,9 +158,7 @@ internal fun CoachProfileRecord.toDomain() = CoachProfile(
     name = name,
     teamName = teamName,
     organisation = organisation,
-    specialisation = specialisation?.let { stored ->
-        CoachSpecialisation.entries.firstOrNull { it.name == stored }
-    },
+    coachingRole = CoachingRole.of(coachingRole),
     yearsExperience = yearsExperience,
     licenceNumber = licenceNumber,
     notifySubmissions = notifySubmissions,
@@ -222,4 +224,6 @@ internal fun NoteRecord.toDomain() = CoachNote(
     sessionId = sessionId,
     text = text,
     createdAtEpochMs = createdAtEpochMs,
+    videoMs = videoMs.takeIf { sessionId != null },
+    repNumber = repNumber.takeIf { sessionId != null && videoMs != null },
 )

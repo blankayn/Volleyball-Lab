@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { DEFAULT_GROQ_MODEL } from "../../functions/session-explanation-policy.mjs";
 import { ApiError, candidateIdentity, firestoreRead } from "./firebase.mjs";
 import { reserveUsage } from "./usage.mjs";
+import { localNextSkills, nextSkillsData, nextSkillsPrompt, validateNextSkills } from "./next-skills.mjs";
 
 export const SETUP_SKILLS = ["Serving", "Receiving", "Setting", "Spiking", "Blocking"];
 export const SETUP_QUESTIONS = Object.freeze({
@@ -30,6 +31,11 @@ const invalid = () => new ApiError("INVALID_ARGUMENT", "Choose the setup answers
 const skillQuestion = skill => Object.keys(SETUP_QUESTIONS).find(id => SETUP_QUESTIONS[id].skill === skill);
 
 export function setupData(body) {
+  if (keysAre(body, ["data"]) && body.data?.mode === "next_skills") {
+    const skills = nextSkillsData(body.data);
+    if (!skills) throw invalid();
+    return skills;
+  }
   if (!keysAre(body, ["data"]) || !keysAre(body.data, ["version", "mode", "answers"])) throw invalid();
   const { version, mode, answers } = body.data;
   if (version !== 1 || !["next_card", "summary"].includes(mode) ||
@@ -64,6 +70,7 @@ function prose(value, maximum) {
 }
 
 export function validateSetupOutput(raw, data) {
+  if (data.mode === "next_skills") return validateNextSkills(raw, data);
   const value = typeof raw === "string" ? JSON.parse(raw) : raw;
   if (data.mode === "next_card") {
     if (!keysAre(value, ["focusSkill", "questionId", "acknowledgment"]) ||
@@ -77,6 +84,7 @@ export function validateSetupOutput(raw, data) {
 }
 
 export function localSetup(data) {
+  if (data.mode === "next_skills") return localNextSkills(data);
   const focusSkill = chosenFocus(data.answers);
   if (data.mode === "next_card") return {
     focusSkill, questionId: data.answers.goalSkill === "NotSure" ? "general_focus" : skillQuestion(focusSkill),
@@ -91,7 +99,7 @@ export function localSetup(data) {
   };
 }
 
-async function boundedBytes(response, maximum) {
+export async function boundedBytes(response, maximum) {
   if (response.ok === false || Number(response.headers.get("content-length")) > maximum) throw Error("bounded_response_unavailable");
   const reader = response.body?.getReader();
   if (!reader) throw Error("bounded_response_unavailable");
@@ -110,6 +118,17 @@ async function boundedBytes(response, maximum) {
 
 /** No account identity, session data, provider key, or recordings enter the prompt. */
 export async function generateSetup({ apiKey, data, fetchImpl = fetch }) {
+  if (data.mode === "next_skills") {
+    const { schema, messages } = nextSkillsPrompt(data);
+    const response = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST", redirect: "manual", signal: AbortSignal.timeout(3_500),
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: DEFAULT_GROQ_MODEL, reasoning_effort: "low", max_completion_tokens: 700, messages,
+        response_format: { type: "json_schema", json_schema: { name: "next_skills", strict: true, schema } } }),
+    });
+    const body = JSON.parse(new TextDecoder().decode(await boundedBytes(response, 12_000)));
+    return validateNextSkills(body.choices?.[0]?.message?.content, data);
+  }
   const next = data.mode === "next_card";
   const properties = next ? {
     focusSkill: { type: "string", enum: data.answers.goalSkill === "NotSure" ? SETUP_SKILLS : [data.answers.goalSkill] },
@@ -159,7 +178,7 @@ export async function trainingSetupRequest(request, env, headers, { fetchImpl = 
     }
     // Do not return freshly generated content after account deletion/revocation.
     await firestoreRead(`users/${identity.uid}`, identity.token, fetchImpl, ["role"]);
-    return Response.json({ result: { status: data.mode === "next_card" ? "question" : "summary", source, ...value } }, { headers });
+    return Response.json({ result: { status: data.mode === "next_skills" ? "next_skills" : data.mode === "next_card" ? "question" : "summary", source, ...value } }, { headers });
   } catch (error) {
     const status = error instanceof ApiError ? error.status : "UNAVAILABLE";
     const message = status === "UNAUTHENTICATED" ? "Sign in again to personalize your setup."

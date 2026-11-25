@@ -12,8 +12,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,16 +30,26 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CoachAssessment
 import com.volleyballlab.player.domain.model.CoachAssessmentEngine
 import com.volleyballlab.player.domain.model.CueId
+import com.volleyballlab.player.domain.model.NextStep
+import com.volleyballlab.player.domain.model.NextStepReason
+import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.pose.analysis.CuePlainWords
 import com.volleyballlab.player.domain.model.ObservedCue
 import com.volleyballlab.player.ui.theme.vbColors
 
 /**
- * The report in three plain parts: what went well, what to practice next, and
+ * The report in three plain parts: what went well, what to do next, and
  * any measured progress. Each part appears only when its evidence exists.
  */
 @Composable
-internal fun SessionReportCard(repCount: Int, assessment: CoachAssessment, modifier: Modifier = Modifier) {
+internal fun SessionReportCard(
+    repCount: Int,
+    assessment: CoachAssessment,
+    modifier: Modifier = Modifier,
+    skill: Skill? = null,
+    next: NextStepAdvice? = null,
+    onNextStep: ((NextStep) -> Unit)? = null,
+) {
     val observed = assessment.observedCues.filter { it.cue.id != CueId.SpikeJumpHeight }
     val strength = observed.filter {
         it.inRange >= CoachAssessmentEngine.MIN_REPS && it.inRange >= it.measuredReps * 0.6f
@@ -61,10 +71,17 @@ internal fun SessionReportCard(repCount: Int, assessment: CoachAssessment, modif
         }
 
         ReportPart(
-            icon = Icons.Rounded.Flag,
+            icon = Icons.Rounded.AutoAwesome,
             tint = MaterialTheme.colorScheme.primary,
-            title = stringResource(R.string.session_report_next),
+            title = stringResource(R.string.next_step_title),
         ) {
+            val step = next?.step
+            // Another skill is the whole suggestion; a correction beside it would be two things to do.
+            if (step != null && skill != null && step.reason == NextStepReason.OtherSkill) {
+                Text(nextStepText(step, skill, false).orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                onNextStep?.let { NextStepButton(step, it) }
+                return@ReportPart
+            }
             if (correction != null) {
                 val evidence = correction.evidence
                 val below = evidence.belowReference > evidence.aboveReference
@@ -78,19 +95,23 @@ internal fun SessionReportCard(repCount: Int, assessment: CoachAssessment, modif
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // The action is the line to remember, so it gets its own block.
                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)) {
-                    Text(correction.instruction, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    Text(next?.instruction ?: correction.instruction, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface)
                 }
-                Text(stringResource(R.string.coach_assessment_drill, correction.drillName),
+                if (step == null) Text(stringResource(R.string.coach_assessment_drill, correction.drillName),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
+            } else if (step == null || step.reason == NextStepReason.Repeat) {
                 Text(stringResource(when {
                     repCount == 0 -> R.string.session_report_no_reps
                     observed.isEmpty() -> R.string.session_report_not_enough
                     strength != null -> R.string.session_report_repeat
                     else -> R.string.session_report_mixed
                 }), style = MaterialTheme.typography.bodyMedium)
+            }
+            if (step != null && skill != null) {
+                nextStepText(step, skill, correction != null)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                onNextStep?.let { NextStepButton(step, it) }
             }
         }
 
@@ -116,7 +137,6 @@ internal fun SessionReportCard(repCount: Int, assessment: CoachAssessment, modif
 
         Text(stringResource(R.string.session_report_basis), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        PoseBenchmarkDisclosure()
     }
 }
 

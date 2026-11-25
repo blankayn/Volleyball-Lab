@@ -10,13 +10,19 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.di.PoseDetectorFactory
 import com.volleyballlab.player.domain.model.CoachAssignment
+import com.volleyballlab.player.domain.model.CoachLink
+import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.Skill
 import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.domain.model.CueId
+import com.volleyballlab.player.domain.model.DrillFocus
+import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.SessionAngleStage
 import com.volleyballlab.player.domain.repository.CoachRepository
 import com.volleyballlab.player.domain.repository.SessionRepository
 import com.volleyballlab.player.domain.repository.CoachingPreferencesRepository
+import com.volleyballlab.player.domain.repository.DominantArm
 import com.volleyballlab.player.domain.repository.CoachingPreferences
 import com.volleyballlab.player.domain.repository.ProfileRepository
 import com.volleyballlab.player.domain.model.AthleteProfile
@@ -47,6 +53,8 @@ import com.volleyballlab.player.pose.analysis.Facing
 import com.volleyballlab.player.pose.analysis.FacingGuide
 import com.volleyballlab.player.pose.analysis.GuideFigure
 import com.volleyballlab.player.pose.analysis.MovementFault
+import com.volleyballlab.player.pose.analysis.MovementVerdict
+import com.volleyballlab.player.pose.analysis.RepJudge
 import com.volleyballlab.player.pose.analysis.ProgressiveInstructions
 import com.volleyballlab.player.pose.analysis.SpokenCue
 import com.volleyballlab.player.pose.analysis.ReferenceFigure
@@ -177,21 +185,54 @@ sealed interface CaptureUiState {
  *
  * Two sources, kept distinct on purpose. The on-device posture coach is always
  * present - it is [LivePostureCoach] reading MediaPipe landmarks. The human coach
- * is present when the athlete has linked one: their name, the drill they set for
- * this skill, and their latest note. The live screen shows both, and never blurs
- * which is which - one is arithmetic over this rep, the other is a person.
+ * is present when the athlete has linked one and they have something for *this
+ * skill*: a drill they set, or their newest note on a session of it. The note is
+ * labelled with the session it was written about, because it says nothing about
+ * the reps being done now. The live screen never blurs the two coaches - one is
+ * arithmetic over this rep, the other is a person, who is not watching live.
  */
 data class LiveCoachContext(
     val coachName: String? = null,
     val teamName: String? = null,
     val assignment: CoachAssignment? = null,
     val latestNote: CoachNote? = null,
+    /** When the session [latestNote] is about was recorded. */
+    val noteSessionAtEpochMs: Long? = null,
 ) {
     val hasHumanCoach: Boolean get() = !coachName.isNullOrBlank() || !teamName.isNullOrBlank()
+
+    /** Whether the coach has left anything for the skill being practised. */
+    val hasCoachContent: Boolean get() = hasHumanCoach && (assignment != null || !latestNote?.text.isNullOrBlank())
 
     /** "Coach Maya", "Your team", or null when there is no linked coach. */
     val displayName: String? get() = coachName?.takeIf { it.isNotBlank() }
         ?: teamName?.takeIf { it.isNotBlank() }
+
+    companion object {
+        /** Only what belongs to [skill]: feedback on another skill's session would read as feedback on this one. */
+        fun of(
+            skill: Skill,
+            link: CoachLink?,
+            assignments: List<CoachAssignment>,
+            notes: List<CoachNote>,
+            sessions: List<SessionResult>,
+            assignmentId: String? = null,
+        ): LiveCoachContext {
+            val coach = link?.takeIf { it.isActive } ?: return LiveCoachContext()
+            val recordedAt = sessions.filter { it.skill == skill }.associate { it.id to it.startedAtEpochMs }
+            val note = notes.filter { it.coachUid == coach.coachUid && it.sessionId in recordedAt }
+                .maxByOrNull { it.createdAtEpochMs }
+            return LiveCoachContext(
+                coachName = coach.coachName.takeIf { it.isNotBlank() },
+                teamName = coach.teamName.takeIf { it.isNotBlank() },
+                assignment = assignments.filter { it.skill == skill }.let { mine ->
+                    if (assignmentId != null) mine.firstOrNull { it.id == assignmentId } else mine.firstOrNull { it.isOpen }
+                },
+                latestNote = note,
+                noteSessionAtEpochMs = note?.sessionId?.let(recordedAt::get),
+            )
+        }
+    }
 }
 
 /**
@@ -237,11 +278,12 @@ class CaptureViewModel(
     private val allowDemoDetector: Boolean,
     private val coachRepository: CoachRepository? = null,
     private val receivingPostureEvaluator: ReceivingReadyPostureEvaluator? = null,
-    coachingPreferencesRepository: CoachingPreferencesRepository? = null,
+    private val coachingPreferencesRepository: CoachingPreferencesRepository? = null,
     private val assignmentId: String? = null,
     private val capturedReviewWriter: CapturedReviewWriter? = null,
     private val liveCoachingRepository: LiveCoachingRepository? = null,
     private val profileRepository: ProfileRepository? = null,
+    private val adaptiveCoach: com.volleyballlab.player.data.coaching.AdaptiveCoachRepository? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<CaptureUiState>(CaptureUiState.Initialising)
@@ -315,6 +357,15 @@ class CaptureViewModel(
     private var latestOrientation: OrientationEstimate? = null
     private var setupAngleReady = false
     private val director = com.volleyballlab.player.pose.analysis.CoachDirector()
+
+    /** What this phone remembers about the player. Read once at the countdown, added to after saving. */
+    private val adaptiveMemory: StateFlow<com.volleyballlab.player.domain.model.AdaptiveMemory> =
+        adaptiveCoach?.memory?.catch { emit(com.volleyballlab.player.domain.model.AdaptiveMemory()) }
+            ?.stateIn(viewModelScope, SharingStarted.Eagerly, com.volleyballlab.player.domain.model.AdaptiveMemory())
+            ?: MutableStateFlow(com.volleyballlab.player.domain.model.AdaptiveMemory())
+
+    /** Attempts refused for a posture check, with when. They are in no saved session. */
+    private val missedReps = mutableListOf<Pair<com.volleyballlab.player.domain.model.CueId, Long>>()
     private var openingFinished: CompletableDeferred<Unit>? = null
     private var spokenGuidanceId: Long? = null
     fun onOpeningFinished() { openingFinished?.complete(Unit) }
@@ -322,7 +373,14 @@ class CaptureViewModel(
     private var reliableSinceMs: Long? = null
     private var lastFrameMs: Long? = null
     private var requiredSide: Side? = null
-    private var preferredSide: Side? = null
+
+    /**
+     * The arm the athlete said they hit with. It used to be guessed from whichever
+     * wrist was higher on their last rep, so the side-view direction flipped when a
+     * guiding arm, or a hidden hand the tracker guessed at, read as the higher one.
+     */
+    private val dominantSide: Side
+        get() = if (coachingPreferences.value.dominantArm == DominantArm.Left) Side.Left else Side.Right
     /**
      * The stance the current view is performed in. Fixed when the view begins,
      * so a later rep that reads the other hand as higher cannot flip the
@@ -330,7 +388,7 @@ class CaptureViewModel(
      */
     private var stageStance: Stance = FacingGuide.stance(skill, CameraAngle.Front)
     /** The last movement that was turned away, and when: (fault, timestamp). */
-    private var lastNotCounted: Pair<MovementFault, Long>? = null
+    private var lastNotCounted: Pair<String, Long>? = null
     private var rotationCountdownJob: Job? = null
     private var rotationElapsedMs = 0L
     private var chunks = mutableListOf<CaptureChunk>()
@@ -358,7 +416,13 @@ class CaptureViewModel(
 
 
     private val qualityValidator = PoseQualityValidator()
-    private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill))
+    private val repJudge = RepJudge(skill, drillId)
+
+    /** The count, the spoken reaction and the saved session all take [RepJudge]'s decision. */
+    private val repCounter = LiveRepCounter(SkillAnalyzers.forSkill(skill)) { window ->
+        repJudge.judge(window, (_uiState.value as? CaptureUiState.Recording)?.angle
+            ?.takeIf { _guidedOptions.value.enabled })
+    }
 
     /** Prototype, debug builds only: see [PersonalElbowBaseline] for the evidence and its limits. */
     private val elbowBaselineEnabled = com.volleyballlab.player.BuildConfig.DEBUG &&
@@ -366,6 +430,7 @@ class CaptureViewModel(
     private val elbowBaseline = PersonalElbowBaseline()
     private val postureCoach = LivePostureCoach(
         skill = skill,
+        cues = FormCueCatalog.forSkill(skill).filterNot { it.id in DrillFocus.excluded(drillId) },
         receivingEvaluator = receivingPostureEvaluator,
     )
 
@@ -403,10 +468,13 @@ class CaptureViewModel(
                 profileRepository?.profile ?: flowOf(AthleteProfile.Anonymous),
                 sessionRepository.sessions.catch { emit(emptyList()) },
                 _coachContext,
-            ) { profile, sessions, coach ->
+                adaptiveMemory,
+                adaptiveCoach?.marks?.catch { emit(emptyList()) } ?: flowOf(emptyList()),
+            ) { profile, sessions, coach, memory, marks ->
                 LiveCoachingPlan.forAthlete(skill, profile)
                     .withDrill(drillId)
                     .withHistory(sessions, skill, drillId)
+                    .withLearned(com.volleyballlab.player.domain.model.AdaptiveCoaching.learn(skill, sessions, memory, marks, drillId))
                     .withCoach(coach.coachName, coach.assignment?.takeIf { it.skill == skill }?.title)
             }.collect { plan ->
                 // Freeze the chosen plan at the countdown for a consistent session.
@@ -430,15 +498,9 @@ class CaptureViewModel(
                 repo.myCoach,
                 repo.assignmentsForMe,
                 repo.notesForMe,
-            ) { link, assignments, notes ->
-                val open = assignments.filter { it.isOpen }
-                LiveCoachContext(
-                    coachName = link?.coachName?.takeIf { it.isNotBlank() },
-                    teamName = link?.teamName?.takeIf { it.isNotBlank() },
-                    assignment = if (assignmentId != null) assignments.firstOrNull { it.id == assignmentId }
-                        else open.firstOrNull { it.skill == skill } ?: open.firstOrNull(),
-                    latestNote = notes.firstOrNull(),
-                )
+                sessionRepository.sessions.catch { emit(emptyList()) },
+            ) { link, assignments, notes, sessions ->
+                LiveCoachContext.of(skill, link, assignments, notes, sessions, assignmentId)
             }.collect { _coachContext.value = it }
         }
     }
@@ -575,10 +637,12 @@ class CaptureViewModel(
                 else ReferenceMoment.Finish
         }
         // Side-on, the arm nearest the lens is the hitting arm; that is the rule
-        // the side view is set up by. Otherwise, the arm they have been hitting with.
-        val hitting = FacingGuide.nearSide(facing) ?: preferredSide ?: Side.Right
+        // the side view is set up by. Otherwise, the arm they chose.
+        val hitting = FacingGuide.nearSide(facing) ?: dominantSide
         _referenceFigure.value = ReferenceFigure.layout(
-            ReferencePoses.pose(skill, moment, hitting, body), moment, body, placement, facing,
+            ReferencePoses.pose(skill, moment, hitting, body,
+                loadSpikeKnees = CueId.SpikeApproachLoad !in DrillFocus.excluded(drillId)),
+            moment, body, placement, facing,
             frame.imageWidth, frame.imageHeight,
         )
     }
@@ -595,6 +659,12 @@ class CaptureViewModel(
         if (_uiState.value !is CaptureUiState.Framing || reps !in listOf(5, 10)) return
         _guidedOptions.value = _guidedOptions.value.copy(repsPerAngle = reps)
         steadyMs = 0L
+    }
+
+    /** Remembered for later sessions. A view already under way keeps the direction it was announced with. */
+    fun setDominantArm(arm: DominantArm) {
+        if (_uiState.value !is CaptureUiState.Framing) return
+        viewModelScope.launch { coachingPreferencesRepository?.setDominantArm(arm) }
     }
 
     fun clearCoachingMessage(id: String) {
@@ -733,7 +803,7 @@ class CaptureViewModel(
         if (stageStartMs == null) stageStartMs = frame.timestampMs
         recordedFrames += frame
         val counted = repCounter.onFrame(frame)
-        repCounter.lastRejection?.let { onMovementNotCounted(it, frame.timestampMs) }
+        repCounter.lastRefusal?.let { onMovementNotCounted(it, frame.timestampMs) }
         _speechWindowOpen.value = repCounter.currentPhase != null
         val actualAngle = if (estimate.confidence >= 0.65f) estimate.angle else CameraAngle.Unknown
         _livePosture.value = postureCoach.update(frame, repCounter.currentPhase, actualAngle)
@@ -777,13 +847,6 @@ class CaptureViewModel(
                     speak = !GuidedCaptureProgress.reachedTarget(_guidedOptions.value, stageMetrics),
                     directorId = direction?.id)
                 if (assessment.isAssessable && assessment.isGood) hapticChannel.trySend(Unit)
-                if (skill == Skill.Serving || skill == Skill.Spiking) {
-                    val contact = window.frameFor(com.volleyballlab.player.domain.model.RepPhase.Contact)
-                    if (contact != null) preferredSide = if (
-                        contact.image(com.volleyballlab.player.pose.model.BodyPoint.LEFT_WRIST).y <
-                        contact.image(com.volleyballlab.player.pose.model.BodyPoint.RIGHT_WRIST).y
-                    ) Side.Left else Side.Right
-                }
             }
         }
         _uiState.value = state.copy(quality = quality, liveRepCount = totalMetrics.reps,
@@ -808,21 +871,26 @@ class CaptureViewModel(
      * [NOT_COUNTED_GAP_MS] apart, so a string of wrong attempts is coached
      * rather than narrated.
      */
-    private fun onMovementNotCounted(fault: MovementFault, timestampMs: Long) {
+    private fun onMovementNotCounted(refusal: MovementVerdict.NotCounted, timestampMs: Long) {
+        val fault = refusal.fault
+        refusal.cue?.let { if (missedReps.size < MAX_MISSED) missedReps += it to System.currentTimeMillis() }
+        val cue = CoachPhrasebook.notCountedCue(refusal)
         // They are moving, so "I'm waiting for a rep" would be the wrong thing to say.
         idleTicks = 0
+        // The last rep's card belongs to the last rep, not to this movement.
+        _repFeedback.value = null
         val last = lastNotCounted
         val sinceLast = last?.let { timestampMs - it.second }
         val speak = sinceLast == null || sinceLast >= NOT_COUNTED_REPEAT_MS ||
-            last?.first != fault && sinceLast >= NOT_COUNTED_GAP_MS
-        if (speak) lastNotCounted = fault to timestampMs
+            last?.first != cue.full && sinceLast >= NOT_COUNTED_GAP_MS
+        if (speak) lastNotCounted = cue.full to timestampMs
         // The finish position goes up with the words, unless the trouble was the
         // camera's view of them rather than where their body was.
         val picture = ReferenceShow.Finish.takeUnless {
             fault == MovementFault.ArmsNotVisible || fault == MovementFault.LegsNotVisible
         }
-        publish(CoachingEvent(0, CoachingEventType.NotCounted, CoachPhrasebook.notCounted(fault), timestampMs, 1,
-            reference = picture), speak = speak, cue = CoachPhrasebook.notCountedCue(fault))
+        publish(CoachingEvent(0, CoachingEventType.NotCounted, cue.full, timestampMs, 1,
+            reference = picture), speak = speak, cue = cue)
     }
 
     /**
@@ -927,10 +995,9 @@ class CaptureViewModel(
         postureCoach.reset()
         reliableSinceMs = null
         rotationElapsedMs = 0L
-        // The hitting arm comes from the reps already seen. The one-armed skills need
-        // that arm nearest the lens; until one has been observed the turn is only
-        // suggested, and the other skills are measurable from either profile.
-        stageStance = FacingGuide.stance(skill, angle, preferredSide)
+        // The chosen arm faces the lens. The one-armed skills need it there; the
+        // others are measurable from either profile, so for them it is only suggested.
+        stageStance = FacingGuide.stance(skill, angle, dominantSide)
         requiredSide = stageStance.requiredNearSide
         val direction = FacingGuide.instruction(skill, stageStance)
         // The target rep shares the turn's audio lane, so its count and verdict
@@ -1166,7 +1233,7 @@ class CaptureViewModel(
         countdownJob = viewModelScope.launch {
             openingFinished = CompletableDeferred()
             val brief = _coachingPlan.value.opening(skill,
-                _guidedOptions.value.repsPerAngle.takeIf { _guidedOptions.value.enabled })
+                _guidedOptions.value.repsPerAngle.takeIf { _guidedOptions.value.enabled }, drillId)
             _uiState.value = CaptureUiState.CountingDown(0, brief.joinToString(" "), brief)
             // Bounded by the same estimate that bounds the speech itself.
             kotlinx.coroutines.withTimeoutOrNull(SpeechTiming.turnMs(brief) + CLOSING_GRACE_MS) { openingFinished?.await() }
@@ -1205,10 +1272,11 @@ class CaptureViewModel(
         trackingGate.reset()
         stageStance = FacingGuide.stance(skill, CameraAngle.Front)
         requiredSide = null
-        preferredSide = null
         lastNotCounted = null
         director.reset()
         director.experience = _coachingPlan.value.experience
+        director.teaching = adaptiveMemory.value
+        missedReps.clear()
         instructions.reset(_coachingPlan.value.experience)
         _speechWindowOpen.value = false
         _coachingMessage.value = null
@@ -1324,6 +1392,15 @@ class CaptureViewModel(
             _uiState.value = CaptureUiState.SaveFailed
             return
         }
+        // Learning is extra: a failure here must not look like a failed save.
+        try {
+            adaptiveCoach?.remember(skill, director.teachingOutcomes(), missedReps.toList())
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w("CaptureViewModel", "Could not save what the coach learned", error)
+        }
+        missedReps.clear()
         recordedFrames.clear()
         replayFrames.clear()
         chunks.clear()
@@ -1428,6 +1505,7 @@ class CaptureViewModel(
          * with the device and the delegate. 90 s at 60 fps with headroom.
          */
         private const val MAX_RECORDED_FRAMES = 6_000
+        private const val MAX_MISSED = 100
         private const val MAX_GUIDED_RECORDED_FRAMES = 18_000
 
         fun factory(skill: Skill, drillId: String, assignmentId: String? = null): ViewModelProvider.Factory = viewModelFactory {
@@ -1457,6 +1535,7 @@ class CaptureViewModel(
                     capturedReviewWriter = container.videoReviewStore,
                     liveCoachingRepository = container.liveCoachingRepository,
                     profileRepository = container.profileRepository,
+                    adaptiveCoach = container.adaptiveCoachRepository,
                 )
             }
         }

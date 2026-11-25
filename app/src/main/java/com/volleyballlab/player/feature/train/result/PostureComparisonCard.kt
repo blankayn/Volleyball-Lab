@@ -64,9 +64,10 @@ internal fun CoachLearningNote(issue: ReviewIssue, showMeasurements: Boolean = f
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Coach note · ${stringResource(cue.label)}", style = MaterialTheme.typography.titleSmall)
-            Text("What: ${ReelComment.what(issue)}")
-            Text("Why: ${ReelComment.why(issue.cueId)}")
-            Text("Practice: ${ReelComment.practice(issue)}")
+            val guide = CorrectionGuide.of(issue.cueId, issue.measured)
+            Text("What went wrong: ${guide.wrong}")
+            Text("Why it matters: ${guide.why}")
+            Text("How to fix it: ${guide.fix}")
             if (showMeasurements) {
                 Text("Measured ${reviewValue(issue.measured, cue.unit)} · Practice range ${reviewValue(cue.target.start, cue.unit)}–${reviewValue(cue.target.endInclusive, cue.unit)}",
                     style = MaterialTheme.typography.bodySmall)

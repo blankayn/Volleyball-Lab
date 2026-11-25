@@ -1,0 +1,8 @@
+<resources>
+    <string name="recording_cloud_saved">Saved to your private cloud backup</string>
+    <string name="recording_cloud_pending">Cloud backup pending. Keep the app installed until this says saved to cloud. Uploads retry when connected.</string>
+    <string name="recording_cloud_too_large">This video exceeds the 90 MB cloud backup limit. Keep the copy on this phone.</string>
+    <string name="recording_remove_local">Remove from phone</string>
+    <string name="recording_remove_local_body">Remove the video from this phone? Your cloud backup will be restored automatically when the app opens.</string>
+    <string name="recording_cloud_restoring">Restoring your video automatically when connected…</string>
+</resources>

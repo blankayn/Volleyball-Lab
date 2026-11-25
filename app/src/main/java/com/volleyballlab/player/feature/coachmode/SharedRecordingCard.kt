@@ -12,7 +12,13 @@ import com.volleyballlab.player.feature.train.result.AnnotatedSessionVideo
 import kotlinx.coroutines.CancellationException
 
 @Composable
-internal fun SharedRecordingCard(session: SessionResult, ownerUid: String, modifier: Modifier = Modifier) {
+internal fun SharedRecordingCard(
+    session: SessionResult,
+    ownerUid: String,
+    modifier: Modifier = Modifier,
+    startAt: Pair<Int, Long>? = null,
+    onAttachMoment: ((videoMs: Long, repNumber: Int?) -> Unit)? = null,
+) {
     val container = (LocalContext.current.applicationContext as VolleyballLabApplication).container
     var path by remember(session.id, ownerUid) { mutableStateOf<String?>(null) }
     var loading by remember(session.id, ownerUid) { mutableStateOf(true) }
@@ -31,7 +37,8 @@ internal fun SharedRecordingCard(session: SessionResult, ownerUid: String, modif
             when {
                 loading -> { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Opening recording…") }
                 error != null -> { Text(requireNotNull(error)); TextButton(onClick = { retry++ }) { Text("Retry") } }
-                path != null -> AnnotatedSessionVideo(session, requireNotNull(path), showMeasurements = true)
+                path != null -> AnnotatedSessionVideo(session, requireNotNull(path), showMeasurements = true,
+                    startAt = startAt, onAttachMoment = onAttachMoment)
                 else -> Text("This session includes a form summary. No recording was shared.", style = MaterialTheme.typography.bodyMedium)
             }
         }

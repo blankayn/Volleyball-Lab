@@ -1,18 +1,11 @@
 package com.volleyballlab.player.domain.model
 
-/** The same closed question catalog used by the onboarding service. No measured ability is inferred. */
+/**
+ * Questions from the setup used until 25 November 2026. Nothing asks them any more;
+ * a plan saved then still names one, and live coaching reads it.
+ */
 data class SetupOption(val id: String, val label: String)
 data class SetupQuestion(val id: String, val prompt: String, val options: List<SetupOption>)
-data class SetupAnswers(
-    val goalSkill: Skill? = null,
-    val experience: ExperienceLevel = ExperienceLevel.New,
-    val note: String = "",
-    val followUpQuestionId: String? = null,
-    val followUpOptionId: String? = null,
-    val weeklySessionGoal: Int? = null,
-)
-data class SetupFollowUp(val focusSkill: Skill, val questionId: String, val acknowledgment: String, val source: String)
-data class SetupSuggestion(val focusSkill: Skill, val summary: String, val reason: String, val source: String)
 
 object TrainingSetupQuestions {
     private fun options(vararg values: Pair<String, String>) = values.map { SetupOption(it.first, it.second) } + SetupOption("not_sure", "I'm not sure yet")
@@ -34,20 +27,4 @@ object TrainingSetupQuestions {
     fun skillForQuestion(id: String): Skill? = if (question(id) == null) null else Skill.All.firstOrNull { id.startsWith(it.name.lowercase() + "_") }
     fun question(id: String) = (questions + variants).firstOrNull { it.id == id }
     fun forSkill(skill: Skill) = questions[Skill.All.indexOf(skill)]
-    fun optionLabel(answers: SetupAnswers) = if (answers.followUpOptionId == "not_sure") "" else question(answers.followUpQuestionId.orEmpty())?.options?.firstOrNull { it.id == answers.followUpOptionId }?.label.orEmpty()
-    fun localFollowUp(answers: SetupAnswers) = SetupFollowUp(answers.goalSkill ?: Skill.Serving,
-        answers.goalSkill?.let { forSkill(it).id } ?: "general_focus", "Let's find a useful starting point.", "local")
-    fun localSuggestion(answers: SetupAnswers): SetupSuggestion {
-        val focus = answers.goalSkill ?: if (answers.followUpQuestionId == "general_focus") Skill.All.firstOrNull { it.name == answers.followUpOptionId } ?: Skill.Serving
-            else skillForQuestion(answers.followUpQuestionId.orEmpty()) ?: Skill.Serving
-        return SetupSuggestion(focus, "Start with ${focus.name.lowercase()} and ${answers.weeklySessionGoal ?: 3} practices each week.",
-            "A starting suggestion based on your choices. You can change it before saving.", "local")
-    }
-    fun starterDrill(skill: Skill): String = when (skill) {
-        Skill.Serving -> "serve-standing-float"
-        Skill.Receiving -> "receive-wall-platform"
-        Skill.Setting -> "set-wall-reps"
-        Skill.Spiking -> "spike-standing-swing"
-        Skill.Blocking -> "block-ready-jumps"
-    }
 }

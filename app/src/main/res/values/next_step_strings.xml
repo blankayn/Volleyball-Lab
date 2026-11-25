@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="next_step_title">AI coach: what to do next</string>
+    <string name="next_step_other">Your %1$s score is still low after your last 3 sessions. Practice %2$s next, then come back to %1$s.</string>
+    <string name="next_step_drill_for">Next, do %1$s. It works on this: %2$s.</string>
+    <string name="next_step_same_drill">Next, do this drill again with that one change.</string>
+    <string name="next_step_work_on">Next in %1$s, work on this: %2$s.</string>
+    <string name="next_step_move_up">Your %1$s is going well. Try %2$s next.</string>
+    <string name="next_step_open_drill">Open %1$s</string>
+    <string name="next_step_open_skill">Practice %1$s</string>
+</resources>

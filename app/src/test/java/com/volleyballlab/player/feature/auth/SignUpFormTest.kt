@@ -42,6 +42,7 @@ class SignUpFormTest {
     }
     private fun fill(model: AuthViewModel) {
         model.onFirstNameChange("  Kirt Deniel  ")
+        model.onMiddleNameChange(" libres ")
         model.onLastNameChange(" Magno ")
         model.onEmailChange("kirt@example.com")
         model.onPasswordChange("valid-password")
@@ -97,17 +98,34 @@ class SignUpFormTest {
         fill(model); advanceUntilIdle()
         model.onAreaChange(cebu); model.onCityChange(city); advanceUntilIdle(); model.onBarangayChange(barangay)
         var completed = 0
-        model.signUp { assertEquals(UserRole.Player, it); completed++ }
+        model.signUp { assertEquals("kirt@example.com", it); completed++ }
         model.signUp { fail("Duplicate submit") }; advanceUntilIdle()
         assertEquals(1, auth.registrations)
         assertEquals(1, completed)
-        assertEquals("Kirt Deniel Magno", auth.createdName)
+        assertEquals("Kirt Deniel L. Magno", auth.createdName)
         assertEquals(setOf("new-user"), profiles.saved.keys)
         val profile = requireNotNull(profiles.saved["new-user"])
         assertEquals("Kirt Deniel", profile.firstName)
+        assertEquals("libres", profile.middleName)
         assertEquals("Magno", profile.lastName)
+        assertNull("a new account returns to the login form signed out", auth.currentUid)
         assertEquals(ProfileAddress(ph, cebu, city, barangay), profile.address)
         assertFalse(model.state.value.canSubmitSignUp)
+    }
+    @Test fun everyNamePartIsRequiredToRegister() = checkForm { model ->
+        fill(model); advanceUntilIdle()
+        listOf(model::onFirstNameChange, model::onMiddleNameChange, model::onLastNameChange).forEach { change ->
+            fill(model); advanceUntilIdle(); change("  ")
+            assertFalse(model.state.value.canSubmitSignUp)
+            model.signUp { fail("Must not register") }; advanceUntilIdle()
+            assertNotNull(model.state.value.error)
+        }
+        assertEquals(0, auth.registrations)
+    }
+    @Test fun theLoginFormGreetsANewAccountWithItsAddress() = checkForm { model ->
+        model.onRegistered("kirt@example.com")
+        assertEquals("kirt@example.com", model.state.value.email)
+        assertEquals(R.string.auth_registered_notice, model.state.value.notice)
     }
     @Test fun countryChangeClearsDescendantsAndCancelsOldCountryLoad() = checkForm { model ->
         model.onCountryChange(ph); runCurrent()

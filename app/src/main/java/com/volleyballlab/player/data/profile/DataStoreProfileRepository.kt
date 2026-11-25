@@ -81,6 +81,7 @@ class DataStoreProfileRepository(
             photoPath = preferences[scope.string("photo_path")],
             firstName = preferences[scope.string("first_name")].orEmpty(),
             lastName = preferences[scope.string("last_name")].orEmpty(),
+            middleName = preferences[scope.string("middle_name")].orEmpty(),
             address = preferences[scope.string("address")]?.toAddressOrNull(),
                 trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
         )
@@ -106,6 +107,7 @@ class DataStoreProfileRepository(
                 photoPath = preferences[scope.string("photo_path")],
                 firstName = preferences[scope.string("first_name")].orEmpty(),
                 lastName = preferences[scope.string("last_name")].orEmpty(),
+                middleName = preferences[scope.string("middle_name")].orEmpty(),
                 address = preferences[scope.string("address")]?.toAddressOrNull(),
                 trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
             )
@@ -123,6 +125,7 @@ class DataStoreProfileRepository(
                 photoPath = preferences[scope.string("photo_path")],
                 firstName = preferences[scope.string("first_name")].orEmpty(),
                 lastName = preferences[scope.string("last_name")].orEmpty(),
+                middleName = preferences[scope.string("middle_name")].orEmpty(),
                 address = preferences[scope.string("address")]?.toAddressOrNull(),
                 trainingSetup = preferences[scope.string("training_setup")]?.toSetupOrNull(),
             ))
@@ -153,6 +156,10 @@ class DataStoreProfileRepository(
             profile.lastName.trim().take(AthleteProfile.MAX_NAME_PART_LENGTH).let {
                 if (it.isEmpty()) preferences.remove(scope.string("last_name"))
                 else preferences[scope.string("last_name")] = it
+            }
+            profile.middleName.trim().take(AthleteProfile.MAX_NAME_PART_LENGTH).let {
+                if (it.isEmpty()) preferences.remove(scope.string("middle_name"))
+                else preferences[scope.string("middle_name")] = it
             }
             profile.trainingSetup?.let { preferences[scope.string("training_setup")] = Json.encodeToString(it) }
                 ?: preferences.remove(scope.string("training_setup"))

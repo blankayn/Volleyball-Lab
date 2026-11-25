@@ -177,9 +177,19 @@ class FirestoreCoachRepository(
     private suspend fun editRoster(playerUid: String, status: MembershipStatus) {
         val coachUid = authRepository.currentUid ?: return
         runCatching {
-            db.collection(CloudSchema.ROSTER).document(coachUid)
-                .collection(CloudSchema.MEMBERS).document(playerUid)
-                .update(mapOf("status" to status.name, "decidedAt" to now())).awaitCloud()
+            val members = db.collection(CloudSchema.ROSTER).document(coachUid).collection(CloudSchema.MEMBERS)
+            val slotsRef = db.collection(CloudSchema.COACH_SLOTS).document(coachUid)
+            val accepting = status == MembershipStatus.Active
+            val active = members.get().awaitCloud().documents.mapNotNull { it.data?.let(CloudSchema::memberOf) }
+                .filter { it.isActive }.map { it.playerUid }.toSet()
+                .let { if (accepting) it + playerUid else it - playerUid }
+            val held = slotsRef.get().awaitCloud().data?.let { data -> (data["players"] as? List<*>).orEmpty().filterIsInstance<String>() }
+            val next = com.volleyballlab.player.domain.model.CoachPlan.slots(held, active, accepting)
+            // One commit: the rules accept a player only together with their place.
+            db.batch().apply {
+                if (next != null && next != held) set(slotsRef, mapOf("players" to next, "updatedAt" to now()))
+                update(members.document(playerUid), mapOf("status" to status.name, "decidedAt" to now()))
+            }.commit().awaitCloud()
             refreshDirectoryRosterSize(coachUid)
         }.onSuccess { clearFailure(issueKey("roster update", coachUid)) }
             .onFailure { reportFailure(issueKey("roster update", coachUid), it, saving = true) }
@@ -228,9 +238,12 @@ class FirestoreCoachRepository(
                 .sortedByDescending { it.createdAtEpochMs }
         }
 
-    override suspend fun postNote(note: CoachNote) {
+    override suspend fun postNote(note: CoachNote) = postNote(note, null)
+
+    override suspend fun postNote(note: CoachNote, photo: String?) {
         val uid = requireNotNull(authRepository.currentUid) { "Sign in before sending feedback." }
         require(note.coachUid == uid)
+        require(note.hasPhoto == (photo != null) && (photo == null || validNotePhoto(photo)))
         runCatching {
             val submission = note.sessionId?.let { sessionId ->
                 db.collection(CloudSchema.SUBMISSIONS)
@@ -241,6 +254,9 @@ class FirestoreCoachRepository(
             // must reach the composer so it preserves the draft and offers retry.
             val batch = db.batch()
             batch.set(db.collection(CloudSchema.NOTES).document(note.id), CloudSchema.noteDoc(note))
+            if (photo != null) {
+                batch.set(db.collection(CloudSchema.NOTE_MEDIA).document(note.id), CloudSchema.noteMediaDoc(note, photo))
+            }
             if (submission?.data?.let { CloudSchema.submissionOf(it).isPending } == true) {
                 batch.update(submission.reference, "reviewedAt", now())
             }

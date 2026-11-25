@@ -51,21 +51,34 @@ class SyncedAssessmentRepository(
         cache(uid, state)
         return state.hasOnboarded
     }
-    override suspend fun saveTrainingSetup(setup: TrainingSetup) {
-        val uid = auth.currentUid ?: throw IllegalStateException("Sign in to save your plan.")
+    override suspend fun complete(answers: AssessmentAnswers) {
+        val uid = auth.currentUid ?: throw IllegalStateException("Sign in to save your assessment.")
         profile.awaitInitialRestore()
         requireAccount(uid)
         val existing = merge(local.assessmentFor(uid).first(), profile.current().trainingSetup?.assessment)
-        val answers = existing.copy(experience = setup.experience ?: existing.experience,
-            completedAtEpochMs = setup.completedAtEpochMs)
+        val merged = existing.copy(experience = answers.experience, completedAtEpochMs = answers.savedAtEpochMs,
+            answers = SkillCheck.known(answers.statements), focus = answers.preferred.distinct().ifEmpty { existing.focus })
         requireAccount(uid)
         profile.update { athlete ->
             requireAccount(uid)
-            athlete.copy(goalSkill = setup.focusSkill, weeklySessionGoal = setup.weeklySessionGoal,
-                goalText = setup.goalText, trainingSetup = SavedTrainingSetup(assessment = answers, plan = setup))
+            // The old fixed starting plan is dropped; the AI's plan has its own record.
+            athlete.copy(position = answers.position, weeklySessionGoal = answers.days, goalText = answers.goalNote,
+                trainingSetup = SavedTrainingSetup(assessment = merged, plan = null))
         }
         requireAccount(uid)
-        local.saveFor(uid, answers)
+        local.saveFor(uid, merged)
+    }
+    override suspend fun applyFocus(uid: String, focus: List<Skill>) {
+        val first = focus.firstOrNull() ?: return
+        requireAccount(uid)
+        val merged = merge(local.assessmentFor(uid).first(), profile.current().trainingSetup?.assessment).copy(focus = focus)
+        requireAccount(uid)
+        profile.update { athlete ->
+            requireAccount(uid)
+            athlete.copy(goalSkill = first, trainingSetup = SavedTrainingSetup(assessment = merged, plan = athlete.trainingSetup?.plan))
+        }
+        requireAccount(uid)
+        local.saveFor(uid, merged)
     }
     override suspend fun save(assessment: SkillAssessment) {
         val uid = auth.currentUid ?: return
@@ -104,6 +117,8 @@ class SyncedAssessmentRepository(
     private fun merge(cached: SkillAssessment, remote: SkillAssessment?): SkillAssessment {
         if (remote == null) return cached
         return remote.copy(ratings = cached.ratings + remote.ratings,
-            experience = remote.experience ?: cached.experience)
+            experience = remote.experience ?: cached.experience,
+            answers = SkillCheck.known(remote.answers).ifEmpty { cached.answers },
+            focus = remote.focus.ifEmpty { cached.focus })
     }
 }

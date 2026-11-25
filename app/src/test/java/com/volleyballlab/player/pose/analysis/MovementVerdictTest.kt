@@ -63,15 +63,17 @@ class MovementVerdictTest {
     private val blockReady = standing.arms(raise = 60f, elbow = 60f)
     private val platform = standing.arms(raise = 45f, elbow = 170f).copy(join = 1f, knee = 20f)
 
+    // The guiding arm comes up as the hitting elbow is drawn back, then drops as the hand swings through.
     private val serve = arrayOf(
-        400L to standing.copy(rightRaise = 100f, rightElbow = 70f),
-        700L to standing.copy(rightRaise = 170f, rightElbow = 170f),
+        400L to standing.copy(leftRaise = 115f, leftElbow = 165f, rightRaise = 100f, rightElbow = 70f),
+        700L to standing.copy(leftRaise = 45f, rightRaise = 170f, rightElbow = 170f),
         1_100L to standing,
     )
     private val spike = arrayOf(
-        350L to standing.copy(rightRaise = -20f, knee = 60f),
-        750L to standing.copy(rightRaise = 170f, rightElbow = 170f),
-        1_150L to standing,
+        300L to standing.copy(leftRaise = 40f, rightRaise = -20f, knee = 60f),
+        600L to standing.copy(leftRaise = 115f, leftElbow = 165f, rightRaise = 100f, rightElbow = 70f, knee = 20f),
+        850L to standing.copy(leftRaise = 45f, rightRaise = 170f, rightElbow = 170f),
+        1_250L to standing,
     )
     private val set = arrayOf(400L to handsAtForehead, 700L to armsOverhead, 1_000L to handsAtForehead, 1_400L to standing)
     private val block = arrayOf(300L to blockReady.copy(knee = 40f), 650L to armsOverhead, 1_050L to blockReady)
@@ -213,7 +215,7 @@ class MovementVerdictTest {
      */
     @Test
     fun `a fast serve swing that is overhead for one frame after the toss still counts`() {
-        val toss = standing.copy(leftRaise = 105f, leftElbow = 170f, rightRaise = 30f, rightElbow = 90f)
+        val toss = standing.copy(leftRaise = 105f, leftElbow = 170f, rightRaise = 75f, rightElbow = 75f)
         val contact = standing.copy(leftRaise = 40f, leftElbow = 170f, rightRaise = 172f, rightElbow = 175f)
         val keys = mutableListOf(0L to standing, 1_000L to standing)
         var at = 1_000L
@@ -314,11 +316,14 @@ class MovementVerdictTest {
         assertEquals(listOf(MovementFault.JoinPlatform, MovementFault.JoinPlatform), outcome.faults)
     }
 
+    /** Live sessions are front and side only, and a platform the camera cannot see is not counted. */
     @Test
-    fun `a pass seen from behind counts when the platform is hidden by the body`() {
+    fun `a pass seen from behind does not count`() {
         val wrists = setOf(BodyPoint.LEFT_WRIST, BodyPoint.RIGHT_WRIST)
-        assertEquals(3, run(Skill.Receiving, reps(platform, 3, *pass, view = Facing.Away, hidden = wrists)).live)
-        // Hands that are visible and hanging apart are still a fault from behind.
+        val outcome = run(Skill.Receiving, reps(platform, 3, *pass, view = Facing.Away, hidden = wrists))
+        assertEquals(0, outcome.live)
+        assertEquals(0, outcome.saved)
+        assertTrue(outcome.faults.all { it == MovementFault.ArmsNotVisible })
         assertEquals(0, run(Skill.Receiving, reps(standing, 2, *kneeBend, view = Facing.Away)).live)
     }
 

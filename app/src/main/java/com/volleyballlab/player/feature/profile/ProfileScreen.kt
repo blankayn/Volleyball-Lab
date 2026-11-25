@@ -142,7 +142,7 @@ class ProfileViewModel(
     }
 
     fun onNameChanged(name: String) = edit {
-        if (name.trim() == it.name) it else it.copy(name = name, firstName = "", lastName = "")
+        if (name.trim() == it.name) it else it.copy(name = name, firstName = "", lastName = "", middleName = "")
     }
 
     /** Tapping the selected chip clears it: the same gesture sets and unsets. */
@@ -252,7 +252,7 @@ private fun StudentAccountSectionContent(
                 CoachingPreferencesCard(state.coachingPreferences, model::onVoiceChanged, model::onHapticsChanged,
                     model::onPoseGuideChanged, model::onDetailedAiChanged)
                 ProfileTrainingTools(section = ProfileToolSection.Training)
-                TrainingSetupPlanCard(onRefreshPlan)
+                YourSkillsCard(onRefreshPlan)
             }
             AccountSection.Security -> AccountSecurityCard()
             AccountSection.Notifications -> NotificationInboxEntry()

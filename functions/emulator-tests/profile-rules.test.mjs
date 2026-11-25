@@ -97,3 +97,21 @@ test('skipped setup restores completion without inventing a plan and deletion bl
   await assertFails(getDoc(ref()));
   await assertFails(updateDoc(ref(), { trainingSetup: trainingSetup(), updatedAt: serverTimestamp() }));
 });
+
+test('five-skill answers and chosen focus save, and anything outside the fixed statements is refused', async () => {
+  const assessment = { ratings: {}, experience: 'New', completedAtEpochMs: 123 };
+  const save = extra => setDoc(ref(), { trainingSetup: { ...trainingSetup(), plan: null, assessment: { ...assessment, ...extra } }, updatedAt: serverTimestamp() });
+  await assertSucceeds(save({}));
+  await assertSucceeds(save({ answers: { serving_ready: 'Yes', blocking_moving: 'NotTried' }, focus: ['Serving', 'Blocking'] }));
+  for (const bad of [{ answers: { serving_ready: 'Beginner' } }, { answers: { style: 'Yes' } }, { answers: ['Yes'] },
+    { focus: ['Serving', 'Libero'] }, { focus: 'Serving' }]) await assertFails(save(bad));
+  // The largest profile a player can have must stay inside the limit of one request.
+  const answers = Object.fromEntries(['serving', 'receiving', 'setting', 'spiking', 'blocking']
+    .flatMap(skill => ['ready', 'movement', 'control', 'moving'].map(part => [`${skill}_${part}`, 'Sometimes'])));
+  const full = { ...profile(), middleName: 'Cruz', trainingSetup: { ...trainingSetup(), assessment: { ...trainingSetup().assessment, answers,
+    focus: ['Serving', 'Receiving', 'Setting', 'Spiking', 'Blocking'] } }, goalSkill: 'Blocking', weeklySessionGoal: 3,
+    goalText: 'Keep serves in', position: 'MiddleBlocker', dominantHand: 'Left' };
+  await assertSucceeds(setDoc(ref(), full));
+  await assertSucceeds(setDoc(ref(), full, { merge: true }));
+  await assertSucceeds(updateDoc(ref(), { name: 'Updated name', updatedAt: serverTimestamp() }));
+});

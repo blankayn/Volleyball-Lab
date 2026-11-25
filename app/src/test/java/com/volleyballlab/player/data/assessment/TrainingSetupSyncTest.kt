@@ -44,6 +44,8 @@ class TrainingSetupSyncTest {
             values[uid] = transform(current()); profile.value = values.getValue(uid); updates++
         }
     }
+    private fun answers() = AssessmentAnswers(ExperienceLevel.New, CourtPosition.Libero, listOf(Skill.Serving), MainGoal.BeConsistent, "Keep my serves in",
+        days = 3, statements = SkillCheck.statements.associate { it.id to CanDo.Yes }, savedAtEpochMs = 123L)
     private fun plan() = TrainingSetup(Skill.Serving, 3, "Keep my serves in", ExperienceLevel.New,
         "Aiming", "Start with serving practice.", "groq", "serve-standing-float", 123L,
         reason = "You chose serving.", questionId = "serving", optionId = "aim")
@@ -66,11 +68,12 @@ class TrainingSetupSyncTest {
         local.saveFor("a", SkillAssessment(mapOf(Skill.Receiving to SelfRating.Confident), ExperienceLevel.Developing, 20L))
         profiles.values["a"] = AthleteProfile(name = "Player", position = CourtPosition.Libero, photoPath = "private.jpg")
         val repo = SyncedAssessmentRepository(local, profiles, auth)
-        repo.saveTrainingSetup(plan())
+        repo.complete(answers())
         val saved = profiles.values.getValue("a")
         assertEquals("Player", saved.name); assertEquals("private.jpg", saved.photoPath)
         assertEquals(CourtPosition.Libero, saved.position)
-        assertEquals(Skill.Serving, saved.goalSkill); assertEquals(3, saved.weeklySessionGoal)
+        assertEquals(3, saved.weeklySessionGoal); assertEquals("Keep my serves in", saved.goalText)
+        assertNull("no fixed starting plan", saved.trainingSetup?.plan)
         assertEquals(mapOf(Skill.Receiving to SelfRating.Confident), saved.trainingSetup?.assessment?.ratings)
         assertEquals(ExperienceLevel.New, saved.trainingSetup?.assessment?.experience)
         repo.skip()
@@ -80,7 +83,7 @@ class TrainingSetupSyncTest {
         val auth = Auth(); val profiles = Profiles(auth); val local = Local()
         profiles.restore = { auth.currentUser.value = AuthUser("b", "b@example.com", "B") }
         val repo = SyncedAssessmentRepository(local, profiles, auth)
-        try { repo.saveTrainingSetup(plan()); fail("Expected account switch rejection") } catch (_: CancellationException) { }
+        try { repo.complete(answers()); fail("Expected account switch rejection") } catch (_: CancellationException) { }
         assertEquals(0, profiles.updates)
         assertFalse(local.hasOnboardedFor("b").value)
         // A stale A profile StateFlow must never leak to B.

@@ -22,6 +22,8 @@ import {
 import { db } from "./firebase";
 import { preferencesPath } from "./account-settings";
 import { normalizePreferences, type PortalPreferences } from "./preferences";
+import { momentOf, type NoteMoment } from "./note-moment";
+import { nextSlots } from "./plan";
 
 export type MembershipStatus = "Pending" | "Active" | "Ended";
 export type AssignmentStatus = "Pending" | "InProgress" | "Completed";
@@ -31,7 +33,11 @@ export interface CoachProfile {
   name: string;
   teamName: string;
   organisation: string;
-  specialisation: string | null;
+  /** Private parts of `name`, which is what players see. */
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  coachingRole: string | null;
   yearsExperience: number | null;
   licenceNumber: string;
   notifySubmissions: boolean;
@@ -85,6 +91,10 @@ export interface CoachNote {
   sessionId: string | null;
   text: string;
   createdAt: number;
+  /** A moment in the session's own recording, when the coach linked one. */
+  moment: NoteMoment | null;
+  /** A photo was sent with this note; it may have been removed since. */
+  hasPhoto: boolean;
 }
 
 export interface CueScore {
@@ -116,14 +126,18 @@ export interface TrainingSession {
 
 export const SKILLS: Skill[] = ["Serving", "Receiving", "Setting", "Spiking", "Blocking"];
 
-export const SPECIALISATIONS = [
-  "AllAround",
-  "Serving",
-  "Receiving",
-  "Setting",
-  "Spiking",
-  "Blocking",
+export const COACHING_ROLES = [
+  ["HeadCoach", "Head coach"],
+  ["AssistantCoach", "Assistant coach"],
+  ["Trainer", "Trainer"],
+  ["PETeacher", "PE teacher"],
 ] as const;
+
+/** "Maria C. Santos": the middle name is kept in full but shown as an initial. */
+export function displayName(first: string, middle: string, last: string): string {
+  const initial = middle.trim().charAt(0).toUpperCase();
+  return [first.trim(), initial ? `${initial}.` : "", last.trim()].filter(Boolean).join(" ").slice(0, 60);
+}
 
 const str = (d: DocumentData, key: string): string =>
   typeof d[key] === "string" ? (d[key] as string) : "";
@@ -141,7 +155,10 @@ export function asProfile(d: DocumentData): CoachProfile {
     name: str(d, "name"),
     teamName: str(d, "teamName"),
     organisation: str(d, "organisation"),
-    specialisation: strOrNull(d, "specialisation"),
+    firstName: str(d, "firstName"),
+    middleName: str(d, "middleName"),
+    lastName: str(d, "lastName"),
+    coachingRole: strOrNull(d, "coachingRole"),
     yearsExperience: numOrNull(d, "yearsExperience"),
     licenceNumber: str(d, "licenceNumber"),
     notifySubmissions: bool(d, "notifySubmissions"),
@@ -205,6 +222,8 @@ export function asNote(d: DocumentData): CoachNote {
     sessionId: strOrNull(d, "sessionId"),
     text: str(d, "text"),
     createdAt: num(d, "createdAt"),
+    moment: momentOf(d),
+    hasPhoto: d["hasPhoto"] === true,
   };
 }
 
@@ -319,7 +338,10 @@ export function emptyProfile(): CoachProfile {
     name: "",
     teamName: "",
     organisation: "",
-    specialisation: null,
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    coachingRole: null,
     yearsExperience: null,
     licenceNumber: "",
     notifySubmissions: true,
@@ -380,7 +402,7 @@ export async function saveProfile(
 /** Public fields only; preferences and licence remain in the private profile. */
 function directoryProjection(profile: CoachProfile, rosterSize: number, updatedAt: number) {
   return { name: profile.name, teamName: profile.teamName, organisation: profile.organisation,
-    specialisation: profile.specialisation, yearsExperience: profile.yearsExperience, rosterSize, updatedAt };
+    coachingRole: profile.coachingRole, yearsExperience: profile.yearsExperience, rosterSize, updatedAt };
 }
 
 export async function getRoster(coachUid: string): Promise<RosterMember[]> {
@@ -395,10 +417,18 @@ export async function setMemberStatus(
   playerUid: string,
   status: MembershipStatus,
 ): Promise<void> {
-  await updateDoc(doc(db, "roster", coachUid, "members", playerUid), {
-    status,
-    decidedAt: Date.now(),
-  });
+  const accepting = status === "Active";
+  const active = (await getRoster(coachUid)).filter((m) => m.status === "Active" && m.playerUid !== playerUid).map((m) => m.playerUid);
+  if (accepting) active.push(playerUid);
+  const slotsRef = doc(db, "coachSlots", coachUid);
+  const saved = (await getDoc(slotsRef)).data();
+  const held = saved ? (Array.isArray(saved["players"]) ? saved["players"].map(String) : []) : null;
+  const next = nextSlots(held, active, accepting);
+  // One commit: the rules accept a player only together with their place.
+  const batch = writeBatch(db);
+  if (next && JSON.stringify(next) !== JSON.stringify(held)) batch.set(slotsRef, { players: next, updatedAt: Date.now() });
+  batch.update(doc(db, "roster", coachUid, "members", playerUid), { status, decidedAt: Date.now() });
+  await batch.commit();
   const roster = await getRoster(coachUid);
   await setDoc(
     doc(db, "coachDirectory", coachUid),
@@ -478,10 +508,17 @@ export async function getAssignmentsForPlayer(
   return all.filter((a) => a.playerUid === playerUid);
 }
 
-/** Post a note and stamp the queue row reviewed — one action, in that order. */
-export async function postNote(note: CoachNote): Promise<void> {
+/** Post a note, with its photo when it has one, and stamp the queue row reviewed — one commit. */
+export async function postNote(note: CoachNote, photo: string | null = null): Promise<void> {
   const batch = writeBatch(db);
-  batch.set(doc(db, "notes", note.id), { ...note });
+  const { id, coachUid, playerUid, sessionId, text, createdAt, moment } = note;
+  batch.set(doc(db, "notes", id), {
+    id, coachUid, playerUid, sessionId, text, createdAt,
+    // Written only when used, so a plain note is the same document as ever.
+    ...(moment ? { videoMs: moment.videoMs, ...(moment.repNumber === null ? {} : { repNumber: moment.repNumber }) } : {}),
+    ...(photo ? { hasPhoto: true } : {}),
+  });
+  if (photo) batch.set(doc(db, "noteMedia", id), { coachUid, playerUid, photo, createdAt });
   if (note.sessionId) {
     const submission = await getDoc(doc(db, "submissions", `${note.coachUid}_${note.sessionId}`));
     if (submission.exists() && submission.data().reviewedAt === null) {

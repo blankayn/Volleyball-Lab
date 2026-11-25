@@ -1,9 +1,12 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.AdaptiveMemory
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.ExperienceLevel
 import com.volleyballlab.player.domain.model.RepPhase
+import com.volleyballlab.player.domain.model.TeachingOutcome
+import com.volleyballlab.player.domain.model.TeachingStyle
 
 /** Counted facts about the session, supplied by the capture screen's own metrics. */
 data class RepContext(
@@ -38,6 +41,8 @@ class CoachDirector {
         var missingReps: Int = 0,
         var progressAcknowledged: Boolean = false,
     )
+    /** A correction that was given, waiting to see whether the next two measured reps are better. */
+    private data class Teaching(val key: CueKey, val style: TeachingStyle, val sinceRep: Int, val baseline: Float, val event: Long)
     private data class Spoken(val rep: Int, val timestampMs: Long)
     /** Enough to undo one emitted sentence the athlete never heard. */
     private data class Emitted(
@@ -51,6 +56,14 @@ class CoachDirector {
 
     /** Chooses where the correction ladder starts. Wording only. */
     var experience: ExperienceLevel? = null
+
+    /** What has worked for this player before. It orders the ways of saying a correction. */
+    var teaching: AdaptiveMemory = AdaptiveMemory()
+    private val teachingPending = mutableListOf<Teaching>()
+    private val teachingDone = mutableListOf<TeachingOutcome>()
+
+    /** Corrections of this session whose effect was seen. */
+    fun teachingOutcomes(): List<TeachingOutcome> = teachingDone.toList()
 
     private var sequence = 0L
     private var stageReps = 0
@@ -97,6 +110,7 @@ class CoachDirector {
         carryFocus = null
         notes.clear()
         lastCorrectionText = null
+        teachingDone.clear()
         clearStage()
         interruptObservation()
     }
@@ -141,6 +155,7 @@ class CoachDirector {
         observations.clear()
         angle = null
         focus = null
+        teachingPending.clear()
         stageScores.clear()
         stageHadGoodRep = false
         cleanStreak = 0
@@ -166,6 +181,7 @@ class CoachDirector {
         observations.addLast(Observation(rep, measured))
         while (observations.size > EVIDENCE_REPS) observations.removeFirst()
         observeArc(assessment, measured)
+        observeTeaching()
 
         // Observe even during the quiet retry; silence must not discard evidence.
         val active = focus
@@ -265,12 +281,38 @@ class CoachDirector {
         lastCue[selected.id] = rep to timestampMs
         val text = if (carried) CoachPhrasebook.CARRIED_FOCUS_PREFIX + rungs[index] else rungs[index]
         lastCorrectionText = text
-        return emit(CoachingEventType.Correction, text, timestampMs, ledgerKey = rungs[index],
+        val event = emit(CoachingEventType.Correction, text, timestampMs, ledgerKey = rungs[index],
             correction = selected, instructionIndex = index, previousCue = previousCue)
+        teachingPending.removeAll { it.key == selected }
+        teachingPending += Teaching(selected, styleOrder(selected.id)[index], rep, distance(status), event.id)
+        return event
     }
 
-    private fun ladder(key: CueKey, status: CueLiveStatus): List<String> =
-        CoachPhrasebook.instructions(key.id, status.measured!!, key.side, experience)
+    private fun ladder(key: CueKey, status: CueLiveStatus): List<String> {
+        val texts = CoachPhrasebook.instructions(key.id, status.measured!!, key.side, experience)
+        val written = CoachPhrasebook.styles(experience)
+        return styleOrder(key.id).map { texts[written.indexOf(it)] }
+    }
+
+    /** The usual order until something is known, then what helped this player most. */
+    private fun styleOrder(id: CueId): List<TeachingStyle> =
+        CoachPhrasebook.styles(experience).sortedByDescending { teaching.tally(id, it).rate }
+
+    /**
+     * The same two-rep test the director uses to say "closer": in range, or closer by a
+     * change bigger than jitter. A gap in tracking drops the question instead of answering it.
+     */
+    private fun observeTeaching() {
+        teachingPending.removeAll { given ->
+            val retries = observations.filter { it.rep > given.sinceRep }.mapNotNull { it.cues[given.key] }
+            if (retries.size < 2) return@removeAll rep - given.sinceRep > EVIDENCE_REPS
+            val cue = retries.last().cue
+            val change = maxOf(cue.warnTolerance * 0.2f, given.baseline * 0.25f)
+            val helped = retries.all { it.score!! >= 0.8f } || retries.all { distance(it) <= given.baseline - change }
+            teachingDone += TeachingOutcome(given.key.id, given.style, helped)
+            true
+        }
+    }
 
     /** A sentence may return only after it has rested for both reps and time. */
     private fun available(text: String, timestampMs: Long): Boolean {
@@ -387,8 +429,7 @@ class CoachDirector {
         val text = facingPrompt ?: when (requestedAngle) {
             CameraAngle.Front -> "Face the camera again so I can assess this view."
             CameraAngle.Side -> "Turn sideways again so I can assess this view."
-            CameraAngle.Rear -> "Face away from the camera again for this view."
-            CameraAngle.Unknown, null -> "Step back into frame so your whole body is visible."
+            CameraAngle.Rear, CameraAngle.Unknown, null -> "Step back into frame so your whole body is visible."
         }
         return CoachingEvent(++sequence, CoachingEventType.Tracking, text, timestampMs, 2)
     }
@@ -409,6 +450,7 @@ class CoachDirector {
         val dropped = emitted.remove(sequence) ?: return
         if (dropped.previousSpoken == null) lastSpoken.remove(dropped.text) else lastSpoken[dropped.text] = dropped.previousSpoken
         val key = dropped.correction ?: return
+        teachingPending.removeAll { it.event == sequence }
         corrections.remove(dropped.rep)
         if (dropped.previousCue == null) lastCue.remove(key.id) else lastCue[key.id] = dropped.previousCue
         focus?.takeIf { it.key == key }?.nextInstruction = dropped.instructionIndex

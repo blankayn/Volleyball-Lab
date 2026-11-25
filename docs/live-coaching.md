@@ -504,3 +504,97 @@ where the gate opens from 21% to 39%, with 2 of 84 front-view clips wrongly
 opened. The opt-in replays are `OrientationReplay` and `RepCountReplay`
 (`VL_ORIENTATION_DIR=<dir with landmarks/>`); see
 `outputs/orientation-eval-20261119/README.md` for the data.
+
+## One decision per movement, and stricter reps (23 November 2026)
+
+Reported from live sessions: extra movements added reps, a pass with one arm
+counted, the voice called a movement wrong while the count went up, the basic
+spike asked for a jump, and the setup card still mentioned a rear view.
+
+**One decision.** `RepJudge` is the only answer to "was that a rep". It applies
+the skill's movement check and then refuses a rep whose posture cue is clearly
+out: beyond the cue's whole tolerance (score zero). Platform height loses the rep
+earlier, at 0.35 (arms about 15 degrees below horizontal). `SpikeElbowHeight` is
+coached only, because it is not validated on correct spikes. A cue the view cannot
+read, or that the drill does not train, is never a reason. `LiveRepCounter`,
+`RepSegmenter` through `SessionScorer`, and the spoken reaction all use it, so a
+refused movement adds nothing and a counted one is never called wrong: the
+reaction wording for a counted rep never says "Not quite" or "needs work". A refusal and a count share one speech lane: the
+newest replaces the older, a refusal expires after 1.5 seconds, and one still
+being spoken stops when a rep is counted.
+
+**Movement checks added** (they come on top of the 17 November table):
+
+| Skill | Must also be true |
+| --- | --- |
+| Serving, Spiking | not both hands level and peaking together; the hitting elbow drawn back (160 degrees or less) on the way up; the guiding hand up to about the chest when that arm is in view |
+| Setting | both hands in view when not side-on, no more than 0.90 torso lengths apart, level at the top (within 0.35), and the elbows opening at least 8 degrees in a push |
+| Blocking | both hands in view when not side-on; the knees bent at least 8 degrees or the hips rose 0.10 torso lengths |
+| Receiving | facing the camera, both arms seen, wrists within 0.35 torso lengths on screen and level within 0.25; elbows at least 125 degrees; knees at least 20 degrees deeper; side-on, the near hand at least 0.40 torso lengths ahead of the hips and the far arm nowhere else if it was seen; two of the three frames around the deepest bend must show it |
+
+Contacts closer than 0.9 seconds are one repetition, in both counters. A pass seen
+from behind no longer counts.
+
+**Spiking drill progression.** `DrillFocus.excluded` leaves the knee load and jump height out of
+`spike-standing-swing` (now "Standing Spike"): not measured, scored, coached or a
+reason to refuse, and the gold figure starts standing with the elbow drawn back.
+Spike Load and Swing (`spike-three-step`) teaches a knee bend and overhead swing
+with both feet planted. Spiking Body Alignment (`spike-four-step-lines`) uses the
+same grounded load while focusing on trunk control and elbow position. A clearly
+missing knee bend can prevent the rep from counting. Jump height is excluded
+from all three starter spiking drills.
+
+**Rear view.** No live text, stance or prompt mentions it, and free practice asks an
+athlete seen from behind to turn around. Saved sessions that have a rear stage still
+display it.
+
+### Verification (23 November 2026)
+
+Replayed over 336 labelled public clips, the 31 coaching clips and six groupmate
+sessions, front and side only, before and after:
+
+| | Before | After |
+| --- | --- | --- |
+| Movements counted as a skill that was not the one performed | 929 | 512 |
+| Reps marked correct that count | 105 | 92 |
+| Groupmate serves / spikes counted live (14 / 15 performed) | 14 / 15 | 14 / 15 |
+| Groupmate sets counted live (8 performed) | 9 | 8 |
+| Groupmate blocks counted live (about 14 performed) | 18 | 15 |
+| Groupmate passes filmed as faults, platform at the shoulders (15) | 15 | 1 |
+
+`UnrelatedMovementTest` runs eleven non-skill movements through all five skills from
+the front and both sides and expects no reps; removing the swing, both-arm or posture
+rules makes it fail.
+
+Limits. Most of the remaining 512 are sets and blocks standing in for each other and
+overhead skills filmed with the far arm hidden. Side-on the far arm is behind the body
+(visibility 0.04 to 0.18 in the groupmate's passes), so a one-armed pass from the side
+is refused only when that arm was seen elsewhere; the front view is what checks both.
+About one in eight reps marked correct in public clips is now refused. No correct
+receiving recordings with labels exist yet, and nothing here has been tried on the
+phone.
+
+## Dominant arm, side-view passes and quieter counts (23 November 2026, evening)
+
+**Dominant arm.** The setup screen asks Left or Right (default Right, remembered on the
+device per account) and the side view always turns that arm toward the camera. Serving and
+spiking require it; the two-handed skills suggest it and accept either profile. Before, the
+arm was guessed from whichever wrist was higher on the last rep, so the direction changed
+between sessions. Reading which side is nearest was not the problem: on recorded side
+views it agreed with joint visibility, the nose and the feet on 99 to 100% of frames.
+
+**Side-view passes.** A straight platform read about 150 degrees side-on (149 to 152 on 15
+recorded passes, 177 to 180 on screen), next to the 140-degree refusal line and well under
+the 165-degree target. Side-on the straighter of the screen and depth angles is used. In a
+guided side view, frames the view detector is unsure of no longer demand both arms. Rep
+timing leans on the better-seen leg, the hidden far hand needs to be further away before it
+counts as a second, separate arm (0.75 torso lengths; 0.70 when fully seen), and bending
+deep never loses a rep. On the same recordings, movements of other skills counted as passes:
+25 before, 25 after. The refusal for a platform held up at the shoulders is unchanged.
+
+**Voice.** A counted rep is spoken as its number. "Counted" is never said. A cue scoring 0.5
+or more is shown on the card as something to polish and praised aloud; a remark asking for a
+change is not made on two reps in a row.
+
+Not tried on a phone yet. No labelled recordings of correct side-view passes exist, so how
+many more of those count has not been measured.

@@ -104,7 +104,12 @@ class RepSegmenter(private val config: Config = Config()) {
 
     private data class Sample(val frame: PoseFrame, val signal: Float)
 
-    fun segment(frames: List<PoseFrame>, analyzer: SkillAnalyzer): List<RepWindow> {
+    /** @param judge the decision on each candidate. A saved session passes [RepJudge], as the capture screen does. */
+    fun segment(
+        frames: List<PoseFrame>,
+        analyzer: SkillAnalyzer,
+        judge: (RepWindow) -> MovementVerdict = analyzer::verdict,
+    ): List<RepWindow> {
         // Frames where the signal could not be computed are dropped rather than
         // zero-filled. They are frames where tracking failed, and a zero would be
         // a synthetic trough that could split one rep into two.
@@ -119,11 +124,15 @@ class RepSegmenter(private val config: Config = Config()) {
                 chunks += mutableListOf(sample)
             } else chunks.last() += sample
         }
-        return chunks.flatMap { segmentContinuous(it, analyzer) }
+        return chunks.flatMap { segmentContinuous(it, analyzer, judge) }
             .mapIndexed { index, window -> window.copy(index = index) }
     }
 
-    private fun segmentContinuous(samples: List<Sample>, analyzer: SkillAnalyzer): List<RepWindow> {
+    private fun segmentContinuous(
+        samples: List<Sample>,
+        analyzer: SkillAnalyzer,
+        judge: (RepWindow) -> MovementVerdict,
+    ): List<RepWindow> {
         if (samples.size < config.smoothingWindow * 2) return emptyList()
 
         val smoothed = smooth(samples.map { it.signal })
@@ -190,7 +199,9 @@ class RepSegmenter(private val config: Config = Config()) {
 
         fun close(endIndex: Int) {
             buildWindow(samples, smoothed, repStart, endIndex, windows.size, analyzer, earliestStart)
-                ?.takeIf { analyzer.verdict(it) == MovementVerdict.Counted }
+                ?.takeIf { judge(it) == MovementVerdict.Counted }
+                // The live counter's spacing rule, so both refuse the same echo.
+                ?.takeIf { rep -> windows.lastOrNull()?.let { rep.contactMs - it.contactMs < MIN_REP_SPACING_MS } != true }
                 ?.let(windows::add)
             earliestStart = endIndex + 1
             repStart = -1
@@ -414,6 +425,11 @@ class RepSegmenter(private val config: Config = Config()) {
             phaseFrames = phaseFrames,
             baselineHipImageY = Angles.hipCentreImage(samples[windowStart].frame).y,
         )
+    }
+
+    companion object {
+        /** Contacts closer than this are one repetition. Real reps in the recordings are 1.5 s apart or more. */
+        const val MIN_REP_SPACING_MS = 900L
     }
 
     /**

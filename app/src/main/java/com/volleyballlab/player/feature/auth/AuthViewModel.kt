@@ -43,6 +43,7 @@ import kotlinx.coroutines.CancellationException
  */
 data class AuthFormState(
     val firstName: String = "",
+    val middleName: String = "",
     val lastName: String = "",
     val email: String = "",
     val password: String = "",
@@ -67,14 +68,14 @@ data class AuthFormState(
     @param:StringRes val error: Int? = null,
     @param:StringRes val notice: Int? = null,
 ) {
-    val name: String get() = listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+    val name: String get() = AthleteProfile.displayName(firstName, middleName, lastName)
     val cities: List<AddressOption> get() = areas.firstOrNull { it.id == area?.id }?.cities.orEmpty()
     val address: ProfileAddress? get() = country?.let { ProfileAddress(it, area, city, barangay) }
     val canSubmitLogin: Boolean
         get() = !submitting && email.isNotBlank() && password.isNotBlank()
 
     val canSubmitSignUp: Boolean
-        get() = canSubmitLogin && firstName.isNotBlank() && lastName.isNotBlank() &&
+        get() = canSubmitLogin && firstName.isNotBlank() && middleName.isNotBlank() && lastName.isNotBlank() &&
             confirmPassword.isNotBlank() && country != null
 }
 
@@ -101,6 +102,7 @@ class AuthViewModel(
             val profile = profileRepository.current()
             if (authRepository.currentUid != editingUid) return@launch
             _state.update { it.copy(firstName = profile.firstName.ifBlank { profile.name.substringBeforeLast(' ', profile.name) }.take(AthleteProfile.MAX_NAME_PART_LENGTH),
+                middleName = profile.middleName.take(AthleteProfile.MAX_NAME_PART_LENGTH),
                 lastName = profile.lastName.ifBlank { profile.name.substringAfterLast(' ', "") }.take(AthleteProfile.MAX_NAME_PART_LENGTH), country = profile.address?.country, area = profile.address?.area,
                 city = profile.address?.city, barangay = profile.address?.barangay, submitting = true) }
             try {
@@ -133,7 +135,7 @@ class AuthViewModel(
             }
             try {
                 profileRepository.update { it.copy(name = form.name, firstName = form.firstName.trim(),
-                    lastName = form.lastName.trim(), address = form.address) }
+                    middleName = form.middleName.trim(), lastName = form.lastName.trim(), address = form.address) }
                 if (authRepository.currentUid == editingUid) onSaved()
             } catch (failure: Exception) {
                 if (failure is CancellationException) throw failure
@@ -223,12 +225,18 @@ class AuthViewModel(
     }
 
     fun onFirstNameChange(value: String) = edit { it.copy(firstName = value.take(AthleteProfile.MAX_NAME_PART_LENGTH)) }
+    fun onMiddleNameChange(value: String) = edit { it.copy(middleName = value.take(AthleteProfile.MAX_NAME_PART_LENGTH)) }
     fun onLastNameChange(value: String) = edit { it.copy(lastName = value.take(AthleteProfile.MAX_NAME_PART_LENGTH)) }
     fun onEmailChange(value: String) = edit { it.copy(email = value) }
     fun onPasswordChange(value: String) = edit { it.copy(password = value) }
     fun onConfirmPasswordChange(value: String) = edit { it.copy(confirmPassword = value) }
     fun onPositionChange(value: CourtPosition?) = edit { it.copy(position = value) }
     fun onGoalSkillChange(value: Skill?) = edit { it.copy(goalSkill = value) }
+    /** Back from a new registration: the address is filled in and the form says what to do. */
+    fun onRegistered(email: String) = _state.update {
+        it.copy(email = email, password = "", error = null, notice = R.string.auth_registered_notice, submitting = false)
+    }
+
     fun onRememberChange(value: Boolean) = _state.update { it.copy(rememberMe = value) }
     fun togglePasswordVisible() = _state.update { it.copy(passwordVisible = !it.passwordVisible) }
     fun toggleConfirmPasswordVisible() = _state.update { it.copy(confirmPasswordVisible = !it.confirmPasswordVisible) }
@@ -257,10 +265,19 @@ class AuthViewModel(
         }
     }
 
-    fun signUp(onSuccess: (UserRole) -> Unit) {
+    /**
+     * Creates the account, saves the name and address to it, and signs out again.
+     *
+     * A new account never goes straight to the dashboard: [onRegistered] returns to the
+     * login form, where the athlete signs in with what they just chose. The profile is
+     * saved first because its stores are scoped by uid, and the uid is gone after signing
+     * out. A coach address gets its role at sign-in, see [signIn].
+     */
+    fun signUp(onRegistered: (email: String) -> Unit) {
         val form = _state.value
         val complaint = when {
             form.firstName.isBlank() -> R.string.auth_error_first_name_required
+            form.middleName.isBlank() -> R.string.auth_error_middle_name_required
             form.lastName.isBlank() -> R.string.auth_error_last_name_required
             form.country == null -> R.string.auth_error_country_required
             else -> validateEmail(form.email) ?: validatePassword(form.password)
@@ -268,14 +285,9 @@ class AuthViewModel(
         }
         if (complaint != null) return fail(complaint)
 
-        submit(onSuccess) {
+        submit({ onRegistered(form.email.trim()) }) {
             authRepository.signUp(form.name, form.email, form.password).also { outcome ->
                 if (outcome is AuthOutcome.Success) {
-                    // The role is written before anything else, because it decides
-                    // which shell the next frame builds. Both stores are scoped by
-                    // uid and the uid only exists now that sign-up has returned.
-                    grantCoachRoleIfAddressed(form.email)
-
                     // The name goes into the local profile as well as onto the
                     // account, so the dashboard can greet the athlete on the very
                     // first frame rather than after a round trip that may not have
@@ -286,12 +298,14 @@ class AuthViewModel(
                         existing.copy(
                             name = form.name.trim(),
                             firstName = form.firstName.trim(),
+                            middleName = form.middleName.trim(),
                             lastName = form.lastName.trim(),
                             address = form.address,
                             position = form.position ?: existing.position,
                             goalSkill = form.goalSkill ?: existing.goalSkill,
                         )
                     }
+                    authRepository.signOut()
                 }
             }
         }

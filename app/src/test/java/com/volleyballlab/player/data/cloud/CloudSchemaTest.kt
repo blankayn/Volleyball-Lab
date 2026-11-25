@@ -106,6 +106,20 @@ class CloudSchemaTest {
 
         val note = CoachNote("n1", "c", "p", "s1", "Bend the knees.", 11L)
         assertEquals(note, CloudSchema.noteOf(CloudSchema.noteDoc(note)))
+        // A plain note is the same document it was before attachments existed.
+        assertEquals(setOf("id", "coachUid", "playerUid", "sessionId", "text", "createdAt"), CloudSchema.noteDoc(note).keys)
+        val attached = note.copy(sessionId = "s", videoMs = 12_400, repNumber = 4, hasPhoto = true)
+        assertEquals(attached, CloudSchema.noteOf(CloudSchema.noteDoc(attached)))
+        assertEquals("Rep 4 · 0:12", CoachNote.momentLabel(12_400, 4))
+        assertEquals("At 1:05", CoachNote.momentLabel(65_000, null))
+        // Unusable attachment values drop the attachment, never the written note.
+        val damaged = CloudSchema.noteOf(CloudSchema.noteDoc(attached) + mapOf("videoMs" to -5L, "repNumber" to 0L, "hasPhoto" to "yes"))
+        assertEquals(attached.copy(videoMs = null, repNumber = null, hasPhoto = false), damaged)
+        assertEquals(setOf("coachUid", "playerUid", "photo", "createdAt"), CloudSchema.noteMediaDoc(attached, "x").keys)
+        listOf("", "https://example.com/a.jpg", "data:image/png;base64,AAAA", "data:image/jpeg;base64,AA\">").forEach {
+            org.junit.Assert.assertFalse(com.volleyballlab.player.data.coach.validNotePhoto(it))
+        }
+        org.junit.Assert.assertTrue(com.volleyballlab.player.data.coach.validNotePhoto("data:image/jpeg;base64,/9j/4AAQ=="))
     }
 
     @Test

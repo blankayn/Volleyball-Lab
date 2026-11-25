@@ -1,5 +1,8 @@
 package com.volleyballlab.player.feature.coachmode
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,11 +25,15 @@ import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.StickyNote2
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.ThumbUp
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,6 +69,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.data.coach.DataStoreCoachRepository
+import com.volleyballlab.player.data.coach.NotePhotos
 import com.volleyballlab.player.domain.model.CoachNote
 import com.volleyballlab.player.domain.model.ReviewPoint
 import com.volleyballlab.player.domain.model.SafetyCheck
@@ -88,6 +97,9 @@ import kotlinx.coroutines.launch
 
 data class NoteDeliveryState(val sending: Boolean = false, val failed: Boolean = false)
 
+/** The photo waiting to go with the next note. */
+data class NotePhotoDraft(val source: String? = null, val preparing: Boolean = false, val error: String? = null)
+
 class CoachReviewViewModel(
     private val coachRepository: CoachRepository,
     private val authRepository: AuthRepository,
@@ -95,6 +107,22 @@ class CoachReviewViewModel(
 ) : ViewModel() {
     private val delivery = MutableStateFlow(NoteDeliveryState())
     val noteDelivery = delivery.asStateFlow()
+    private val photo = MutableStateFlow(NotePhotoDraft())
+    val photoDraft = photo.asStateFlow()
+
+    fun attachPhoto(encode: suspend () -> String) {
+        if (photo.value.preparing || delivery.value.sending) return
+        photo.value = NotePhotoDraft(preparing = true)
+        viewModelScope.launch {
+            photo.value = try { NotePhotoDraft(source = encode()) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { NotePhotoDraft(error = failure.message ?: "That photo could not be attached.") }
+        }
+    }
+
+    fun removePhotoDraft() {
+        if (!delivery.value.sending) photo.value = NotePhotoDraft()
+    }
 
     fun clearSendError() {
         if (!delivery.value.sending) delivery.value = NoteDeliveryState()
@@ -113,9 +141,13 @@ class CoachReviewViewModel(
      * The coach uid is read here rather than taken from the screen, so a note can
      * only ever be attributed to whoever is actually signed in.
      */
-    fun postNote(playerUid: String, sessionId: String, text: String, onSent: () -> Unit) {
+    fun postNote(
+        playerUid: String, sessionId: String, text: String,
+        videoMs: Long? = null, repNumber: Int? = null, onSent: () -> Unit,
+    ) {
         val trimmed = text.trim().take(CoachNote.MAX_LENGTH)
-        if (trimmed.isEmpty() || delivery.value.sending) return
+        if (trimmed.isEmpty() || delivery.value.sending || photo.value.preparing) return
+        val image = photo.value.source
         val coachUid = authRepository.currentUid ?: run {
             delivery.value = NoteDeliveryState(failed = true)
             return
@@ -132,8 +164,13 @@ class CoachReviewViewModel(
                         sessionId = sessionId,
                         text = trimmed,
                         createdAtEpochMs = System.currentTimeMillis(),
+                        videoMs = videoMs?.coerceIn(0, CoachNote.MAX_VIDEO_MS),
+                        repNumber = repNumber?.takeIf { videoMs != null },
+                        hasPhoto = image != null,
                     ),
+                    image,
                 )
+                photo.value = NotePhotoDraft()
                 delivery.value = NoteDeliveryState()
                 onSent()
             } catch (cancelled: CancellationException) {
@@ -204,6 +241,15 @@ fun CoachReviewScreen(
     var draft by rememberSaveable(sessionId) { mutableStateOf("") }
     var sent by rememberSaveable(sessionId) { mutableStateOf(false) }
     var tab by rememberSaveable(sessionId) { mutableStateOf(0) }
+    var momentMs by rememberSaveable(sessionId) { mutableStateOf<Long?>(null) }
+    var momentRep by rememberSaveable(sessionId) { mutableStateOf<Int?>(null) }
+    var openAt by remember(sessionId) { mutableStateOf<Pair<Int, Long>?>(null) }
+    val photo by viewModel.photoDraft.collectAsStateWithLifecycle()
+    val plan = rememberCoachPlan()
+    val context = LocalContext.current.applicationContext
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.attachPhoto { NotePhotos.encode(context, uri) }
+    }
 
     val snapshot = state.snapshotOf(playerUid)
     // Resolved from the full history, not from the snapshot's capped list, so a
@@ -261,7 +307,12 @@ fun CoachReviewScreen(
         }
 
         if (tab == 1) item {
-            SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter))
+            SharedRecordingCard(review.session, playerUid, Modifier.padding(horizontal = CoachGutter), startAt = openAt) { videoMs, rep ->
+                momentMs = videoMs
+                momentRep = rep
+                sent = false
+                tab = 2
+            }
         }
         if (tab == 0) item {
             com.volleyballlab.player.feature.session.SessionExplanationCard(review.session.id, Modifier.padding(horizontal = CoachGutter))
@@ -327,11 +378,20 @@ fun CoachReviewScreen(
                     viewModel.clearSendError()
                 },
                 onSend = {
-                    viewModel.postNote(playerUid, sessionId, draft) {
+                    viewModel.postNote(playerUid, sessionId, draft, momentMs, momentRep) {
                         draft = ""
+                        momentMs = null
+                        momentRep = null
                         sent = true
                     }
                 },
+                moment = momentMs?.let { CoachNote.momentLabel(it, momentRep) },
+                onChooseMoment = { tab = 1 },
+                onRemoveMoment = { momentMs = null; momentRep = null },
+                photo = photo,
+                onChoosePhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                photosIncluded = plan.isPro,
+                onRemovePhoto = viewModel::removePhotoDraft,
                 modifier = Modifier.padding(horizontal = CoachGutter),
             )
         }
@@ -345,7 +405,10 @@ fun CoachReviewScreen(
             // coach who has written to this session a dozen times still scrolls a
             // keyed, lazily composed list.
             items(items = existing, key = { it.id }) { note ->
-                NoteRow(note, Modifier.padding(horizontal = CoachGutter))
+                NoteRow(note, Modifier.padding(horizontal = CoachGutter)) { videoMs ->
+                    openAt = ((openAt?.first ?: 0) + 1) to videoMs
+                    tab = 1
+                }
             }
         }
 
@@ -602,6 +665,13 @@ private fun CommentBox(
     delivery: NoteDeliveryState,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
+    moment: String?,
+    onChooseMoment: () -> Unit,
+    onRemoveMoment: () -> Unit,
+    photo: NotePhotoDraft,
+    onChoosePhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
+    photosIncluded: Boolean,
     modifier: Modifier = Modifier,
 ) {
     CoachSectionCard(
@@ -622,12 +692,32 @@ private fun CommentBox(
             modifier = Modifier.fillMaxWidth(),
             shape = CoachInnerShape,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+        if (moment != null) InputChip(selected = true, enabled = !delivery.sending, onClick = onRemoveMoment, label = { Text(moment) },
+            leadingIcon = { Icon(Icons.Rounded.PlayCircle, null, Modifier.size(18.dp)) },
+            trailingIcon = { Icon(Icons.Rounded.Close, stringResource(R.string.coach_remove_moment), Modifier.size(18.dp)) })
+        photo.source?.let { source ->
+            com.volleyballlab.player.feature.coach.DraftNotePhoto(source)
+            TextButton(onClick = onRemovePhoto, enabled = !delivery.sending) { Text(stringResource(R.string.coach_remove_photo)) }
+            Text(stringResource(R.string.coach_photo_consent), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        photo.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (moment == null) TextButton(onClick = onChooseMoment, enabled = !delivery.sending) { Text(stringResource(R.string.coach_choose_moment)) }
+            if (photo.source == null && photosIncluded) TextButton(onClick = onChoosePhoto, enabled = !delivery.sending && !photo.preparing) {
+                Text(stringResource(if (photo.preparing) R.string.coach_photo_preparing else R.string.coach_add_photo))
+            }
+        }
+        if (!photosIncluded) Text(stringResource(R.string.coach_plan_photos), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             CoachPillButton(
                 label = stringResource(if (delivery.sending) R.string.coach_feedback_sending else R.string.coach_review_send),
                 onClick = onSend,
-                enabled = draft.isNotBlank() && !delivery.sending,
+                enabled = draft.isNotBlank() && !delivery.sending && !photo.preparing,
             )
             if (delivery.sending) {
                 HorizontalGap(12)
@@ -661,7 +751,7 @@ private fun CommentBox(
  * said on separate days.
  */
 @Composable
-private fun NoteRow(note: CoachNote, modifier: Modifier = Modifier) {
+private fun NoteRow(note: CoachNote, modifier: Modifier = Modifier, onOpenMoment: (Long) -> Unit) {
     CoachRowCard(modifier) {
         CoachIconChip(
             icon = Icons.AutoMirrored.Rounded.StickyNote2,
@@ -675,6 +765,8 @@ private fun NoteRow(note: CoachNote, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            com.volleyballlab.player.feature.coach.NoteMomentChip(note, onOpenMoment)
+            com.volleyballlab.player.feature.coach.NotePhoto(note, canRemove = true)
             Spacer(Modifier.height(6.dp))
             Text(
                 text = sessionTimestampLabel(note.createdAtEpochMs),

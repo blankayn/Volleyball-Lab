@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.CoachPreview
-import com.volleyballlab.player.domain.model.CoachSpecialisation
+import com.volleyballlab.player.domain.model.CoachingRole
 import com.volleyballlab.player.feature.profile.ProPlanCard
 import com.volleyballlab.player.ui.component.StudentCard
 import com.volleyballlab.player.ui.component.studentBackground
@@ -38,9 +38,9 @@ fun CoachDirectoryScreen(
     val model: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
-    var specialisation by rememberSaveable { mutableStateOf<CoachSpecialisation?>(null) }
+    var role by rememberSaveable { mutableStateOf<CoachingRole?>(null) }
     val filtered = state.directory.filter { coach ->
-        (specialisation == null || coach.profile.specialisation == specialisation) &&
+        (role == null || coach.profile.coachingRole == role) &&
             listOf(coach.profile.name, coach.profile.teamName, coach.profile.organisation)
                 .any { it.contains(query.trim(), ignoreCase = true) }
     }
@@ -70,10 +70,10 @@ fun CoachDirectoryScreen(
                 }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { FilterChip(selected = specialisation == null, onClick = { specialisation = null }, label = { Text("All coaches") }) }
-                        items(CoachSpecialisation.All) { spec ->
-                            FilterChip(selected = specialisation == spec, onClick = { specialisation = spec },
-                                label = { Text(stringResource(spec.displayName)) })
+                        item { FilterChip(selected = role == null, onClick = { role = null }, label = { Text("All coaches") }) }
+                        items(CoachingRole.All) { option ->
+                            FilterChip(selected = role == option, onClick = { role = option },
+                                label = { Text(stringResource(option.displayName)) })
                         }
                     }
                 }
@@ -87,9 +87,9 @@ fun CoachDirectoryScreen(
                             Text(if (state.directory.isEmpty()) "Coaches are on their way" else "No matching coaches",
                                 style = MaterialTheme.typography.titleMedium)
                             Text(if (state.directory.isEmpty()) "Published coach profiles will appear here. Check back soon."
-                                else "Try another name or choose a different specialization.",
+                                else "Try another name or choose a different role.",
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (query.isNotBlank() || specialisation != null) TextButton(onClick = { query = ""; specialisation = null }) { Text("Clear filters") }
+                            if (query.isNotBlank() || role != null) TextButton(onClick = { query = ""; role = null }) { Text("Clear filters") }
                         }
                     }
                 }
@@ -119,6 +119,8 @@ fun CoachProfileScreen(
     val connected = current && state.link?.isActive == true
     val canViewProfile = state.plan.isPro || connected
     val summary = if (state.loaded && canViewProfile && coach != null) rememberCoachSummary(coachUid).value else com.volleyballlab.player.domain.model.CoachPublicSummary()
+    val trust = coach?.let { rememberCoachTrust(it) }
+    var confirmUnconfirmed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(requestedCoach) { if (requestedCoach == coachUid) onRequestSent() }
 
     Column(Modifier.fillMaxSize().coachPageBackground()) {
@@ -133,7 +135,7 @@ fun CoachProfileScreen(
                 !canViewProfile -> item { ProPlanCard() }
                 coach == null -> item { CoachEmptyState("Profile unavailable", "This coach may have removed their directory listing. Your existing feedback stays in My coach.") }
                 else -> {
-                    item { com.volleyballlab.player.ui.component.EntranceAnimation(index = 0) { CoachIdentityHero(coach, summary, connected) } }
+                    item { com.volleyballlab.player.ui.component.EntranceAnimation(index = 0) { CoachIdentityHero(coach, summary, connected, trust = trust) } }
                     item { CoachMetrics(summary) }
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -152,7 +154,7 @@ fun CoachProfileScreen(
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                                 CoachFact("School or club", coach.profile.organisation.ifBlank { "Not provided" })
                                 coach.profile.teamName.takeIf(String::isNotBlank)?.let { CoachFact("Team", it) }
-                                coach.profile.specialisation?.let { CoachFact("Coaching focus", stringResource(it.displayName)) }
+                                coach.profile.coachingRole?.let { CoachFact("Role", stringResource(it.displayName)) }
                             }
                         }
                     }
@@ -161,7 +163,7 @@ fun CoachProfileScreen(
                         CoachSectionCard {
                             CoachEyebrow("Working together")
                             Text("A clear path from practice to progress", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                            CoachConnectionStep("01", "Request a place", "Choose a coach whose focus fits your training goals.")
+                            CoachConnectionStep("01", "Request a place", "Choose a coach who fits your training goals.")
                             CoachConnectionStep("02", "Get approved", "Your coach accepts your request before training is shared.")
                             CoachConnectionStep("03", "Practise with guidance", "Follow assignments, share sessions, and get focused feedback.")
                         }
@@ -180,8 +182,13 @@ fun CoachProfileScreen(
                 error?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 if (current && state.link?.isPending == true) Text("Request sent. Your coach will review it before you join.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else if (state.link != null && !current) Text("You already have a team connection. Manage it in My coach before choosing another.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { if (connected) onOpenWorkspace() else model.sendRequest(coachUid) },
-                    enabled = connected || (!requesting && state.link == null),
+                Button(onClick = {
+                    if (connected) onOpenWorkspace()
+                    else if (trust?.verified == false) confirmUnconfirmed = true
+                    else model.sendRequest(coachUid)
+                },
+                    // A request waits for the checks, so an unverified coach is never joined without the warning.
+                    enabled = connected || (!requesting && state.link == null && trust != null),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(16.dp)) {
                     if (requesting) { CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
                     Text(if (connected) "Open My coach" else if (requesting) "Sending request…" else if (current && state.link?.isPending == true) "Awaiting approval" else if (state.link != null) "Already connected to a team" else "Request to join team", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
@@ -190,6 +197,10 @@ fun CoachProfileScreen(
             }
         }
     }
+    if (confirmUnconfirmed) UnconfirmedCoachDialog(
+        onSend = { confirmUnconfirmed = false; model.sendRequest(coachUid) },
+        onCancel = { confirmUnconfirmed = false },
+    )
 }
 
 @Composable
@@ -252,10 +263,11 @@ private fun CoachDiscoveryCard(coach: CoachPreview, onClick: () -> Unit) {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val summary = listOfNotNull(
-                coach.profile.specialisation?.let { stringResource(it.displayName) },
+                coach.profile.coachingRole?.let { stringResource(it.displayName) },
                 coach.profile.yearsExperience?.let { "$it ${if (it == 1) "year" else "years"} coaching" },
             ).joinToString(" · ")
             if (summary.isNotBlank()) Text(summary, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            CoachVerifiedBadge(rememberCoachTrust(coach))
             Text("View coach profile", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

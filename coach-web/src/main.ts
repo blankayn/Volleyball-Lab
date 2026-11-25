@@ -2,6 +2,7 @@ import { beforeAuthStateChanged, onAuthStateChanged } from "firebase/auth";
 import { setCoachPresenceAccount, stopCoachPresence } from "./lib/coach-presence";
 import { auth, configError, initFirebase } from "./lib/firebase";
 import { getUserRole } from "./lib/cloud";
+import { syncCoachTrust } from "./lib/coach-trust";
 import { go, parseRoute } from "./lib/router";
 import "./styles/tokens.css";
 import "./styles/main.css";
@@ -67,6 +68,7 @@ function backendError(): void {
 // or the initial load exits before drawing anything.
 let current: string | null = null;
 let renderVersion = 0;
+let trustSynced: string | null = null;
 let disposeDashboard: (() => void) | undefined;
 
 async function render(): Promise<void> {
@@ -101,6 +103,11 @@ async function render(): Promise<void> {
       return;
     }
     setCoachPresenceAccount(user.uid);
+    if (trustSynced !== user.uid) {
+      trustSynced = user.uid;
+      // Publishes a newly confirmed email. Never holds up or breaks the dashboard.
+      void syncCoachTrust(user).catch(() => { trustSynced = null; });
+    }
     const dashboard = await import("./pages/dashboard");
     if (version !== renderVersion) return;
     const { renderDashboard } = dashboard;

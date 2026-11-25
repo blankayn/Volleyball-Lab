@@ -71,7 +71,13 @@ class VideoReviewTest {
         val original = TestPoses.wellFramedStanding(500)
         val hidden = original.copy(world = original.world.mapIndexed { i, p -> if (i == BodyPoint.LEFT_KNEE.ordinal) p.copy(presence = 0.1f) else p })
         val window = RepWindow(0, listOf(hidden), mapOf(RepPhase.Contact to hidden), 0.5f)
-        assertNull(VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 180f, 0f))
+        // The fault is read from the leg in view and marked there, never on the hidden knee.
+        val issue = VideoReviewFeedback().issueFor(window, 1, CueId.PassKneeFlexion, window.frameFor(RepPhase.Contact), 180f, 0f)
+        assertTrue(issue != null && BodyPoint.LEFT_KNEE.ordinal !in issue.points)
+        // With both knees hidden there is nothing to mark.
+        val both = hidden.copy(world = hidden.world.mapIndexed { i, p -> if (i == BodyPoint.RIGHT_KNEE.ordinal) p.copy(presence = 0.1f) else p })
+        val bothWindow = RepWindow(0, listOf(both), mapOf(RepPhase.Contact to both), 0.5f)
+        assertNull(VideoReviewFeedback().issueFor(bothWindow, 1, CueId.PassKneeFlexion, bothWindow.frameFor(RepPhase.Contact), 180f, 0f))
     }
 
     @Test fun `good missing or nonfinite measurements do not produce corrections`() {

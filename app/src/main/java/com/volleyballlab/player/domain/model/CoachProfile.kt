@@ -4,41 +4,26 @@ import androidx.annotation.StringRes
 import com.volleyballlab.player.R
 
 /**
- * A coach's specialisation, as `Coach_Specialization` in Table 14.
- *
- * The document's example values are "serving, spiking, all-around", so this is the
- * five MVP skills plus an explicit all-round option rather than free text. Free
- * text would be unsearchable and would not survive translation; an enum keeps the
- * roster filterable and the label localisable.
+ * What the coach does on the team. It replaced the specialisation field on
+ * 25 November 2026: every coach here coaches all five skills, so a specialisation
+ * said nothing. Names are stored and shared with the website.
  */
-enum class CoachSpecialisation(@param:StringRes val displayName: Int) {
-    AllAround(R.string.coach_spec_all_around),
-    Serving(R.string.skill_serving),
-    Receiving(R.string.skill_receiving),
-    Setting(R.string.skill_setting),
-    Spiking(R.string.skill_spiking),
-    Blocking(R.string.skill_blocking);
-
-    /** The skill this specialisation is about, or null for [AllAround]. */
-    val skill: Skill?
-        get() = when (this) {
-            AllAround -> null
-            Serving -> Skill.Serving
-            Receiving -> Skill.Receiving
-            Setting -> Skill.Setting
-            Spiking -> Skill.Spiking
-            Blocking -> Skill.Blocking
-        }
+enum class CoachingRole(@param:StringRes val displayName: Int) {
+    HeadCoach(R.string.coaching_role_head),
+    AssistantCoach(R.string.coaching_role_assistant),
+    Trainer(R.string.coaching_role_trainer),
+    PETeacher(R.string.coaching_role_pe_teacher);
 
     companion object {
-        val All: List<CoachSpecialisation> = entries
+        val All: List<CoachingRole> = entries
+        fun of(name: String?): CoachingRole? = entries.firstOrNull { it.name == name }
     }
 }
 
 /**
  * Who the coach is, and what team they run.
  *
- * Combines Table 14 (`Coach_Specialization`, `Coach_Experience`) with the fields
+ * Combines `Coach_Experience` from Table 14 with the fields
  * the storyboard's team-setup step asks for - team name, organisation or school,
  * and the level being coached. The registration screen in Figure 24 additionally
  * collects a certification licence number; [licenceNumber] is that field.
@@ -58,7 +43,7 @@ data class CoachProfile(
     val name: String = "",
     val teamName: String = "",
     val organisation: String = "",
-    val specialisation: CoachSpecialisation? = null,
+    val coachingRole: CoachingRole? = null,
     val yearsExperience: Int? = null,
     val licenceNumber: String = "",
     /** Push alerts for player submissions. `Coach_Settings` in Figure 29. */
@@ -107,7 +92,7 @@ data class CoachProfile(
  *
  * ## Only what helps someone choose
  *
- * Name, team, specialisation, experience and how many athletes are already on the
+ * Name, team, role, experience and how many athletes are already on the
  * roster. Not a contact address, not a licence number, and nothing at all about
  * the coach.s other players - a directory that leaked squad names would be handing
  * out other athletes. details to anyone who opened the tab.

@@ -12,4 +12,43 @@
     <string name="coach_feedback_sending">Sending…</string>
     <string name="coach_feedback_failed">Feedback could not be sent. Your draft is still here. Check your connection and try again.</string>
     <string name="coach_feedback_count">%1$d/%2$d</string>
+    <string name="coach_attach_moment">Comment on this moment (%1$s)</string>
+    <string name="coach_choose_moment">Link a moment</string>
+    <string name="coach_remove_moment">Remove the linked moment</string>
+    <string name="coach_add_photo">Add a photo</string>
+    <string name="coach_photo_preparing">Preparing photo…</string>
+    <string name="coach_remove_photo">Remove photo</string>
+    <string name="coach_photo_consent">Only this player and you can see it. Send photos only of people who have agreed to it, and a guardian for anyone under 18.</string>
+    <string name="result_back_to_coach">Back to coach feedback</string>
+    <string name="coach_feedback_new">New</string>
+    <string name="feedback_history_title">Summary</string>
+    <string name="feedback_history_sent">Sent</string>
+    <string name="feedback_history_reviewed">Reviewed</string>
+    <string name="feedback_history_waiting">Waiting</string>
+    <plurals name="feedback_history_unread">
+        <item quantity="one">%1$d new comment to read</item>
+        <item quantity="other">%1$d new comments to read</item>
+    </plurals>
+    <string name="feedback_history_repeated">Keeps coming up in the app’s checks</string>
+    <string name="feedback_history_repeated_value">%1$s · lowest check in %3$d of %4$d %2$s sessions</string>
+    <string name="feedback_went_well">Best check</string>
+    <string name="feedback_work_on">Work on next</string>
+    <string name="send_session_title">Get feedback on a session</string>
+    <string name="send_session_none">Record a training session first, then send it here.</string>
+    <string name="send_session_all_sent">You’ve sent all your sessions. New ones will show up here.</string>
+    <string name="send_session_body">Tap a session for its summary, or send it. Your coach gets its scores, and its video when one is saved. Their feedback shows up under Sent sessions below.</string>
+    <string name="send_session_no_reps">No reps were counted in this session.</string>
+    <string name="send_session_not_measured">Not enough was measured for a summary.</string>
+    <string name="send_session_video">Video saved on this phone</string>
+    <string name="feedback_open">Show summary</string>
+    <string name="feedback_form_score">Form score %1$d</string>
+    <string name="feedback_hide">Show less</string>
+    <plurals name="coach_feedback_unread_line">
+        <item quantity="one">New feedback from your coach</item>
+        <item quantity="other">New feedback messages from your coach</item>
+    </plurals>
+    <plurals name="coach_feedback_unread">
+        <item quantity="one">%1$d unread coach feedback</item>
+        <item quantity="other">%1$d unread coach feedback</item>
+    </plurals>
 </resources>

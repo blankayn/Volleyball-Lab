@@ -58,8 +58,14 @@ object NotificationEvents {
 
     fun session(s: SessionResult) = TrainingNotification("analysis:${s.id}", TrainingNotificationType.AnalysisComplete,
         "Analysis complete", "${s.skill.name} session analyzed · ${s.repCount} completed reps", s.startedAtEpochMs + s.durationMs, s.id)
-    fun feedback(n: CoachNote) = TrainingNotification("feedback:${n.id}", TrainingNotificationType.FeedbackDelivered,
+    fun feedback(n: CoachNote) = TrainingNotification(feedbackId(n.id), TrainingNotificationType.FeedbackDelivered,
         "Coach feedback", n.text.take(240), n.createdAtEpochMs, n.sessionId)
+    /** Ids of the notes still unread in [inbox]. A note that was deleted cannot hold the number up. */
+    fun unreadFeedback(inbox: List<TrainingNotification>, notes: List<CoachNote>): Set<String> {
+        val unread = inbox.filter { it.type == TrainingNotificationType.FeedbackDelivered && !it.isRead }.mapTo(mutableSetOf()) { it.id }
+        return notes.filter { feedbackId(it.id) in unread }.mapTo(mutableSetOf()) { it.id }
+    }
+    fun feedbackId(noteId: String) = "feedback:$noteId"
     fun assignment(a: CoachAssignment) = TrainingNotification("assignment:${a.id}", TrainingNotificationType.CoachAssignment,
         "New training assignment", a.title, a.createdAtEpochMs, a.id)
     fun submission(s: SessionSubmission) = TrainingNotification("submission:${s.playerUid}:${s.sessionId}:${s.submittedAtEpochMs}", TrainingNotificationType.PlayerSubmission,

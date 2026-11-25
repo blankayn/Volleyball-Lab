@@ -34,7 +34,6 @@ import com.volleyballlab.player.R
 import com.volleyballlab.player.domain.model.isValidFor
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.model.Skill
-import com.volleyballlab.player.domain.model.SkillRecommendation
 import com.volleyballlab.player.feature.session.RecentSessionSummaryCard
 import com.volleyballlab.player.ui.component.EntranceAnimation
 import com.volleyballlab.player.ui.component.StudentCard
@@ -52,11 +51,13 @@ fun HomeScreen(
     onStartTraining: () -> Unit,
     onSkillSelected: (Skill) -> Unit,
     onTakeAssessment: () -> Unit,
+    onOpenDrill: (String) -> Unit,
     onViewAllSessions: () -> Unit,
     onOpenSession: (String) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     onViewAssignments: () -> Unit = onStartTraining,
+    onOpenAssignment: (String) -> Unit = {},
 ) {
     val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -87,20 +88,20 @@ fun HomeScreen(
             item(key = "start") {
                 EntranceAnimation(index = 1) { TrainingHero(onStartTraining, horizontal) }
             }
+            if (state.assignments.isNotEmpty()) item(key = "assignments") {
+                EntranceAnimation(index = 2) { HomeAssignmentsCard(state.assignments, onOpenAssignment, onViewAssignments, horizontal) }
+            }
             item(key = "overview") {
                 EntranceAnimation(index = 2) {
                     DashboardOverview(state.sessions, onViewAllSessions, horizontal)
                 }
             }
             item(key = "agenda") {
-                EntranceAnimation(index = 3) { TrainingAgendaCard(onSkillSelected, onViewAssignments, horizontal) }
+                EntranceAnimation(index = 3) { TrainingAgendaCard(onSkillSelected, horizontal) }
             }
             item(key = "focus") {
-                val recommendation = state.recommendation
                 EntranceAnimation(index = 4) {
-                    FocusCard(recommendation, state.profile.goalSkill != null,
-                        onClick = { if (recommendation == null) onTakeAssessment() else onSkillSelected(recommendation.skill) },
-                        modifier = horizontal)
+                    WeekPlanCard(state.athlete, state.planner, state.drills, state.done, onOpenDrill, onTakeAssessment, viewModel::retryPlan, horizontal)
                 }
             }
             item(key = "recent_header") {
@@ -238,37 +239,6 @@ private fun DashboardStat(value: Int, label: String, icon: ImageVector, revealed
             if (available) CountUp(value, revealed, MaterialTheme.typography.headlineSmall)
             else Text("—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-private fun FocusCard(recommendation: SkillRecommendation?, savedGoal: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    StudentCard(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = DashboardShape,
-        color = MaterialTheme.colorScheme.primaryContainer) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            IconTile(Icons.Rounded.TrackChanges)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(if (recommendation == null) "Find your starting point" else "Your training focus",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text(if (recommendation == null) "Build your starting plan"
-                    else stringResource(recommendation.skill.displayName),
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text(if (recommendation == null) "A few short cards to find a useful starting practice."
-                    else stringResource(recommendation.skill.description),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                if (recommendation != null) {
-                    if (recommendation.isMeasured) Text(stringResource(R.string.home_skill_level, recommendation.level.number, stringResource(recommendation.level.label)),
-                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    if (savedGoal) Text("From your saved training goal", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
-                    Text(if (recommendation.isMeasured) stringResource(R.string.home_focus_source_measured) else "Based on your answers",
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .75f))
-                }
-            }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.primary)
         }
     }
 }

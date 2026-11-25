@@ -3,6 +3,7 @@ package com.volleyballlab.player.pose.analysis
 import com.volleyballlab.player.domain.model.CameraAngle
 import com.volleyballlab.player.domain.model.CueScore
 import com.volleyballlab.player.domain.model.CueId
+import com.volleyballlab.player.domain.model.DrillFocus
 import com.volleyballlab.player.domain.model.FormCueCatalog
 import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.domain.model.RepResult
@@ -40,9 +41,12 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
         angle: CameraAngle? = null,
     ): ScoredSession {
         val analyzer = SkillAnalyzers.forSkill(skill)
-        val windows = segmenter.segment(frames, analyzer)
+        // The same decision the live counter made, so the saved session cannot
+        // hold a rep the coach refused.
+        val judge = RepJudge(skill, drillId, analyzer)
+        val windows = segmenter.segment(frames, analyzer) { judge.judge(it, angle) }
         val reps = windows.map {
-            scoreRep(it, skill, analyzer, receivingPostureEvaluator, angle)
+            scoreRep(it, skill, analyzer, receivingPostureEvaluator, angle, excluded = DrillFocus.excluded(drillId))
         }
         val feedback = VideoReviewFeedback()
         val issues = windows.zip(reps).flatMap { (window, rep) ->
@@ -67,18 +71,22 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
     }
 
     fun scoreRep(
-        window: RepWindow,
+        candidate: RepWindow,
         skill: Skill,
         analyzer: SkillAnalyzer = SkillAnalyzers.forSkill(skill),
         receivingPostureEvaluator: ReceivingReadyPostureEvaluator? = null,
         angle: CameraAngle? = null,
+        liveSideView: Boolean = false,
+        /** Cues the drill does not train ([DrillFocus.excluded]): left unmeasured. */
+        excluded: Set<CueId> = emptySet(),
     ): RepResult {
+        val window = if (angle == null) candidate else candidate.copy(view = angle)
         val cues = FormCueCatalog.forSkill(skill)
         val measurements = cues.associate { cue ->
             val phase = analyzer.cueFrame(cue, window)
             val side = AngleCuePolicy.completedSide(cue.id, window)
             val supported = angle == null || phase != null && AngleCuePolicy.isSupported(cue.id, angle, phase, side)
-            cue.id to if (supported) analyzer.measure(cue, window)?.takeIf { it.isFinite() } else null
+            cue.id to if (supported && cue.id !in excluded) analyzer.measure(cue, window)?.takeIf { it.isFinite() } else null
         }
         val contact = window.frameFor(RepPhase.Contact)
         val receivingLegsReliable = skill != Skill.Receiving ||
@@ -122,7 +130,8 @@ class SessionScorer(private val segmenter: RepSegmenter = RepSegmenter()) {
                 }
                 val score = when {
                     measured == null -> null
-                    skill == Skill.Receiving && readinessCue && !receivingLegsReliable -> null
+                    // Side-view geometry already passed the per-cue visibility check. The front-facing readiness rule needs both legs.
+                    skill == Skill.Receiving && readinessCue && !(liveSideView && angle == CameraAngle.Side) && !receivingLegsReliable -> null
                     readinessCue && ready?.decision in setOf(
                         ReceivingReadyDecision.Uncertain, ReceivingReadyDecision.WarmingUp,
                         ReceivingReadyDecision.InsufficientQuality,

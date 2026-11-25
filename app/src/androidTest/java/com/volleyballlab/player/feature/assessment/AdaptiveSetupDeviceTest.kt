@@ -10,7 +10,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
-import com.volleyballlab.player.data.ai.TrainingSetupPersonalizer
+import com.volleyballlab.player.data.ai.AnalystResult
+import com.volleyballlab.player.data.assessment.AthleteAssessmentRepository
+import com.volleyballlab.player.data.assessment.AthletePlanner
+import com.volleyballlab.player.data.assessment.PlannerSources
 import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.domain.repository.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,26 +24,43 @@ import org.junit.Test
 
 class AdaptiveSetupDeviceTest {
     @get:Rule val compose = createComposeRule()
-    private val store = ViewModelStore()
-    private var saved: TrainingSetup? = null
+    private val owner = ViewModelStore()
+    private var saved: AssessmentAnswers? = null
+    private val drill = Drill("set-wall-reps", Skill.Setting, "Setting Stance", "", 20, 5, DrillLevel.Beginner)
     private fun show() {
         val assessments = object : AssessmentRepository {
             override val assessment = MutableStateFlow(SkillAssessment.Unanswered)
             override val hasOnboarded = MutableStateFlow(false)
             override suspend fun save(assessment: SkillAssessment) {}
             override suspend fun skip() {}
-            override suspend fun saveTrainingSetup(setup: TrainingSetup) { saved = setup }
+            override suspend fun complete(answers: AssessmentAnswers) { saved = answers }
         }
         val profiles = object : ProfileRepository {
             override val profile = MutableStateFlow(AthleteProfile())
             override suspend fun save(profile: AthleteProfile) {}
         }
-        val ai = object : TrainingSetupPersonalizer {
-            override suspend fun nextCard(answers: SetupAnswers) = SetupFollowUp(Skill.Serving, "serving_focus", "Let's practice serving.", "groq")
-            override suspend fun summary(answers: SetupAnswers) = SetupSuggestion(Skill.Serving, "Start with serving practice.", "You chose serving and contact.", "groq")
+        val store = object : AthleteAssessmentRepository {
+            override val state = MutableStateFlow<AthleteState?>(AthleteState())
+            override suspend fun saveAnswers(uid: String, answers: AssessmentAnswers) { state.value = AthleteState(answers) }
+            override suspend fun savePlan(uid: String, answers: AssessmentAnswers, plan: AthletePlan) { state.value = AthleteState(answers, plan) }
         }
-        val model = AssessmentViewModel(assessments, profiles, ai, { "fixture" })
-        store.put("setup", model)
+        val drills = object : DrillRepository {
+            override suspend fun drillsFor(skill: Skill) = if (skill == Skill.Setting) listOf(drill) else emptyList()
+            override suspend fun byId(id: String) = drill
+        }
+        val sources = object : PlannerSources {
+            override val uid = "fixture"
+            override suspend fun sessions() = emptyList<SessionResult>()
+            override suspend fun memory() = AdaptiveMemory()
+            override suspend fun marks() = emptyList<RepMark>()
+            override suspend fun workouts() = emptyList<DrillPracticeRecord>()
+            override suspend fun openDrills() = listOf(drill)
+            override suspend fun onPlanned(uid: String, focus: List<Skill>) = Unit
+        }
+        val analysis = AthleteAnalysis("A plan made from your answers.", focus = listOf(Skill.Setting),
+            practices = listOf(PlannedPractice("Hands up", listOf(PlannedDrill(drill.id, 2, 10, "You like setting.")))))
+        val model = AssessmentViewModel(assessments, profiles, store, AthletePlanner(store, { AnalystResult.Ready(analysis) }, sources), drills, { "fixture" })
+        owner.put("setup", model)
         compose.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, 1.6f)) {
@@ -48,27 +68,22 @@ class AdaptiveSetupDeviceTest {
             }
         }
     }
-    @After fun clear() { compose.runOnIdle { store.clear() } }
-    @Test fun narrowLargeTextSetupHasReachableActionsAndEditableReview() {
+    @After fun clear() { compose.runOnIdle { owner.clear() } }
+    private fun pick(label: String) { compose.onNodeWithText(label).performScrollTo().performClick() }
+    @Test fun narrowLargeTextAssessmentReachesItsResult() {
         show()
-        compose.onNodeWithText("Serving", useUnmergedTree = true).performScrollTo().performClick()
-        compose.onNodeWithText("Continue with AI").assertIsDisplayed().performClick()
-        compose.onNodeWithText("New to volleyball").performScrollTo().performClick()
-        compose.onNodeWithText("Next").performClick()
-        compose.onNodeWithText("Contacting the ball").performScrollTo().performClick()
-        compose.onNodeWithText("Next").performClick()
-        compose.onNodeWithText("5 / week").performScrollTo().performClick()
-        compose.onNodeWithText("Next").performClick()
-        compose.onNodeWithText("Based on your answers").assertExists()
+        pick("New to volleyball"); compose.onNodeWithText("Next").performClick()
+        pick("Be more consistent"); compose.onNodeWithText("Next").performClick()
+        pick("5"); compose.onNodeWithText("Next").performClick()
+        repeat(Skill.All.size) {
+            repeat(SkillCheck.PER_SKILL) { index -> compose.onAllNodesWithText("Sometimes")[index].performScrollTo().performClick() }
+            compose.onNodeWithText("Next").assertIsDisplayed().performClick()
+        }
+        pick("Timing")
         assertNull(saved)
-        compose.onNodeWithText("Setting", useUnmergedTree = true).performScrollTo().performClick()
-        compose.onNodeWithText("Save my plan").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(Skill.Setting, saved?.focusSkill); assertEquals(5, saved?.weeklySessionGoal) }
-    }
-    @Test fun keyboardDoesNotHideTheNextAction() {
-        show()
-        compose.onNodeWithText("Describe your goal (optional)").performScrollTo().performTextInput("Gusto ko maging consistent sa serve")
-        compose.onNodeWithText("Continue with AI").assertIsDisplayed().performClick()
-        compose.onNodeWithText("How much have you played?").assertExists()
+        compose.onNodeWithText("Get my assessment").assertIsDisplayed().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("A plan made from your answers.").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Setting Stance").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { assertEquals(5, saved?.days) }
     }
 }

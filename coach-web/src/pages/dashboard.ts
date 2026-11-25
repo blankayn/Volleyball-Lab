@@ -36,6 +36,9 @@ import { mountNotifications, notificationBell } from "../lib/notifications";
 import { sessionExplanationPanel, wireSessionExplanations } from "../lib/session-explanation";
 import { sharedRecordingPanel, wireSharedRecordings } from "../lib/shared-recording";
 import { wireProfileMedia } from "../lib/profile-media";
+import { createRefresher, SLOW_SAVE, withSlowNotice } from "../lib/pending";
+import { canAccept, FREE_STUDENTS, isPro, loadPlan } from "../lib/plan";
+import { attachmentComposer, clearDraftAttachments, draftAttachments, noteAttachments, wireNoteAttachments } from "../lib/note-attachments";
 import { profileHeader } from "../lib/profile-header";
 import { wireCoachExperience } from "../lib/coach-experience";
 import { messageBadge, playerUnreadCount, unreadCount } from "../lib/coaching-unread";
@@ -68,11 +71,13 @@ let disposeNotifications: (() => void) | null = null;
 let disposeExplanations: (() => void) | null = null;
 let disposeRecordings: (() => void) | null = null;
 let disposeProfileMedia: (() => void) | null = null;
+let disposeNoteAttachments: (() => void) | null = null;
 let disposeHub: (() => void) | null = null;
 
 let dashboardVersion = 0;
 export function disposeDashboard(): void {
   disposeProfileMedia?.(); disposeProfileMedia = null;
+  disposeNoteAttachments?.(); disposeNoteAttachments = null;
   disposeRecordings?.();
   disposeRecordings = null;
   disposeHub?.();
@@ -157,6 +162,7 @@ async function loadData(coachUid: string): Promise<DashData> {
     getProfile(coachUid),
     getCoachQuestions(coachUid).catch(() => null),
     getCoachChat(coachUid).catch(() => null),
+    loadPlan(coachUid),
   ]);
   const sessionsByPlayer = new Map<string, TrainingSession[]>();
   await Promise.all(
@@ -306,7 +312,7 @@ export async function renderDashboard(
   sessionId: string | null = null,
 ): Promise<void> {
   stopLive();
-  if (coachUid !== draftAccount) { noteDrafts.clear(); draftAccount = coachUid; }
+  if (coachUid !== draftAccount) { noteDrafts.clear(); clearDraftAttachments(); draftAccount = coachUid; }
   if (sessionId === "messages" && playerUid) expandedConversations.add(playerUid);
   else if (sessionId) expandedSessions.add(sessionId);
   const version = ++dashboardVersion;
@@ -368,7 +374,6 @@ export async function renderDashboard(
   const body = root.querySelector<HTMLElement>("#dash-body");
   if (!body) return;
 
-  let request = 0;
   let dirty = false;
   let hasRendered = false;
   const filterQueries = new Map<string, string>();
@@ -412,11 +417,11 @@ export async function renderDashboard(
       else expandedSessions.delete(details.dataset.sessionDetails);
     }
   }, true);
-  const render = async (live = false) => {
-    const attempt = ++request;
+  const render = createRefresher(async (live, current) => {
+    const gone = () => version !== dashboardVersion || !current() || !body.isConnected;
     try {
       const data = await loadData(coachUid);
-      if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
+      if (gone()) return false;
       notifications.update(data);
       nameCache = new Map(data.roster.map((m) => [m.playerUid, m.playerName || "Player"]));
       // Refresh badges and the selected-player link without replacing the shell.
@@ -430,9 +435,9 @@ export async function renderDashboard(
             + data.roster.reduce((total, m) => total + chatUnread(data.chat, m.playerUid), 0),
         );
       }
-      if (live && editing()) return;
+      if (live && editing()) return false;
       const html = await viewFor(activeTab, coachUid, data, playerUid);
-      if (version !== dashboardVersion || attempt !== request || !body.isConnected || (live && editing())) return;
+      if (gone() || (live && editing())) return false;
       disposeAccount?.();
       disposeAccount = null;
       disposeExplanations?.();
@@ -440,11 +445,13 @@ export async function renderDashboard(
       disposeRecordings?.();
       disposeRecordings = null;
       disposeProfileMedia?.(); disposeProfileMedia = null;
+  disposeNoteAttachments?.(); disposeNoteAttachments = null;
       disposeExperience?.();
       disposeHub?.();
       body.innerHTML = html;
       disposeRecordings = wireSharedRecordings(body);
       disposeProfileMedia = wireProfileMedia(body);
+      disposeNoteAttachments = wireNoteAttachments(body);
       body.querySelectorAll<HTMLInputElement>("[data-coach-search]").forEach(field => {
         field.value = filterQueries.get(field.getAttribute("aria-label") ?? "") ?? "";
       });
@@ -471,8 +478,8 @@ export async function renderDashboard(
         const heading = root.querySelector("#page-heading");
         if (heading) heading.textContent = nameCache.get(playerUid) || PAGE_LABELS.player;
       }
-      wireActions(root, coachUid, () => void render());
-      disposeHub = wireChat(root, coachUid, data.questions, data.chat, () => void render());
+      wireActions(root, coachUid, () => render());
+      disposeHub = wireChat(root, coachUid, data.questions, data.chat, () => render());
       disposeExplanations = wireSessionExplanations(root);
       disposeAccount = wireAccount(root, coachUid, () => {
         void getProfile(coachUid).then((profile) => {
@@ -484,17 +491,19 @@ export async function renderDashboard(
           updateCoachAvatars(root, name);
         }).catch(() => undefined);
       });
+      return true;
     } catch (e) {
       console.error(e);
-      if (version !== dashboardVersion || attempt !== request || !body.isConnected) return;
-      if (hasRendered) return;
+      if (gone()) return false;
+      if (hasRendered) return false;
       body.innerHTML = errorCard(
         "Could not load your team. Check your connection and try again.",
         "reload",
       );
       body.querySelector("[data-retry]")?.addEventListener("click", () => void render());
+      return false;
     }
-  };
+  });
 
   // Live queue + roster counts; the body re-renders on change.
   let liveRefresh: ReturnType<typeof setTimeout>;
@@ -742,7 +751,8 @@ function viewRoster(data: DashData): string {
   const requests = data.roster.filter((m) => m.status === "Pending");
   const active = activeRoster(data.roster);
   const past = data.roster.filter((m) => m.status === "Ended");
-  return `${requests.length ? `<section class="request-panel" aria-label="Join requests"><h3 class="panel-title">${plural(requests.length, "player")} waiting to join</h3>
+  const limit = isPro() ? "" : `<p class="plan-limit">${canAccept(active.length) ? `Free plan: ${active.length} of ${FREE_STUDENTS} students.` : `Your Free plan covers ${FREE_STUDENTS} students. <a href="${appPath("account")}">Get Pro</a> to accept more.`}</p>`;
+  return `${limit}${requests.length ? `<section class="request-panel" aria-label="Join requests"><h3 class="panel-title">${plural(requests.length, "player")} waiting to join</h3>
       <div class="request-list">${requests.map((m) => `
         <div class="request-row">${avatar(m.playerName || "Player", m.playerUid)}
           <span class="queue-copy"><strong>${esc(m.playerName || "Unnamed player")}</strong><span>${esc(positionLabel(m.position))} · asked ${esc(timeAgo(m.requestedAt))}</span></span>
@@ -819,7 +829,7 @@ async function viewPlayer(coachUid: string, data: DashData, playerUid: string): 
     </section>
     <section class="panel"><header class="panel-header"><h3 class="panel-title">Coach feedback</h3></header>
       ${notes.length === 0 ? `<p class="muted">No coach feedback yet. Open a session above to provide feedback.</p>` : notes.slice(0, 5).map((n) => `
-        <div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
+        <div class="note-bubble">${esc(n.text)}${noteAttachments(n, false)}<small>${fullDate(n.createdAt)}${n.sessionId ? " · on a session" : " · general"}</small></div>`).join("")}
     </section>
   </div>`;
 }
@@ -858,10 +868,11 @@ function sessionCard(coachUid: string, playerUid: string, s: TrainingSession, no
       <div class="cue-table-scroll" role="region" aria-label="Session cue measurements" tabindex="0"><table class="cues"><thead><tr><th>Cue</th><th>Athlete</th><th>Score</th><th>Target</th></tr></thead><tbody>${cueRows}</tbody></table></div>
       ${sessionExplanationPanel(s.id)}
       <section aria-label="Coach Feedback"><h4>Coach Feedback</h4>
-      ${notes.filter(n => n.sessionId === s.id).sort((a, b) => a.createdAt - b.createdAt).map(n => `<div class="note-bubble">${esc(n.text)}<small>${fullDate(n.createdAt)}</small></div>`).join("") || `<p class="muted">Awaiting Coach Feedback. Review the session and provide your assessment and next practice focus.</p>`}
+      ${notes.filter(n => n.sessionId === s.id).sort((a, b) => a.createdAt - b.createdAt).map(n => `<div class="note-bubble">${esc(n.text)}${noteAttachments(n, true)}<small>${fullDate(n.createdAt)}</small></div>`).join("") || `<p class="muted">Awaiting Coach Feedback. Review the session and provide your assessment and next practice focus.</p>`}
       </section>
       <div class="field" style="margin-top:12px"><label for="note-${esc(s.id)}">${answered ? "Add follow-up feedback" : "Coach Feedback"}</label>
         <textarea id="note-${esc(s.id)}" data-note-draft="${esc(s.id)}" maxlength="800" rows="4" placeholder="One thing they did well, then a clear focus for the next set."></textarea></div>
+      ${attachmentComposer(s.id)}
       <div class="note-composer-footer"><span class="muted" data-note-count="${esc(s.id)}">0/800</span><button class="btn btn-primary" disabled data-action="send-note" data-session="${esc(s.id)}" data-player="${esc(playerUid)}">${icon("message")} Send feedback</button></div>
     </div></template></div>
   </details>`;
@@ -924,13 +935,14 @@ function wireSignOut(root: HTMLElement): void {
     b.onclick = async () => {
       stopLive();
       noteDrafts.clear();
+      clearDraftAttachments();
       await auth.signOut();
       go("/");
     },
   );
 }
 
-function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): void {
+function wireActions(root: HTMLElement, coachUid: string, refresh: () => unknown): void {
   wireSignOut(root);
   const showStatus = (message: string, error = false) => {
     const status = root.querySelector<HTMLElement>("#action-status");
@@ -948,29 +960,46 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
       if (el.disabled) return;
       el.disabled = true;
     }
+    const restore = () => { el.innerHTML = original; if (el instanceof HTMLButtonElement) el.disabled = false; };
+    const slow = () => showStatus(SLOW_SAVE, true);
+    let sentNote: HTMLTextAreaElement | null = null;
     try {
+      if (action === "approve" && !canAccept(activeRoster(await getRoster(coachUid)).filter((m) => m.playerUid !== player).length)) {
+        showStatus(`Your Free plan covers ${FREE_STUDENTS} students. Get Pro in Account to accept more.`, true);
+        restore();
+        return;
+      }
       if (action === "approve" || action === "decline" || action === "remove") {
-        await setMemberStatus(coachUid, player, action === "approve" ? "Active" : "Ended");
+        await withSlowNotice(setMemberStatus(coachUid, player, action === "approve" ? "Active" : "Ended"), slow);
       } else if (action === "send-note") {
         const sessionId = el.dataset["session"] ?? "";
         const text = val(root, `note-${CSS.escape(sessionId)}`);
-        if (!text) throw new Error("Write coach feedback before sending.");
+        const attached = draftAttachments(sessionId);
+        const missing = !text ? "Write coach feedback before sending." : attached.preparing ? "The photo is still being prepared. Try again in a moment." : "";
+        if (missing) { showStatus(missing, true); restore(); return; }
         el.textContent = "Sending…";
-        (el as HTMLButtonElement).disabled = true;
-        await postNote({ id: newId(), coachUid, playerUid: player, sessionId, text: text.slice(0, 800), createdAt: Date.now() });
+        await withSlowNotice(postNote({ id: newId(), coachUid, playerUid: player, sessionId, text: text.slice(0, 800), createdAt: Date.now(), moment: attached.moment, hasPhoto: attached.photo !== null }, attached.photo), slow);
         noteDrafts.delete(sessionId);
+        clearDraftAttachments(sessionId);
+        sentNote = root.querySelector<HTMLTextAreaElement>(`#note-${CSS.escape(sessionId)}`);
         showStatus("Feedback sent to the player.");
       } else if (action === "delete-assignment") {
-        await deleteAssignment(el.dataset["id"] ?? "");
+        await withSlowNotice(deleteAssignment(el.dataset["id"] ?? ""), slow);
       }
     } catch (e) {
       console.error(e);
       showStatus("Could not save this change. Check your connection and try again. Your text is still here.", true);
-      el.innerHTML = original;
-      if (el instanceof HTMLButtonElement) el.disabled = false;
+      restore();
       return;
     }
-    refresh();
+    await refresh();
+    // The refresh normally replaces this button. If it could not, the button must not stay busy.
+    if (!el.isConnected) return;
+    restore();
+    if (sentNote) {
+      sentNote.value = "";
+      if (el instanceof HTMLButtonElement) el.disabled = true;
+    }
   };
 
   const actionArea = root.querySelector<HTMLElement>("#dash-body");
@@ -1002,7 +1031,7 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
     if (button) button.textContent = "Assigning…";
     try {
       const skill = val(root, "a-skill") as Skill;
-      await saveAssignment({
+      await withSlowNotice(saveAssignment({
         id: newId(),
         coachUid,
         playerUid,
@@ -1017,7 +1046,7 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
         status: "Pending",
         createdAt: Date.now(),
         libraryDrillId: null,
-      });
+      }), () => showStatus(SLOW_SAVE, true));
       showStatus(`Assigned “${title.slice(0, 60)}” to ${playerName}.`);
     } catch (e) {
       console.error(e);
@@ -1025,7 +1054,10 @@ function wireActions(root: HTMLElement, coachUid: string, refresh: () => void): 
       if (button) { button.disabled = false; button.textContent = buttonLabel; }
       return;
     }
-    refresh();
+    await refresh();
+    if (!assignForm.isConnected) return;
+    assignForm.reset();
+    if (button) { button.disabled = false; button.textContent = buttonLabel; }
   });
 
 }

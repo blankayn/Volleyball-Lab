@@ -6,156 +6,173 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.volleyballlab.player.appContainer
-import com.volleyballlab.player.data.ai.CloudTrainingSetupRepository
-import com.volleyballlab.player.data.ai.TrainingSetupPersonalizer
+import com.volleyballlab.player.data.assessment.AthleteAssessmentRepository
+import com.volleyballlab.player.data.assessment.AthletePlanner
+import com.volleyballlab.player.data.assessment.PlannerStatus
 import com.volleyballlab.player.domain.model.*
 import com.volleyballlab.player.domain.repository.AssessmentRepository
+import com.volleyballlab.player.domain.repository.DrillRepository
 import com.volleyballlab.player.domain.repository.ProfileRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
-enum class AssessmentStep { Goal, Experience, FollowUp, Schedule, Review;
-    companion object { val All = entries }
-}
+/** The pages in order. The five skill pages come between [Time] and [Weak]. */
+enum class AssessmentPage { About, Goals, Time, Skill, Weak, Result }
 
 data class AssessmentUiState(
-    val step: AssessmentStep = AssessmentStep.Goal,
-    val goal: Skill? = null,
-    val goalChosen: Boolean = false,
-    val note: String = "",
+    val order: List<Skill> = Skill.All,
+    val page: Int = 0,
     val experience: ExperienceLevel? = null,
-    val weeklyGoal: Int = 3,
-    val followUp: SetupFollowUp? = null,
-    val optionId: String? = null,
-    val suggestion: SetupSuggestion? = null,
-    val aiEnabled: Boolean = true,
+    val position: CourtPosition? = null,
+    val preferred: List<Skill> = emptyList(),
+    val goal: MainGoal? = null,
+    val goalNote: String = "",
+    val days: Int = 3,
+    val minutes: Int = 30,
+    val statements: Map<String, CanDo> = emptyMap(),
+    val weakPoints: List<WeakPoint> = emptyList(),
+    val weakNote: String = "",
+    val plan: AthletePlan? = null,
+    val submittedAtEpochMs: Long = 0L,
+    val planner: PlannerStatus = PlannerStatus.Idle,
+    val drills: Map<String, Drill> = emptyMap(),
     val busy: Boolean = true,
     val error: String? = null,
 ) {
-    val progress get() = (step.ordinal + 1) / 5f
-    val canAdvance get() = !busy && when(step) {
-        AssessmentStep.Goal -> goalChosen || note.isNotBlank()
-        AssessmentStep.Experience -> experience != null
-        AssessmentStep.FollowUp -> optionId != null
-        AssessmentStep.Schedule -> weeklyGoal in 1..14
-        AssessmentStep.Review -> suggestion != null
+    val pages: Int get() = FIRST_SKILL + order.size + 2
+    val kind: AssessmentPage get() = when {
+        page == 0 -> AssessmentPage.About
+        page == 1 -> AssessmentPage.Goals
+        page == 2 -> AssessmentPage.Time
+        page < FIRST_SKILL + order.size -> AssessmentPage.Skill
+        page == FIRST_SKILL + order.size -> AssessmentPage.Weak
+        else -> AssessmentPage.Result
     }
-    fun answers() = SetupAnswers(goal, experience ?: ExperienceLevel.New, note.trim(), followUp?.questionId, optionId, weeklyGoal)
+    val skill: Skill? get() = if (kind == AssessmentPage.Skill) order[page - FIRST_SKILL] else null
+    /** The plan for these answers. An earlier one is not shown as their result. */
+    val result: AthletePlan? get() = plan?.takeIf { submittedAtEpochMs > 0 && it.createdAtEpochMs >= submittedAtEpochMs }
+    val progress: Float get() = (page + 1f) / pages
+    val canAdvance: Boolean get() = !busy && when (kind) {
+        AssessmentPage.About -> experience != null
+        AssessmentPage.Goals -> goal != null
+        AssessmentPage.Skill -> SkillCheck.forSkill(requireNotNull(skill)).all { it.id in statements }
+        else -> true
+    }
+    val answers: AssessmentAnswers? get() {
+        return AssessmentAnswers(experience ?: return null, position, preferred, goal ?: return null, goalNote.trim(), days, minutes,
+            weakPoints, weakNote.trim(), SkillCheck.known(statements)).takeIf { it.isComplete }
+    }
+
+    companion object { const val FIRST_SKILL = 3 }
 }
 
-/** Five bounded cards. One follow-up call and one summary call at most per opened setup. */
+/**
+ * Asks, saves, and has the AI write this athlete's assessment.
+ *
+ * The questions are the same for everyone; nothing in the result is. Answers are saved
+ * before the AI is asked, so an athlete who is offline or over the limit loses nothing and
+ * the plan is written later ([AthletePlanner.refreshIfDue]).
+ */
 class AssessmentViewModel(
-    private val assessmentRepository: AssessmentRepository,
-    private val profileRepository: ProfileRepository,
-    private val personalizer: TrainingSetupPersonalizer,
+    private val assessments: AssessmentRepository,
+    private val profiles: ProfileRepository,
+    private val athlete: AthleteAssessmentRepository,
+    private val planner: AthletePlanner,
+    private val drills: DrillRepository,
     private val currentUid: () -> String?,
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val uid = currentUid()
-    private val _state = MutableStateFlow(AssessmentUiState())
+    private val _state = MutableStateFlow(AssessmentUiState(order = SkillCheck.orderFor(uid)))
     val state = _state.asStateFlow()
-    private var nextRequested = false
-    private var summaryRequested = false
+
     init {
         viewModelScope.launch {
             try {
-                val profile = profileRepository.profile.first()
-                val existing = assessmentRepository.assessment.first()
+                val saved = withTimeoutOrNull(LOAD_MS) { athlete.state.filterNotNull().first() }?.answers
+                val earlier = assessments.assessment.first()
+                val profile = profiles.profile.first()
                 checkAccount()
-                _state.update { it.copy(goal = profile.goalSkill, goalChosen = profile.goalSkill != null,
-                    note = profile.goalText.take(160), experience = existing.experience,
-                    weeklyGoal = profile.weeklySessionGoal.coerceIn(1, 14), busy = false) }
+                _state.update { it.copy(
+                    experience = saved?.experience ?: earlier.experience, position = saved?.position ?: profile.position,
+                    preferred = saved?.preferred ?: earlier.focus, goal = saved?.goal, goalNote = (saved?.goalNote ?: profile.goalText).take(AssessmentAnswers.MAX_NOTE),
+                    days = (saved?.days ?: profile.weeklySessionGoal).coerceIn(1, 7), minutes = saved?.minutes?.takeIf { m -> m in AssessmentAnswers.MINUTES } ?: 30,
+                    statements = SkillCheck.known(saved?.statements ?: earlier.answers), weakPoints = saved?.weakPoints.orEmpty(), weakNote = saved?.weakNote.orEmpty(),
+                    drills = Skill.All.flatMap { skill -> drills.drillsFor(skill) }.associateBy { drill -> drill.id }, busy = false) }
             } catch (failure: CancellationException) { throw failure }
-            catch (_: Exception) { _state.update { it.copy(busy = false, error = "Could not load your saved choices. You can still use quick setup.", aiEnabled = false) } }
+            catch (_: Exception) { _state.update { it.copy(busy = false, error = "Could not load your saved answers. You can still answer again.") } }
         }
+        viewModelScope.launch { planner.status.collect { status -> _state.update { it.copy(planner = status) } } }
+        viewModelScope.launch { athlete.state.collect { saved -> _state.update { it.copy(plan = saved?.plan) } } }
     }
-    private fun checkAccount() { check(uid != null && currentUid() == uid) { "Your account changed. Reopen setup to continue." } }
-    private fun changeAnswers(change: (AssessmentUiState) -> AssessmentUiState) = _state.update {
-        if (it.busy) it else change(it).copy(followUp = null, optionId = null, suggestion = null,
-            aiEnabled = it.aiEnabled && !nextRequested && !summaryRequested, error = null)
-    }
-    fun onGoalSelected(skill: Skill?) = changeAnswers { it.copy(goal = skill, goalChosen = true) }
-    fun onNoteChanged(text: String) = changeAnswers { it.copy(note = text.take(160)) }
-    fun onExperienceSelected(level: ExperienceLevel) = changeAnswers { it.copy(experience = level) }
-    fun onOptionSelected(id: String) { _state.update { if (it.busy) it else it.copy(optionId = id, suggestion = null, error = null) } }
-    fun onWeeklyGoalSelected(value: Int) { _state.update { if (it.busy) it else it.copy(weeklyGoal = value.coerceIn(1, 14), suggestion = null) } }
-    fun onReviewGoalSelected(skill: Skill) { _state.update {
-        if (it.busy) it else it.copy(goal = skill, goalChosen = true, aiEnabled = false,
-            followUp = SetupFollowUp(skill, TrainingSetupQuestions.forSkill(skill).id, "", "local"), optionId = "not_sure",
-            suggestion = TrainingSetupQuestions.localSuggestion(it.answers().copy(goalSkill = skill)))
-    } }
-    fun onReviewWeeklyGoalSelected(value: Int) { _state.update {
-        if (it.busy) it else it.copy(weeklyGoal = value.coerceIn(1, 14), suggestion = TrainingSetupQuestions.localSuggestion(it.answers().copy(goalSkill = it.suggestion?.focusSkill, weeklySessionGoal = value.coerceIn(1, 14))))
-    } }
-    fun useQuickSetup() { _state.update { if (it.busy) it else it.copy(aiEnabled = false, goalChosen = true) } }
-    fun onBack() { _state.update { if (it.busy) it else it.copy(step = AssessmentStep.All[(it.step.ordinal - 1).coerceAtLeast(0)], error = null) } }
+
+    private fun checkAccount() { check(uid != null && currentUid() == uid) { "Your account changed. Reopen the assessment to continue." } }
+    private fun change(change: (AssessmentUiState) -> AssessmentUiState) = _state.update { if (it.busy) it else change(it).copy(error = null) }
+    private fun <T> List<T>.toggled(item: T) = if (item in this) this - item else this + item
+
+    fun onExperience(value: ExperienceLevel) = change { it.copy(experience = value) }
+    fun onPosition(value: CourtPosition?) = change { it.copy(position = value) }
+    fun onPreferred(skill: Skill) = change { it.copy(preferred = it.preferred.toggled(skill)) }
+    fun onGoal(value: MainGoal) = change { it.copy(goal = value) }
+    fun onGoalNote(text: String) = change { it.copy(goalNote = text.take(AssessmentAnswers.MAX_NOTE)) }
+    fun onDays(value: Int) = change { it.copy(days = value.coerceIn(1, 7)) }
+    fun onMinutes(value: Int) = change { if (value in AssessmentAnswers.MINUTES) it.copy(minutes = value) else it }
+    fun onAnswer(statementId: String, answer: CanDo) = change { it.copy(statements = it.statements + (statementId to answer)) }
+    fun onWeakPoint(value: WeakPoint) = change { it.copy(weakPoints = it.weakPoints.toggled(value)) }
+    fun onWeakNote(text: String) = change { it.copy(weakNote = text.take(AssessmentAnswers.MAX_NOTE)) }
+    fun onBack() = change { it.copy(page = (it.page - 1).coerceAtLeast(0)) }
+
     fun onNext(onFinished: () -> Unit) {
         val state = _state.value
         if (!state.canAdvance) return
+        when (state.kind) {
+            AssessmentPage.Result -> onFinished()
+            AssessmentPage.Weak -> submit(state)
+            else -> change { it.copy(page = it.page + 1) }
+        }
+    }
+
+    private fun submit(state: AssessmentUiState) {
+        val answers = state.answers?.copy(savedAtEpochMs = now()) ?: return
         viewModelScope.launch {
             _state.update { it.copy(busy = true, error = null) }
             try {
                 checkAccount()
-                when (state.step) {
-                    AssessmentStep.Goal -> _state.update { it.copy(step = AssessmentStep.Experience) }
-                    AssessmentStep.Experience -> {
-                        val answers = state.answers().copy(followUpQuestionId = null, followUpOptionId = null, weeklySessionGoal = null)
-                        val follow = if (state.followUp != null) state.followUp else if (state.aiEnabled && !nextRequested) {
-                            nextRequested = true
-                            try { personalizer.nextCard(answers) }
-                            catch (_: TimeoutCancellationException) { TrainingSetupQuestions.localFollowUp(answers) }
-                            catch (failure: CancellationException) { throw failure }
-                            catch (_: Exception) { TrainingSetupQuestions.localFollowUp(answers) }
-                        } else TrainingSetupQuestions.localFollowUp(answers)
-                        checkAccount()
-                        _state.update { it.copy(step = AssessmentStep.FollowUp, followUp = follow, aiEnabled = it.aiEnabled && follow.source == "groq") }
-                    }
-                    AssessmentStep.FollowUp -> _state.update { it.copy(step = AssessmentStep.Schedule) }
-                    AssessmentStep.Schedule -> {
-                        val suggestion = state.suggestion ?: if (state.aiEnabled && !summaryRequested) {
-                            summaryRequested = true
-                            try { personalizer.summary(state.answers()) }
-                            catch (_: TimeoutCancellationException) { TrainingSetupQuestions.localSuggestion(state.answers()) }
-                            catch (failure: CancellationException) { throw failure }
-                            catch (_: Exception) { TrainingSetupQuestions.localSuggestion(state.answers()) }
-                        } else TrainingSetupQuestions.localSuggestion(state.answers())
-                        checkAccount()
-                        _state.update { it.copy(step = AssessmentStep.Review, suggestion = suggestion, aiEnabled = it.aiEnabled && suggestion.source == "groq") }
-                    }
-                    AssessmentStep.Review -> {
-                        val suggestion = requireNotNull(state.suggestion)
-                        assessmentRepository.saveTrainingSetup(TrainingSetup(
-                            focusSkill = suggestion.focusSkill, weeklySessionGoal = state.weeklyGoal,
-                            goalText = state.note.trim(), experience = state.experience,
-                            concern = TrainingSetupQuestions.optionLabel(state.answers()), summary = suggestion.summary,
-                            source = suggestion.source, starterDrillId = TrainingSetupQuestions.starterDrill(suggestion.focusSkill),
-                            completedAtEpochMs = System.currentTimeMillis(), reason = suggestion.reason,
-                            questionId = state.followUp?.questionId.orEmpty(), optionId = state.optionId.orEmpty(),
-                        ))
-                        checkAccount()
-                        onFinished()
-                    }
-                }
+                assessments.complete(answers)
+                checkAccount()
+                athlete.saveAnswers(requireNotNull(uid), answers)
+                checkAccount()
+                _state.update { it.copy(page = it.page + 1, submittedAtEpochMs = answers.savedAtEpochMs, busy = false) }
+                planner.write(answers)
             } catch (failure: CancellationException) { throw failure }
-            catch (_: Exception) { _state.update { it.copy(error = if (currentUid() != uid) "Your account changed. Reopen setup to continue." else "Could not save your plan. Your choices are still here; please try again.") } }
+            catch (_: Exception) { _state.update { it.copy(error = message("Could not save. Your answers are still here; please try again.")) } }
             finally { _state.update { it.copy(busy = false) } }
         }
     }
+
+    fun retryPlan() { if (_state.value.planner != PlannerStatus.Working) viewModelScope.launch { planner.write() } }
+
     fun onSkip(onFinished: () -> Unit) {
         if (_state.value.busy) return
+        if (_state.value.kind == AssessmentPage.Result) { onFinished(); return }
         viewModelScope.launch {
             _state.update { it.copy(busy = true, error = null) }
-            try { checkAccount(); assessmentRepository.skip(); checkAccount(); onFinished() }
+            try { checkAccount(); assessments.skip(); checkAccount(); onFinished() }
             catch (failure: CancellationException) { throw failure }
-            catch (_: Exception) { _state.update { it.copy(error = "Could not finish setup. Check your account and try again.") } }
+            catch (_: Exception) { _state.update { it.copy(error = message("Could not finish. Check your account and try again.")) } }
             finally { _state.update { it.copy(busy = false) } }
         }
     }
+
+    private fun message(text: String) = if (currentUid() != uid) "Your account changed. Reopen the assessment to continue." else text
+
     companion object {
+        private const val LOAD_MS = 4_000L
         val Factory: ViewModelProvider.Factory = viewModelFactory { initializer {
-            AssessmentViewModel(appContainer.assessmentRepository, appContainer.profileRepository,
-                CloudTrainingSetupRepository(), { appContainer.authRepository.currentUid })
+            AssessmentViewModel(appContainer.assessmentRepository, appContainer.profileRepository, appContainer.athleteAssessmentRepository,
+                appContainer.athletePlanner, appContainer.drillRepository, { appContainer.authRepository.currentUid })
         } }
     }
 }

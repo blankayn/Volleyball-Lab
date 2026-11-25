@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.MailOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,8 +58,14 @@ fun LoginScreen(
     onAuthenticated: (UserRole) -> Unit,
     onSignUp: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The address of an account just registered, or null. */
+    registeredEmail: String? = null,
+    onRegisteredShown: () -> Unit = {},
 ) {
     val viewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory)
+    LaunchedEffect(registeredEmail) {
+        if (registeredEmail != null) { viewModel.onRegistered(registeredEmail); onRegisteredShown() }
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     var recoveringPassword by rememberSaveable { mutableStateOf(false) }
     if (recoveringPassword) {

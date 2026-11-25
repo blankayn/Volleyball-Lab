@@ -1,3 +1,4 @@
+import { SLOW_SAVE, withSlowNotice } from "./pending";
 import { collection, doc, getDocs, query, serverTimestamp, setDoc, Timestamp, where } from "firebase/firestore";
 import { contactText, markQuestionRead, questionPending, replyToQuestion, topicLabel, type CoachingQuestion } from "./coaching-hub";
 import { incomingTimes, unreadCount } from "./coaching-unread";
@@ -81,7 +82,7 @@ export async function sendChat(uid: string, playerUid: string, text: string, que
   await setDoc(ref, { id: ref.id, coachUid: uid, playerUid, senderUid: uid, text, createdAt: serverTimestamp() });
 }
 
-export function wireChat(root: HTMLElement, uid: string, questions: CoachingQuestion[] | null, chat: ChatData | null, refresh: () => void): () => void {
+export function wireChat(root: HTMLElement, uid: string, questions: CoachingQuestion[] | null, chat: ChatData | null, refresh: () => unknown): () => void {
   const section = root.querySelector<HTMLElement>("[data-chat]");
   if (!section || questions === null || chat === null) return () => {};
   const playerUid = section.dataset.chat!;
@@ -135,9 +136,11 @@ export function wireChat(root: HTMLElement, uid: string, questions: CoachingQues
       if (contactText.test(text)) { say("Remove links, phone numbers, emails or social accounts to send.", true); return; }
       button.disabled = true; field.disabled = true;
       try {
-        await sendChat(uid, playerUid, text.slice(0, 1000), questions);
+        await withSlowNotice(sendChat(uid, playerUid, text.slice(0, 1000), questions), () => say(SLOW_SAVE, true));
         drafts.delete(playerUid);
-        refresh();
+        await refresh();
+        // Normally the refresh replaced this form; if it could not, it must not stay locked.
+        if (form.isConnected) { field.value = ""; say(hint, false); button.disabled = false; field.disabled = false; }
       } catch {
         say("Could not send. Your text is still here; check your connection and try again.", true);
         button.disabled = false; field.disabled = false;

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="skill_check_skip">Skip</string>
+    <string name="skill_check_step">Page %1$d of %2$d</string>
+    <string name="skill_check_body">Think about how you play now. There are no right answers, and no level is given.</string>
+    <string name="skill_check_schedule">How often would you like to practice?</string>
+    <string name="skill_check_schedule_body">Choose a realistic weekly target. You can change it later.</string>
+    <string name="skill_check_goal">Your goal, in your own words (optional)</string>
+    <string name="skill_check_back">Back</string>
+    <string name="skill_check_next">Next</string>
+    <string name="your_skills_title">Your skills</string>
+    <plurals name="evidence_measured">
+        <item quantity="one">Measured with the camera · %1$d scored session</item>
+        <item quantity="other">Measured with the camera · %1$d scored sessions</item>
+    </plurals>
+    <string name="evidence_answers">Your answers · %1$d yes, %2$d sometimes, %3$d not yet</string>
+    <string name="evidence_unknown">Not known yet</string>
+    <string name="home_assignments_title">From your coach</string>
+    <string name="home_assignments_all">See all</string>
+    <string name="home_assignment_start">Start</string>
+    <string name="home_assignment_continue">Continue</string>
+    <string name="home_assignment_view">View</string>
+    <string name="home_assignment_progress">%1$d of %2$d reps recorded</string>
+    <string name="home_assignment_new">New</string>
+    <string name="home_assignment_in_progress">In progress</string>
+    <string name="home_assignment_overdue">Overdue</string>
+    <string name="home_assignment_sent">Sent, waiting for your coach</string>
+    <string name="home_assignment_due">Due %1$s</string>
+    <string name="home_assignment_no_due">No due date</string>
+</resources>

@@ -134,6 +134,15 @@ interface CoachRepository {
      */
     suspend fun postNote(note: CoachNote)
 
+    /**
+     * [postNote] with a photo, saved in the same commit: both arrive or neither
+     * does. A store without photo support refuses rather than dropping it.
+     */
+    suspend fun postNote(note: CoachNote, photo: String?) {
+        check(photo == null) { "Photos cannot be attached here." }
+        postNote(note)
+    }
+
     // ---- The player's side of the same link --------------------------------
 
     /** The signed-in player's link to a coach, or null when there is none. */

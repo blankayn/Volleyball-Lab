@@ -68,6 +68,7 @@ fun MyCoachScreen(
     onOpenProfile: (String) -> Unit = {},
     section: String? = null,
     onOpenSection: (String) -> Unit = {},
+    onOpenMoment: (sessionId: String, videoMs: Long) -> Unit = { _, _ -> },
 ) {
     val model: CoachLinkViewModel = viewModel(factory = CoachLinkViewModel.Factory)
     val state by model.state.collectAsStateWithLifecycle()
@@ -159,6 +160,8 @@ fun MyCoachScreen(
                     if (state.submissions.isNotEmpty()) item(key = "feedback-filters") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             HubLabel("Sent sessions")
+                            FeedbackHistoryCard(remember(state.submissions, state.sessions) { FeedbackHistory.of(state.submissions, state.sessions) },
+                                rememberUnreadFeedback().size)
                             FeedbackFilter(feedbackFilter, state.submissions.count { it.isPending }) { feedbackFilter = it }
                         }
                     }
@@ -176,7 +179,8 @@ fun MyCoachScreen(
                         val conversation = conversationWith(submission.coachUid)
                         val hasChat = conversation.messages.isNotEmpty()
                         var questionOpen by rememberSaveable(submission.coachUid, submission.sessionId) { mutableStateOf(false) }
-                        CoachFeedbackSessionCard(submission, session, feedback) {
+                        CoachFeedbackSessionCard(submission, session, feedback,
+                            onOpenMoment = session?.let { saved -> { at: Long -> onOpenMoment(saved.id, at) } }) {
                             if (!submission.isPending) {
                                 ReviewEditor(submission, review, connected, actions, busy, errors) {
                                     if (connected || hasChat) {
@@ -194,7 +198,10 @@ fun MyCoachScreen(
                             }
                         }
                     }
-                    items(state.notes.filter { it.sessionId == null }, key = { "general-${it.id}" }) { note -> CoachGeneralNote(note) }
+                    items(state.notes.filter { note ->
+                        // General notes, and any whose sent session is no longer listed above.
+                        note.sessionId == null || state.submissions.none { it.coachUid == note.coachUid && it.sessionId == note.sessionId }
+                    }, key = { "general-${it.id}" }) { note -> CoachGeneralNote(note) }
                     items((questions.map { it.coachUid } + chat.map { it.coachUid }).distinct().filter { !active || it != link.coachUid }, key = { "earlier-$it" }) { coachUid ->
                         CoachSectionCard {
                             Text("Earlier conversation", style = MaterialTheme.typography.labelLarge, color = coachCardMuted())

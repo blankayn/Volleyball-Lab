@@ -55,13 +55,13 @@ class DrillRecommendationsTest {
         assertEquals(DrillPickReason.Untrained(Skill.Spiking), picks[1].reason)
     }
 
-    @Test fun withNoFocusTheLeastTrainedRelevantSkillLeads() {
+    @Test fun withNoFocusTheLeastTrainedSkillLeadsWhateverThePosition() {
         val sessions = listOf(session("serve-standing-float"), session("spike-standing-swing"))
         val picks = pick(position = CourtPosition.Libero, sessions = sessions)
-        // Serving is trained and spiking/blocking are not libero skills, so receiving leads.
+        // Serving and spiking are trained, so receiving leads.
         assertEquals("receive-wall-platform", picks[0].drill.id)
         assertEquals(DrillPickReason.Untrained(Skill.Receiving), picks[0].reason)
-        assertTrue(picks.none { it.drill.skill !in CourtPosition.Libero.relevantSkills })
+        assertEquals("position never hides a skill", pick(sessions = sessions), picks)
     }
 
     @Test fun withinALevelTheLessPractisedDrillComesFirst() {

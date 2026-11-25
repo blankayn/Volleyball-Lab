@@ -7,9 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.volleyballlab.player.data.UserScope
+import com.volleyballlab.player.domain.model.CanDo
 import com.volleyballlab.player.domain.model.ExperienceLevel
 import com.volleyballlab.player.domain.model.SelfRating
 import com.volleyballlab.player.domain.model.Skill
+import com.volleyballlab.player.domain.model.SkillCheck
 import com.volleyballlab.player.domain.model.SkillAssessment
 import com.volleyballlab.player.domain.repository.AssessmentRepository
 import com.volleyballlab.player.domain.repository.AuthRepository
@@ -61,6 +63,8 @@ class DataStoreAssessmentRepository(
             }.toMap(),
             experience = stored[scope.string(KEY_EXPERIENCE)]?.toEnumOrNull<ExperienceLevel>(),
             completedAtEpochMs = stored[scope.long(KEY_COMPLETED_AT)] ?: 0L,
+            answers = answersOf(stored, scope),
+            focus = focusOf(stored, scope),
         )
     }
 
@@ -80,6 +84,8 @@ class DataStoreAssessmentRepository(
                 ?.toEnumOrNull<SelfRating>()?.let { skill to it } }.toMap(),
             experience = stored[scope.string(KEY_EXPERIENCE)]?.toEnumOrNull<ExperienceLevel>(),
             completedAtEpochMs = stored[scope.long(KEY_COMPLETED_AT)] ?: 0L,
+            answers = answersOf(stored, scope),
+            focus = focusOf(stored, scope),
         )
     }
     override fun hasOnboardedFor(uid: String): Flow<Boolean> = preferences.map { stored ->
@@ -106,6 +112,8 @@ class DataStoreAssessmentRepository(
                 ?.let { stored[scope.string(KEY_EXPERIENCE)] = it.name }
                 ?: stored.remove(scope.string(KEY_EXPERIENCE))
             stored[scope.long(KEY_COMPLETED_AT)] = assessment.completedAtEpochMs
+            stored[scope.string(KEY_ANSWERS)] = assessment.answers.entries.joinToString(",") { "${it.key}=${it.value.name}" }
+            stored[scope.string(KEY_FOCUS)] = assessment.focus.joinToString(",") { it.name }
             stored[scope.boolean(KEY_ONBOARDED)] = true
         }
     }
@@ -123,6 +131,16 @@ class DataStoreAssessmentRepository(
         const val KEY_ONBOARDED = "onboarded"
         const val KEY_EXPERIENCE = "experience"
         const val KEY_COMPLETED_AT = "completed_at"
+        const val KEY_ANSWERS = "skill_check"
+        const val KEY_FOCUS = "focus_skills"
+
+        fun answersOf(stored: Preferences, scope: UserScope): Map<String, CanDo> = SkillCheck.known(
+            stored[scope.string(KEY_ANSWERS)].orEmpty().split(',').mapNotNull { entry ->
+                entry.substringAfter('=', "").toEnumOrNull<CanDo>()?.let { entry.substringBefore('=') to it }
+            }.toMap())
+
+        fun focusOf(stored: Preferences, scope: UserScope): List<Skill> =
+            stored[scope.string(KEY_FOCUS)].orEmpty().split(',').mapNotNull { it.toEnumOrNull<Skill>() }.distinct()
 
         fun ratingKey(skill: Skill) = "rating_${skill.name}"
     }

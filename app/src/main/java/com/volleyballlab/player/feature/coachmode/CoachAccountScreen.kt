@@ -55,7 +55,7 @@ import com.volleyballlab.player.feature.profile.AccountSecurityCard
 import com.volleyballlab.player.R
 import com.volleyballlab.player.appContainer
 import com.volleyballlab.player.domain.model.CoachProfile
-import com.volleyballlab.player.domain.model.CoachSpecialisation
+import com.volleyballlab.player.domain.model.CoachingRole
 import com.volleyballlab.player.domain.repository.AuthRepository
 import com.volleyballlab.player.domain.repository.AuthUser
 import com.volleyballlab.player.domain.repository.CoachRepository
@@ -145,8 +145,8 @@ class CoachAccountViewModel(
     fun onLicence(value: String) = edit { it.copy(licenceNumber = value.take(40)) }
 
     /** Tapping the selected chip clears it: the same gesture sets and unsets. */
-    fun onSpecialisation(value: CoachSpecialisation) = edit {
-        it.copy(specialisation = if (it.specialisation == value) null else value)
+    fun onCoachingRole(value: CoachingRole) = edit {
+        it.copy(coachingRole = if (it.coachingRole == value) null else value)
     }
 
     /**
@@ -239,11 +239,11 @@ private fun CoachAccountSectionContent(section: AccountSection, state: CoachAcco
                     AccountField(stringResource(R.string.coach_account_organisation), profile.organisation, model::onOrganisation)
                 }
                 AccountSectionCard("Coaching background") {
-                    Text(stringResource(R.string.coach_account_specialisation), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.coach_account_role), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CoachSpecialisation.All.forEach { candidate ->
-                            FilterChip(profile.specialisation == candidate, { model.onSpecialisation(candidate) },
+                        CoachingRole.All.forEach { candidate ->
+                            FilterChip(profile.coachingRole == candidate, { model.onCoachingRole(candidate) },
                                 label = { Text(stringResource(candidate.displayName)) }, shape = CoachPillShape)
                         }
                     }
@@ -254,6 +254,7 @@ private fun CoachAccountSectionContent(section: AccountSection, state: CoachAcco
                 }
                 com.volleyballlab.player.feature.profile.ProfileSyncCard(Modifier.fillMaxWidth())
             }
+            AccountSection.Plan -> com.volleyballlab.player.feature.profile.ProPlanCard(coach = true)
             AccountSection.Settings -> com.volleyballlab.player.feature.profile.InlineAccountSettings(coach = true) { selected ->
                 CoachAccountSectionContent(selected, state, model, onSignedOut)
             }

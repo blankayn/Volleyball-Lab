@@ -1,5 +1,6 @@
 import { getFunctions, httpsCallable, httpsCallableFromURL } from "firebase/functions";
 import { esc } from "./format";
+import { isPro } from "./plan";
 
 interface ExplanationCue { id: string; label: string; measuredReps: number; score: number | null; measured: number | null; unit: string; target: number[]; tip: string; }
 interface ExplanationPoint { cueId: string; explanation: string; }
@@ -25,6 +26,7 @@ export async function getSessionExplanation(sessionId: string, generate: boolean
 }
 
 export function sessionExplanationPanel(sessionId: string): string {
+  if (!isPro()) return `<section class="session-explanation" aria-label="AI session explanation"><div class="explanation-heading"><span class="eyebrow">Session insight</span><span class="explanation-badge">Pro</span></div><p>AI session explanations are part of Pro. <a href="#/app/account">See plans</a></p></section>`;
   return `<section class="session-explanation" data-explanation-panel="${esc(sessionId)}" aria-label="AI session explanation"><div class="explanation-heading"><span class="eyebrow">Session insight</span><span class="explanation-badge">AI explanation</span></div><div data-explanation-content><p>Turn the saved measurements into a clearer explanation and a next practice focus.</p></div><div class="explanation-actions"><button class="btn btn-ghost btn-sm" type="button" data-explanation-generate="${esc(sessionId)}">Generate explanation</button><span class="explanation-consent">Sends anonymous session measurements to Groq for an AI explanation.</span></div><p class="explanation-status" data-explanation-status role="status" aria-live="polite"></p></section>`;
 }
 

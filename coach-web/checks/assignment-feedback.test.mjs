@@ -12,7 +12,7 @@ before(async () => {
   const imports = new Map([...source.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*"([^"]+)"/g)].map((match) => [match[2], match[1].split(",").map(s => s.trim()).filter(s => s && !s.startsWith("type "))]));
   const result = await build({ stdin: { contents: source + "\nexport { wireActions };", resolveDir: fileURLToPath(new URL("../src/pages/", import.meta.url)), loader: "ts" }, bundle: true, platform: "node", format: "cjs", write: false,
     plugins: [{ name: "assignment-write-boundary", setup(builder) {
-      builder.onResolve({ filter: /.*/ }, args => imports.has(args.path) && !["../lib/format", "../lib/icons"].includes(args.path) ? { path: args.path, namespace: "fixture" } : undefined);
+      builder.onResolve({ filter: /.*/ }, args => imports.has(args.path) && !["../lib/format", "../lib/icons", "../lib/pending"].includes(args.path) ? { path: args.path, namespace: "fixture" } : undefined);
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, args => ({ contents: imports.get(args.path).map(binding => {
         const [original, alias = original] = binding.split(/\s+as\s+/);
         return `export const ${original} = (...args) => globalThis.__assignmentFeedback.${alias}?.(...args);`;

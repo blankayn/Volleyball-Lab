@@ -5,6 +5,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import com.google.firebase.storage.FirebaseStorage
 import com.volleyballlab.player.data.cloud.CloudSchema
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.flatMapLatest
 import com.volleyballlab.player.data.cloud.awaitCloud
 import com.volleyballlab.player.domain.model.SessionResult
 import com.volleyballlab.player.domain.repository.AuthRepository
@@ -12,10 +14,13 @@ import com.volleyballlab.player.pose.review.VideoReview
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /** Private R2 transfers, without public download URLs or token-bearing links. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SharedRecordingStore(
     private val context: Context,
     private val auth: AuthRepository,
@@ -25,8 +30,29 @@ class SharedRecordingStore(
     private val cloud: RecordingCloudClient = RecordingCloudClient(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val downloadMutex = Mutex()
 
-    suspend fun upload(session: SessionResult, uid: String) {
+    suspend fun isBackedUp(sessionId: String, uid: String): Boolean {
+        check(auth.currentUid == uid)
+        val marker = db.collection("recordings").document(sessionId).get(Source.SERVER).awaitCloud()
+        check(auth.currentUid == uid)
+        return marker.getString("ownerUid") == uid && marker.getBoolean("ready") == true
+    }
+
+    fun backupStatus(sessionId: String): kotlinx.coroutines.flow.Flow<Boolean> =
+        auth.currentUser.flatMapLatest { user ->
+            if (user == null) kotlinx.coroutines.flow.flowOf(false)
+            else kotlinx.coroutines.flow.callbackFlow {
+                val registration = db.collection("recordings").document(sessionId)
+                    .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { marker, _ ->
+                        trySend(marker?.getString("ownerUid") == user.uid &&
+                            marker.getBoolean("ready") == true && !marker.metadata.hasPendingWrites())
+                    }
+                awaitClose { registration.remove() }
+            }
+        }
+
+    suspend fun upload(session: SessionResult, uid: String, createSession: Boolean = true) {
         val path = session.videoPath ?: return
         check(auth.currentUid == uid) { "Your account changed. Sign in again." }
         val video = File(path)
@@ -40,8 +66,10 @@ class SharedRecordingStore(
         val reviewBytes = withContext(Dispatchers.IO) { json.encodeToString(review).toByteArray() }
         require(reviewBytes.size <= MAX_REVIEW_BYTES)
         val ref = db.collection(CloudSchema.SESSIONS).document(session.id)
-        if (!ref.get(Source.SERVER).awaitCloud().exists())
+        if (!ref.get(Source.SERVER).awaitCloud().exists()) {
+            check(createSession) { "The saved session is no longer available." }
             ref.set(CloudSchema.sessionDoc(session, uid, emptyList(), System.currentTimeMillis())).awaitCloud()
+        }
         cloud.uploadVideo(session.id, uid, video)
         check(auth.currentUid == uid)
         cloud.uploadReview(session.id, uid, reviewBytes)
@@ -53,10 +81,10 @@ class SharedRecordingStore(
             "reviewBytes" to reviewBytes.size, "ready" to true)).awaitCloud()
     }
 
-    suspend fun download(session: SessionResult, ownerUid: String): String? {
+    suspend fun download(session: SessionResult, ownerUid: String): String? = downloadMutex.withLock {
         val viewer = checkNotNull(auth.currentUid)
         val marker = db.collection("recordings").document(session.id).get(Source.SERVER).awaitCloud()
-        if (!marker.exists()) return null
+        if (!marker.exists()) return@withLock null
         check(marker.getString("ownerUid") == ownerUid && marker.getBoolean("ready") == true)
         // Server authorization is checked even when this device has a cached copy.
         val row = db.collection(CloudSchema.SESSIONS).document(session.id).get(Source.SERVER).awaitCloud()
@@ -68,7 +96,9 @@ class SharedRecordingStore(
             // Only missing R2 objects may use the legacy Firebase transport.
             if (error.status != 404) throw error
         }
-        val local = File(context.cacheDir, "shared_recordings/$viewer/$ownerUid/${session.id}.mp4")
+        val local = if (viewer == ownerUid) {
+            File(context.filesDir, "restored_recordings/" + viewer + "/" + session.id + ".mp4")
+        } else File(context.cacheDir, "shared_recordings/$viewer/$ownerUid/${session.id}.mp4")
         val prefix = "recordings/$ownerUid/${session.id}"
         withContext(Dispatchers.IO) { local.parentFile?.mkdirs() }
         if (!local.isFile || cache.read(local.path, session.skill) == null) {
@@ -89,11 +119,11 @@ class SharedRecordingStore(
                 require(review.width > 0 && review.height > 0)
                 check(auth.currentUid == viewer)
                 withContext(Dispatchers.IO) { check(temporary.renameTo(local)) }
-                cache.write(local.path, session.skill, review)
+                cache.write(local.path, session.skill, review, persistent = viewer == ownerUid)
             } finally { withContext(Dispatchers.IO) { temporary.delete() } }
         }
         check(auth.currentUid == viewer)
-        return local.path
+        local.path
     }
 
     companion object {

@@ -57,6 +57,10 @@
     <string name="capture_start">Start</string>
     <string name="capture_stop">Finish</string>
     <string name="capture_cancel">Cancel</string>
+    <string name="capture_dominant_arm">Dominant arm</string>
+    <string name="capture_dominant_arm_note">This arm faces the camera in side view</string>
+    <string name="capture_arm_left">Left</string>
+    <string name="capture_arm_right">Right</string>
     <string name="capture_switch_camera">Switch camera</string>
 
     <!--
@@ -89,7 +93,8 @@
     <string name="live_posture_model_uncertain_sub">The posture model is near its decision boundary</string>
     <string name="live_coach_device">On-device coach</string>
     <string name="live_coach_device_sub">Correcting your posture as you move</string>
-    <string name="live_coach_human_title">Coach %1$s is in this session</string>
+    <string name="live_coach_human_title">From your coach, %1$s</string>
+    <string name="live_coach_note_session">Feedback on your session from %1$s</string>
     <string name="live_coach_assignment">%1$s · %2$d×%3$d reps</string>
     <string name="cd_live_posture">Live posture correction</string>
 
@@ -245,7 +250,7 @@
 
     <!-- Spiking -->
     <string name="cue_spike_load">Load the knees</string>
-    <string name="cue_spike_load_tip">Bend the knees from a balanced stance before an in-place jump. Take off from the same spot.</string>
+    <string name="cue_spike_load_tip">Bend your knees from a balanced stance, then straighten into the swing with both feet planted.</string>
     <string name="cue_spike_arm">Swing through full extension</string>
     <string name="cue_spike_arm_tip">Extend the raised arm above your shoulder within a comfortable range.</string>
     <string name="cue_spike_elbow">Keep the hitting elbow high</string>
@@ -470,7 +475,10 @@
     <string name="assignment_pending">Not started</string>
     <string name="assignment_in_progress">In progress</string>
     <string name="assignment_completed">Done</string>
-    <string name="coach_spec_all_around">All-around</string>
+    <string name="coaching_role_head">Head coach</string>
+    <string name="coaching_role_assistant">Assistant coach</string>
+    <string name="coaching_role_trainer">Trainer</string>
+    <string name="coaching_role_pe_teacher">PE teacher</string>
     <string name="coach_unnamed">Unnamed player</string>
     <string name="coach_team_default">Your team</string>
     <string name="coach_coach_default">Your coach</string>
@@ -624,7 +632,7 @@
     <string name="coach_account_name">Full name</string>
     <string name="coach_account_team_name">Team name</string>
     <string name="coach_account_organisation">School or club</string>
-    <string name="coach_account_specialisation">Specialisation</string>
+    <string name="coach_account_role">Role</string>
     <string name="coach_account_experience">Years coaching</string>
     <string name="coach_account_licence">Certification or licence no.</string>
     <string name="coach_account_licence_note">Your licence number is private and is not shown in the coach directory.</string>
@@ -659,7 +667,6 @@
     <!-- Figure 21: the coach's details, before the player commits to asking. -->
     <string name="coach_link_preview_eyebrow">Connection request</string>
     <string name="coach_link_preview_rules">They review your request before you join. Once connected, only the sessions you choose to send are shared — nothing is uploaded automatically.</string>
-    <string name="coach_link_preview_specialisation">Specialises in %1$s</string>
     <string name="coach_link_preview_experience">%1$d years coaching</string>
     <string name="coach_link_send">Send connection request</string>
     <string name="coach_link_back">Choose someone else</string>
@@ -759,15 +766,6 @@
     <string name="coach_assessment_confidence">Validated model confidence: %1$s</string>
     <string name="coach_assessment_unavailable">Not established</string>
     <string name="coach_assessment_duration">Mean detected movement window: %1$.2f s</string>
-    <string name="coach_assessment_mpjpe">This session’s 3D joint error: not measured</string>
-    <string name="pose_benchmark_open">About 3D accuracy</string>
-    <string name="pose_benchmark_title">3D pose benchmark</string>
-    <string name="pose_benchmark_value">MADS benchmark: %1$.1f mm MPJPE</string>
-    <string name="pose_benchmark_definition">MPJPE measures the average distance between predicted and reference 3D joints. Lower is better. The research target is less than 50 mm.</string>
-    <string name="pose_benchmark_sample">Compared with independent motion capture: %1$d valid reference frames and %2$d joint comparisons.</string>
-    <string name="pose_benchmark_scope">One athlete and one camera view, evaluated offline. This does not establish accuracy for all five skills or live phone recordings.</string>
-    <string name="pose_benchmark_session">This is a test of the pose model, not your technique score or the error in your recording. Your session needs its own reference measurements to calculate MPJPE.</string>
-    <string name="pose_benchmark_close">Close</string>
     <string name="coach_assessment_more_evidence">Record at least three clear repetitions with your arms and legs visible for an overall estimate.</string>
     <string name="coach_assessment_evidence">Median observed position: %1$s across %2$d measurable repetitions</string>
     <string name="coach_assessment_reference">Reference range: %1$s–%2$s</string>

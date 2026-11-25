@@ -67,12 +67,10 @@ internal val CoachInk = Color(0xFF242925)
     summary: CoachPublicSummary,
     connected: Boolean,
     onViewProfile: (() -> Unit)? = null,
+    trust: com.volleyballlab.player.domain.model.CoachTrust? = null,
 ) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
         .background(Brush.linearGradient(listOf(CoachInk, Color(0xFF373B32))))) {
-        val media = com.volleyballlab.player.feature.profile.rememberProfileMedia(coach.coachUid, coach = true)
-        com.volleyballlab.player.feature.profile.ProfileMediaImage(media.banner, null, Modifier.matchParentSize())
-        if (!media.banner.isNullOrBlank()) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .58f)))
         Canvas(Modifier.matchParentSize()) {
             val left = size.width * .60f
             val ink = Color.White.copy(alpha = .055f)
@@ -99,10 +97,11 @@ internal val CoachInk = Color(0xFF242925)
                     coach.profile.teamName.takeIf(String::isNotBlank)?.let {
                         Text(it, color = Color(0xFFDEDCD2), style = MaterialTheme.typography.bodyMedium)
                     }
+                    CoachVerifiedBadge(trust, onDark = true)
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                coach.profile.specialisation?.let {
+                coach.profile.coachingRole?.let {
                     Text(stringResource(it.displayName), color = Color(0xFFF5BE9C), style = MaterialTheme.typography.labelLarge)
                 }
                 coach.profile.yearsExperience?.let {

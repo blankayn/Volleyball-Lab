@@ -26,7 +26,7 @@ import com.volleyballlab.player.ui.theme.vbTween
 
 enum class AccountSection(val title: String) {
     Personal("Personal information"), Plan("Plan & limits"), Team("Team & coaching"),
-    Settings("Settings"), Training("Training preferences"), Notifications("Notifications"),
+    Settings("Settings"), Training("Training & skills"), Notifications("Notifications"),
     Security("Security"), Privacy("Privacy & data"), Help("Get help")
 }
 
@@ -52,10 +52,11 @@ internal fun AccountMenuScreen(
         item { Text("Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold) }
         item(key = "profile-banner") { banner() }
         item {
-            AccountMenuGroup(listOf(
+            AccountMenuGroup(listOfNotNull(
                 AccountMenuEntry(AccountSection.Personal.title, Icons.Rounded.Person) { toggle(AccountSection.Personal) },
                 if (coach) AccountMenuEntry(AccountSection.Team.title, Icons.Rounded.Groups) { toggle(AccountSection.Team) }
-                else AccountMenuEntry(AccountSection.Plan.title, Icons.Rounded.Speed) { toggle(AccountSection.Plan) },
+                else null,
+                AccountMenuEntry(AccountSection.Plan.title, Icons.Rounded.Speed) { toggle(AccountSection.Plan) },
                 AccountMenuEntry(AccountSection.Settings.title, Icons.Rounded.Settings) { toggle(AccountSection.Settings) },
                 AccountMenuEntry(AccountSection.Help.title, Icons.Rounded.HeadsetMic) { toggle(AccountSection.Help) },
             ), expandedLabel = expanded?.title, expandedContent = { expanded?.let { sectionContent(it) } })
@@ -173,7 +174,7 @@ internal fun AccountHelpContent(coach: Boolean) {
         "How do I connect with a coach?" to "Open Find a coach from the Coach tab or Plan & limits. Coach connection requires Pro. After approval, open My coach to see assignments and ask about getting started.",
         "How do I share a session?" to "After recording a training session, open My coach, choose Training, and send the session for review. Your coach’s feedback appears in Feedback.",
         "Where can I see my plan limits?" to "Open Plan & limits from Profile to see your current plan and included features.",
-        "Why can’t I hear voice coaching?" to "Check Training preferences in Settings. Voice coaching uses an installed English voice; Speech settings lets you check the voices on your phone.",
+        "Why can’t I hear voice coaching?" to "Check Training & skills in Settings. Voice coaching uses an installed English voice; Speech settings lets you check the voices on your phone.",
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         topics.forEach { (question, answer) -> HelpTopic(question, answer) }

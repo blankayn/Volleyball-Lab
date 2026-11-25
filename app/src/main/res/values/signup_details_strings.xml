@@ -4,6 +4,10 @@
     <string name="auth_full_name_placeholder">Enter your full name</string>
     <string name="auth_first_name_label">First name</string>
     <string name="auth_first_name_placeholder">Enter your first name</string>
+    <string name="auth_middle_name_label">Middle name</string>
+    <string name="auth_middle_name_placeholder">Enter your middle name</string>
+    <string name="auth_error_middle_name_required">Please enter your middle name.</string>
+    <string name="auth_registered_notice">Account created. We sent a link to confirm your email. Log in to continue.</string>
     <string name="auth_last_name_label">Last name</string>
     <string name="auth_last_name_placeholder">Enter your last name</string>
     <string name="auth_error_first_name_required">Please enter your first name.</string>

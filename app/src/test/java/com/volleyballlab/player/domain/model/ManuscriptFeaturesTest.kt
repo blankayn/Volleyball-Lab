@@ -38,13 +38,25 @@ class ManuscriptFeaturesTest {
         assertEquals(0, ReportAllowance.usage(listOf(previous), UserPlan.Free, today).used)
         assertEquals(today.plusWeeks(1), ReportAllowance.usage(listOf(previous), UserPlan.Free, today).resetDate)
     }
-    @Test fun `today includes overdue open coach work but excludes future and completed assignments`() {
-        fun assignment(id: String, date: LocalDate, status: AssignmentStatus) = CoachAssignment(id, "c", "p", "Pass", Skill.Receiving, DrillLevel.Beginner,
-            "", "", 2, 10, date.atStartOfDay(zone).toInstant().toEpochMilli(), status, 0)
-        val agenda = TrainingAgenda.today(listOf(ScheduledTraining("local", today.toString(), "17:00", Skill.Setting)),
-            listOf(assignment("late", today.minusDays(1), AssignmentStatus.Pending), assignment("future", today.plusDays(1), AssignmentStatus.Pending),
-                assignment("done", today, AssignmentStatus.Completed)), today, zone)
-        assertEquals(setOf("local", "late"), agenda.map { it.id }.toSet()); assertTrue(agenda.first { it.id == "late" }.overdue)
+    @Test fun `today lists only the practices scheduled for today`() {
+        val agenda = TrainingAgenda.today(listOf(ScheduledTraining("late", today.toString(), "17:00", Skill.Setting),
+            ScheduledTraining("early", today.toString(), "08:00", Skill.Serving), ScheduledTraining("other", today.plusDays(1).toString(), "08:00", Skill.Serving)), today)
+        assertEquals(listOf("early", "late"), agenda.map { it.id })
+    }
+    @Test fun `open coach assignments are tracked on the dashboard until they are done`() {
+        val now = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        fun assignment(id: String, due: LocalDate?, status: AssignmentStatus = AssignmentStatus.Pending) = CoachAssignment(id, "c", "p", "Pass", Skill.Receiving,
+            DrillLevel.Beginner, "", "", 2, 10, due?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(), status, 0)
+        val recorded = session("r1", today, List(7) { rep() }).copy(assignmentId = "started")
+        val sentSession = session("r2", today, List(25) { rep() }).copy(assignmentId = "sent")
+        val items = HomeAssignment.of(listOf(assignment("none", null), assignment("sent", today.minusDays(3)), assignment("started", today.plusDays(2), AssignmentStatus.InProgress),
+            assignment("late", today.minusDays(1)), assignment("done", today, AssignmentStatus.Completed)),
+            listOf(recorded, sentSession, session("unrelated", today, List(9) { rep() })), listOf(SessionSubmission("r2", "c", "p", 1)), now)
+        assertEquals(listOf("late", "started", "none", "sent"), items.map { it.assignment.id })
+        assertEquals(listOf(HomeAssignmentState.Overdue, HomeAssignmentState.InProgress, HomeAssignmentState.New, HomeAssignmentState.Sent), items.map { it.state })
+        assertEquals(7, items[1].repsRecorded); assertTrue(items[1].started); assertFalse(items[0].started)
+        assertEquals("never past the target", 20, items[3].repsRecorded)
+        assertEquals(1f, items[3].progress)
     }
     @Test fun `saved goal determines recommendation even when assessment is empty`() {
         val result = SkillRecommendation.from(SkillAssessment.Unanswered, AthleteProfile(goalSkill = Skill.Setting), emptyList())

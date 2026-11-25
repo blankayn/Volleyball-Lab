@@ -17,7 +17,12 @@ enum class PostureSheet(val skill: Skill, val firstRowEnd: Int, val secondRowEnd
 data class PostureSampleStep(val label: String, val cue: String)
 data class PostureFrameRegion(val x: Int, val y: Int, val width: Int, val height: Int)
 
-data class DrillPostureSample(val sheet: PostureSheet, val row: Int, val steps: List<PostureSampleStep>) {
+data class DrillPostureSample(
+    val sheet: PostureSheet,
+    val row: Int,
+    val steps: List<PostureSampleStep>,
+    private val reachRow: Int = row,
+) {
     val supportsHandedness: Boolean get() = sheet.skill == Skill.Serving || sheet.skill == Skill.Spiking
 
     fun frameRegion(phase: Int, imageWidth: Int, imageHeight: Int): PostureFrameRegion {
@@ -25,8 +30,9 @@ data class DrillPostureSample(val sheet: PostureSheet, val row: Int, val steps: 
         val column = phase.coerceIn(0, 3)
         val left = imageWidth * column / 4
         val right = imageWidth * (column + 1) / 4
-        val top = (sheet.rowStart(row) * imageHeight / 1448f).roundToInt()
-        val bottom = (sheet.rowEnd(row) * imageHeight / 1448f).roundToInt()
+        val frameRow = if (column == 2) reachRow else row
+        val top = (sheet.rowStart(frameRow) * imageHeight / 1448f).roundToInt()
+        val bottom = (sheet.rowEnd(frameRow) * imageHeight / 1448f).roundToInt()
         return PostureFrameRegion(left, top, right - left, bottom - top)
     }
 }
@@ -40,7 +46,12 @@ object DrillPostureSamples {
     private val set = steps("Ready" to "Bring both hands above the forehead.", "Cushion" to "Soften the knees and keep the hands balanced.", "Extend" to "Extend the legs and both arms together.", "Reset" to "Regain balance and prepare both hands again.")
     private val backSet = steps("Ready" to "Keep the hands prepared above your forehead.", "Cushion" to "Keep your hands balanced and your knees softly bent.", "Extend" to "Extend both arms overhead while keeping your trunk upright.", "Reset" to "Return to a balanced upright stance.")
     private val swing = steps("Ready" to "Keep both feet grounded in a balanced stance.", "Prepare" to "Draw the hitting elbow back and lift the guiding arm.", "Reach" to "Reach high while rotating the torso under control.", "Recover" to "Finish the arm swing and regain balance.")
-    private val jumpHit = steps("Ready" to "Prepare with balanced feet in one spot.", "Load" to "Bend the knees and hips before an in-place takeoff.", "Reach" to "Reach high with the hitting arm in front of the shoulder.", "Land" to "Land in the starting spot with control and softened knees.")
+    private val loadedSwing = steps(
+        "Ready" to "Keep both feet planted in a balanced stance.",
+        "Load" to "Bend your knees and draw your hitting elbow back.",
+        "Reach" to "Straighten through your knees and swing overhead with your feet planted.",
+        "Reset" to "Lower your arm and settle into the same stance.",
+    )
     private val block = steps("Ready" to "Keep both hands ready and the feet balanced in one spot.", "Load" to "Bend the knees while keeping the shoulders square.", "Reach" to "Jump straight up and extend both arms overhead and slightly forward.", "Land" to "Land in the same spot on both feet and soften the knees.")
 
     private val samples = mapOf(
@@ -54,8 +65,8 @@ object DrillPostureSamples {
         "set-toss-to-target" to DrillPostureSample(PostureSheet.Setting, 1, set),
         "set-back-set" to DrillPostureSample(PostureSheet.Setting, 2, backSet),
         "spike-standing-swing" to DrillPostureSample(PostureSheet.Spiking, 0, swing),
-        "spike-three-step" to DrillPostureSample(PostureSheet.Spiking, 1, jumpHit),
-        "spike-four-step-lines" to DrillPostureSample(PostureSheet.Spiking, 2, jumpHit),
+        "spike-three-step" to DrillPostureSample(PostureSheet.Spiking, 1, loadedSwing, reachRow = 0),
+        "spike-four-step-lines" to DrillPostureSample(PostureSheet.Spiking, 1, loadedSwing, reachRow = 0),
         "block-ready-jumps" to DrillPostureSample(PostureSheet.Blocking, 0, block),
         "block-lateral-shuffle" to DrillPostureSample(PostureSheet.Blocking, 0, block),
         "block-read-setter" to DrillPostureSample(PostureSheet.Blocking, 2, block),

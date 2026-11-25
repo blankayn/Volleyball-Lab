@@ -59,6 +59,13 @@ class TrainingNotificationRepository(private val context: Context, private val a
         context.notificationStore.edit { p -> val key = scope.string("inbox"); p[key] = json.encodeToString(decode(p[key]).map { if (id == null || it.id == id) it.copy(isRead = true) else it }) }
         if (id == null) NotificationManagerCompat.from(context).cancelAll() else NotificationManagerCompat.from(context).cancel(id.hashCode())
     }
+    /** Marks several read in one write, as when a screen shows them together. */
+    suspend fun markRead(ids: Set<String>) {
+        val scope = UserScope.of(auth.currentUid) ?: return
+        if (ids.isEmpty()) return
+        context.notificationStore.edit { p -> val key = scope.string("inbox"); p[key] = json.encodeToString(decode(p[key]).map { if (it.id in ids) it.copy(isRead = true) else it }) }
+        ids.forEach { NotificationManagerCompat.from(context).cancel(it.hashCode()) }
+    }
     suspend fun ingest(uid: String, incoming: List<TrainingNotification>, allowDelivery: Boolean = true) {
         if (auth.currentUid != uid) return
         val scope = UserScope.of(uid) ?: return

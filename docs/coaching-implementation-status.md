@@ -83,7 +83,7 @@ No phase is declared fully accepted while its required device checks are pending
 ## Posture wording follow-up - 15 November 2026
 
 Renamed all fifteen drill labels around body positions. The five starter labels
-are Serving Stance, Passing Platform, Setting Stance, Spiking Arm Position, and
+are Serving Stance, Passing Platform, Setting Stance, Standing Spike, and
 Blocking Stance. Drill setup, skill learning, posture captions, spoken cues,
 assessment recommendations, and mirrored coach-portal cues now teach body
 alignment and controlled rehearsal without equipment tasks.

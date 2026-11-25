@@ -1,5 +1,7 @@
 package com.volleyballlab.player.pose.analysis
 
+import com.volleyballlab.player.domain.model.CameraAngle
+import com.volleyballlab.player.domain.model.CueId
 import com.volleyballlab.player.domain.model.FormCue
 import com.volleyballlab.player.domain.model.RepPhase
 import com.volleyballlab.player.domain.model.Skill
@@ -29,6 +31,8 @@ data class RepWindow(
     val frames: List<PoseFrame>,
     val phaseFrames: Map<RepPhase, PoseFrame>,
     val baselineHipImageY: Float,
+    /** The guided view this was performed in, or null to read it from the frames. */
+    val view: CameraAngle? = null,
 ) {
     val startMs: Long get() = frames.first().timestampMs
     val endMs: Long get() = frames.last().timestampMs
@@ -76,6 +80,33 @@ enum class MovementFault {
 
     /** Receive: neither leg was in view at the bottom of the bend. */
     LegsNotVisible,
+
+    /** Serve, spike: both hands went up and peaked together, as in a set, a block or a stretch. */
+    SwingOneHand,
+
+    /** Serve, spike: the arm went up straight; the elbow was never drawn back. */
+    DrawElbowBack,
+
+    /** Serve, spike: the other arm stayed down, so a raised hand was all there was. */
+    LiftGuidingArm,
+
+    /** Set: the hands were up but too far apart to shape a set. */
+    HandsTogether,
+
+    /** Set: the hands reached the face and came back down without a push. */
+    PushToExtend,
+
+    /** Block: the arms went up from legs that never loaded. */
+    BendKnees,
+
+    /** Receive: one arm made the platform and the other did not. */
+    UseBothArms,
+
+    /** Receive: the forearms met, but the elbows stayed bent. */
+    StraightenPlatform,
+
+    /** A posture cue that defines the skill was clearly out of its range. See [RepJudge]. */
+    PostureOff,
 }
 
 /** The outcome of checking one completed movement against its skill. */
@@ -91,8 +122,17 @@ sealed interface MovementVerdict {
      */
     data object TooSmall : MovementVerdict
 
-    /** A real attempt that was not the skill. The athlete is told [fault]. */
-    data class NotCounted(val fault: MovementFault) : MovementVerdict
+    /**
+     * A real attempt that was not the skill. The athlete is told [fault].
+     *
+     * @param cue for [MovementFault.PostureOff], the cue that was out of range,
+     *   and [measured] what it read, so the coach can name the change.
+     */
+    data class NotCounted(
+        val fault: MovementFault,
+        val cue: CueId? = null,
+        val measured: Float? = null,
+    ) : MovementVerdict
 }
 
 /**
@@ -253,6 +293,22 @@ internal object AnalyzerSupport {
         Angles.at(frame, shoulder(side), elbow(side), wrist(side))
 
     /**
+     * [elbowAngle] as drawn on screen. For an arm seen side-on this is the true
+     * angle, where the depth estimate is not: a groupmate's 15 side-view platforms
+     * were 177 to 180 degrees straight on screen and read 149 to 152 in world space.
+     */
+    fun imageElbowAngle(frame: PoseFrame, side: Side): Float? {
+        val (a, b, c) = listOf(shoulder(side), elbow(side), wrist(side)).map(frame::image)
+        val ux = (a.x - b.x) * frame.imageWidth
+        val uy = (a.y - b.y) * frame.imageHeight
+        val vx = (c.x - b.x) * frame.imageWidth
+        val vy = (c.y - b.y) * frame.imageHeight
+        val lengths = kotlin.math.hypot(ux, uy) * kotlin.math.hypot(vx, vy)
+        if (!lengths.isFinite() || lengths < 1e-3f) return null
+        return Math.toDegrees(kotlin.math.acos(((ux * vx + uy * vy) / lengths).coerceIn(-1f, 1f)).toDouble()).toFloat()
+    }
+
+    /**
      * Shoulder elevation: hip, shoulder, elbow. Larger means the arm is carried
      * higher relative to the trunk, which is what "reach" means for a serve.
      */
@@ -284,9 +340,46 @@ internal object AnalyzerSupport {
     fun meanKneeAngle(frame: PoseFrame): Float? =
         bilateralMean { side -> kneeAngle(frame, side) }
 
+    /**
+     * Mean knee angle, leaning on the leg the camera sees better. Side-on the far
+     * leg is behind the body and its estimate wanders, which moved the start and end
+     * of a rep. The weights change smoothly, so a leg coming in and out of view does
+     * not make the curve jump; with both legs seen this is [meanKneeAngle].
+     */
+    fun steadyKneeAngle(frame: PoseFrame): Float? {
+        var total = 0f
+        var sum = 0f
+        for (side in Side.entries) {
+            val angle = kneeAngle(frame, side) ?: continue
+            val seen = listOf(hip(side), knee(side), ankle(side)).minOf { frame.image(it).visibility }
+            val weight = ((seen - 0.30f) / 0.40f).coerceIn(0.05f, 1f)
+            total += weight
+            sum += weight * angle
+        }
+        return if (total > 0f) sum / total else null
+    }
+
     /** Mean elbow angle across both arms. */
     fun meanElbowAngle(frame: PoseFrame): Float? =
         bilateralMean { side -> elbowAngle(frame, side) }
+
+    /**
+     * Mean knee angle over the legs the camera saw ([AngleCuePolicy.visibleSides]),
+     * for scored cues. Side-on the far leg is behind the body and its estimated
+     * angle is a guess; with both legs seen this equals [meanKneeAngle].
+     */
+    fun visibleKneeAngle(frame: PoseFrame): Float? = AngleCuePolicy.visibleSides(frame) { listOf(hip(it), knee(it), ankle(it)) }
+        .mapNotNull { kneeAngle(frame, it) }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+
+    /** Mean elbow angle over the arms the camera saw; [meanElbowAngle] when both were. */
+    fun visibleElbowAngle(frame: PoseFrame): Float? = AngleCuePolicy.visibleSides(frame) { listOf(shoulder(it), elbow(it), wrist(it)) }
+        .mapNotNull { elbowAngle(frame, it) }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+
+    /** Mean world position of the wrists the camera saw; both when it saw neither. */
+    fun visibleWrists(frame: PoseFrame): com.volleyballlab.player.pose.model.Landmark {
+        val wrists = AngleCuePolicy.visibleSides(frame) { listOf(wrist(it)) }.map { frame.world(wrist(it)) }
+        return if (wrists.size == 1) wrists.single() else Angles.midpoint(wrists[0], wrists[1])
+    }
 
     /**
      * Height of the higher wrist above the shoulder line, in normalised image
@@ -348,6 +441,56 @@ internal object AnalyzerSupport {
         val left = wristRise(frame, Side.Left) ?: return null
         val right = wristRise(frame, Side.Right) ?: return null
         return maxOf(left, right)
+    }
+
+    /**
+     * Whether a movement was performed side-on: more of its frames read as a side
+     * view than as a front or rear one. The majority, not the contact frame,
+     * because a swing turns the shoulders square to the lens for a moment.
+     *
+     * In a guided side view the athlete was already confirmed side-on, so frames the
+     * detector is unsure of do not make it anything else; only a movement that mostly
+     * reads square to the lens does.
+     */
+    fun sideOn(window: RepWindow): Boolean {
+        val detector = CameraOrientationDetector()
+        val views = window.frames.map { detector.detect(it).angle }
+        val square = views.count { it == CameraAngle.Front || it == CameraAngle.Rear }
+        if (window.view == CameraAngle.Side) return square * 2 <= views.size
+        return views.count { it == CameraAngle.Side } > square
+    }
+
+    /** Distance between the two wrists on screen, in torso lengths. */
+    fun wristGap(frame: PoseFrame): Float? {
+        val w = frame.imageWidth.toFloat()
+        val h = frame.imageHeight.toFloat()
+        val shoulder = Angles.shoulderCentreImage(frame)
+        val hip = Angles.hipCentreImage(frame)
+        val torso = kotlin.math.hypot((shoulder.x - hip.x) * w, (shoulder.y - hip.y) * h)
+        if (!torso.isFinite() || torso < MIN_TORSO_IMAGE * h) return null
+        val left = frame.image(BodyPoint.LEFT_WRIST)
+        val right = frame.image(BodyPoint.RIGHT_WRIST)
+        return (kotlin.math.hypot((left.x - right.x) * w, (left.y - right.y) * h) / torso).takeIf { it.isFinite() }
+    }
+
+    /**
+     * How many degrees the knees bent on the way to contact, over the legs the
+     * camera saw and averaged over three frames, so one jittery knee is not a bend.
+     */
+    fun kneeLoad(window: RepWindow): Float? {
+        val contact = window.frameFor(RepPhase.Contact) ?: return null
+        val knees = window.frames.filter { it.timestampMs <= contact.timestampMs }.mapNotNull { visibleKneeAngle(it) }
+        if (knees.size < 3) return null
+        val smooth = knees.windowed(3).map { it.average().toFloat() }
+        return smooth.max() - smooth.min()
+    }
+
+    /** How far the hips rose above where the movement began, in torso lengths: a jump. */
+    fun hipLift(window: RepWindow): Float? {
+        val first = window.frames.firstOrNull() ?: return null
+        val torso = torsoImageLength(first) ?: return null
+        val top = window.frames.minOf { Angles.hipCentreImage(it).y }
+        return ((Angles.hipCentreImage(first).y - top) / torso).takeIf { it.isFinite() }
     }
 
     /** The highest one hand reached, and the frame it reached it on. */

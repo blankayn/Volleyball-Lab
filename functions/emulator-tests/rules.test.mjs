@@ -1,7 +1,7 @@
 import test, { before, after, beforeEach } from "node:test";
 import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, collection, collectionGroup, query, where, runTransaction, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, collection, collectionGroup, query, where, runTransaction, writeBatch, arrayUnion } from "firebase/firestore";
 import { OWNER_UID } from "../billing-policy.mjs";
 
 let env;
@@ -45,6 +45,14 @@ function session(id = "s", ownerUid = "paid") { return { id, ownerUid, skill: "R
   repCount: 0, formScore: null, weakestCue: null, reps: [], sharedWith: [], createdAt: now, updatedAt: now }; }
 function assignment(id = "a") { return { id, coachUid: "coach", playerUid: "paid", title: "Practice", skill: "Receiving", level: "Beginner", summary: "",
   instructions: "", targetSets: 3, targetReps: 10, dueAt: null, status: "Pending", createdAt: now, libraryDrillId: null }; }
+
+/** Accepting a player commits their place with them, see coachSlots. */
+function accept(coach, uid, change) {
+  const batch = writeBatch(coach);
+  batch.set(doc(coach, "coachSlots/coach"), { players: [uid], updatedAt: now });
+  batch.update(doc(coach, `roster/coach/members/${uid}`), change);
+  return batch.commit();
+}
 
 async function sendAssignmentResult(uid = "paid") {
   const db = client(uid);
@@ -152,7 +160,8 @@ test("owner and paid users can request their own coach connection while identity
   await assertSucceeds(setDoc(doc(client("paid"), "roster/coach/members/paid"), member("paid")));
   await assertFails(setDoc(doc(client("paid"), "roster/coach/members/other"), member("other")));
   await assertFails(updateDoc(doc(client("paid"), "roster/coach/members/paid"), { status: "Active" }));
-  await assertSucceeds(updateDoc(doc(client("coach"), "roster/coach/members/paid"), { status: "Active" }));
+  await assertFails(updateDoc(doc(client("coach"), "roster/coach/members/paid"), { status: "Active" }));
+  await assertSucceeds(accept(client("coach"), "paid", { status: "Active" }));
 });
 
 test("billing order ownership and private coach profiles do not leak through directory reads", async () => {
@@ -281,7 +290,7 @@ test("Pro request reaches coach, approval reaches student, and assignment and fe
   await assertSucceeds(setDoc(doc(player, "roster/coach/members/paid"), member("paid")));
   const pending = await assertSucceeds(getDocs(collection(coach, "roster/coach/members")));
   if (pending.size !== 1 || pending.docs[0].data().status !== "Pending") throw new Error("Coach did not receive request");
-  await assertSucceeds(updateDoc(doc(coach, "roster/coach/members/paid"), { status: "Active", decidedAt: now + 1 }));
+  await assertSucceeds(accept(coach, "paid", { status: "Active", decidedAt: now + 1 }));
   const link = await assertSucceeds(getDocs(query(collectionGroup(player, "members"), where("playerUid", "==", "paid"))));
   if (link.size !== 1 || link.docs[0].data().status !== "Active") throw new Error("Student did not receive approval");
   await assertSucceeds(setDoc(doc(coach, "assignments/a"), assignment()));

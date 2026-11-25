@@ -16,6 +16,7 @@ internal suspend fun clearLocalAccount(context: Context, uid: String) {
     com.volleyballlab.player.data.session.clearSessionAccount(context, uid)
     com.volleyballlab.player.data.assessment.clearAssessmentAccount(context, uid)
     com.volleyballlab.player.data.coaching.clearCoachingAccount(context, uid)
+    com.volleyballlab.player.data.coaching.clearAdaptiveCoachAccount(context, uid)
     com.volleyballlab.player.data.drill.clearDrillAccount(context, uid)
     com.volleyballlab.player.data.notifications.clearNotificationsAccount(context, uid)
     com.volleyballlab.player.data.training.clearTrainingAccount(context, uid)

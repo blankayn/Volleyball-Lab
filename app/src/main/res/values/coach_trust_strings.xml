@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="coach_verified">Verified</string>
+    <string name="coach_not_verified">Not verified</string>
+    <string name="trust_confirm_title">This coach is not verified</string>
+    <string name="trust_confirm_body">A connected coach can see the sessions you send.</string>
+    <string name="trust_confirm_send">Send request anyway</string>
+    <string name="trust_confirm_cancel">Cancel</string>
+</resources>

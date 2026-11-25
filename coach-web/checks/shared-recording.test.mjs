@@ -12,6 +12,8 @@ before(async () => {
   const result = await build({ entryPoints: [fileURLToPath(new URL("../src/lib/shared-recording.ts", import.meta.url))], bundle: true, platform: "node", format: "cjs", write: false,
     define: { "import.meta.env.VITE_RECORDING_STORAGE_URL": '"https://storage.example"' },
     plugins: [{ name: "recording-auth-boundary", setup(builder) {
+      builder.onResolve({ filter: /^\.\/rep-marks$/ }, () => ({ path: "rep-marks", namespace: "marks-fixture" }));
+      builder.onLoad({ filter: /.*/, namespace: "marks-fixture" }, () => ({ contents: `export const attachRepMarks = () => () => {};`, loader: "js" }));
       builder.onResolve({ filter: /^firebase\/auth$|^\.\/firebase$/ }, args => ({ path: args.path, namespace: "auth-fixture" }));
       builder.onLoad({ filter: /.*/, namespace: "auth-fixture" }, () => ({ contents: `export const auth = globalThis.__r2WebCheck.auth; export function onAuthStateChanged(_auth, callback) { globalThis.__r2WebCheck.changed = callback; return () => {}; }`, loader: "js" }));
     } }] });

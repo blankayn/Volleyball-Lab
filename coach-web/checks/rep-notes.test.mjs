@@ -11,11 +11,12 @@ async function load(path) {
   new Function("module", "exports", "require", result.outputFiles[0].text)(module, module.exports, createRequire(import.meta.url));
   return module.exports;
 }
-let notes, cues, reel;
+let notes, cues, reel, guide;
 before(async () => {
   notes = await load("../src/lib/rep-notes.ts");
   cues = await load("../src/lib/cues.ts");
   reel = await load("../src/lib/coach-reel.ts");
+  guide = await load("../src/lib/correction-guide.ts");
 });
 
 const review = () => ({ durationMs: 9000, reps: [
@@ -87,4 +88,19 @@ test("the website knows every cue the Android app can flag, with the same weight
     assert.ok(cue, `${id} is missing from coach-web/src/lib/cues.ts`);
     assert.deepEqual([id, ...cue.target, cue.weight], [id, Number(low), Number(high), Number(weight)]);
   }
+});
+test("each correction says what went wrong, how far off it was, why and how to fix it", () => {
+  const note = notes.buildRepReports({ durationMs: 40000, reps: [{ repNumber: 2, startMs: 33000, endMs: 36000 }],
+    issues: [{ timestampMs: 34000, repNumber: 2, cueId: "PassPlatformStraight", measured: 111, score: 0, points: [11] }] })[0].notes[0];
+  assert.equal(note.measured, "Measured 111°. Practice range 165–180°, so 54° below the range.");
+  assert.match(note.wrong, /elbows were bent/);
+  assert.ok(note.why.length > 40 && note.fix.length > 40);
+  assert.equal(guide.correctionFor("FutureCue", 1), null);
+});
+test("the explanations match the Android app word for word", async () => {
+  const source = await readFile(new URL("../../app/src/main/java/com/volleyballlab/player/pose/review/CorrectionGuide.kt", import.meta.url), "utf8");
+  const rows = [...source.matchAll(/CueId\.(\w+) to Row\(([\s\S]*?)\n\s*\),/g)];
+  assert.ok(rows.length >= 22);
+  assert.deepEqual(Object.fromEntries(rows.map(([, id, body]) => [id, [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => JSON.parse(`"${m[1]}"`))])), guide.CORRECTIONS);
+  for (const id of Object.keys(guide.CORRECTIONS)) assert.ok(cues.cueDefinition(id), id);
 });

@@ -21,16 +21,18 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
   await erase(db.collection('recordings').where('ownerUid', '==', uid));
   await erase(db.collection('pushTokens').where('uid', '==', uid));
   await erase(db.collection('coachEmailDeliveries').where('coachUid', '==', uid));
-  for (const collection of ['assignments', 'submissions', 'notes', 'coachingQuestions', 'coachingLocks', 'coachingMessages', 'coachingReads', 'coachReviews']) {
+  for (const collection of ['assignments', 'submissions', 'notes', 'noteMedia', 'coachingQuestions', 'coachingLocks', 'coachingMessages', 'coachingReads', 'coachReviews', 'repLabels']) {
     for (const field of ['playerUid', 'coachUid']) await erase(db.collection(collection).where(field, '==', uid), async item => {
       if (collection === 'coachingQuestions') await db.doc(`coachResponseTimes/${item.id}`).delete();
     });
   }
   await erase(db.collection('coachResponseTimes').where('coachUid', '==', uid));
   await erase(db.collection('coachPresence').where('coachUid', '==', uid));
+  for (const field of ['coachUid', 'voucherUid']) await erase(db.collection('coachVouches').where(field, '==', uid));
   await erase(db.collectionGroup('members').where('playerUid', '==', uid));
   await db.recursiveDelete(db.doc(`roster/${uid}`));
   await db.recursiveDelete(db.doc(`coaches/${uid}`));
+  await db.recursiveDelete(db.doc(`athleteAssessments/${uid}`));
   // A deleted coach loses playback access to surviving players' sessions.
   while (true) {
     const page = await db.collection('sessions').where('sharedWith', 'array-contains', uid).limit(200).get();
@@ -43,7 +45,7 @@ export async function removeAccountData({ db, bucket, auth, fieldValue }, uid) {
     await erase(db.collection('billingSessions').where('orderId', '==', order.id));
     await erase(db.collection('billingPayments').where('orderId', '==', order.id));
   });
-  for (const collection of ['profiles', 'users', 'coachDirectory', 'coachPhotos', 'profileMedia', 'coachAvailability', 'entitlements', 'demoProAccess', 'billingPending'])
+  for (const collection of ['profiles', 'users', 'coachDirectory', 'coachPhotos', 'profileMedia', 'coachAvailability', 'coachTrust', 'coachVerified', 'coachSlots', 'entitlements', 'demoProAccess', 'billingPending'])
     await db.doc(`${collection}/${uid}`).delete();
   await bucket.deleteFiles({ prefix: `recordings/${uid}/`, force: true });
   // The authentication identity is removed last, after all data operations succeed.

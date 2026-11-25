@@ -27,12 +27,11 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 
 @Composable
-fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modifier: Modifier = Modifier) {
+fun TrainingAgendaCard(onStart: (Skill) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val graph = remember { (context.applicationContext as VolleyballLabApplication).container }
     val workspace = graph.trainingWorkspaceRepository
     val schedule by workspace.schedule.collectAsStateWithLifecycle(emptyList())
-    val assignments by graph.coachRepository.assignmentsForMe.collectAsStateWithLifecycle(emptyList())
     val profile by graph.profileRepository.profile.collectAsStateWithLifecycle(AthleteProfile.Anonymous)
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<ScheduledTraining?>(null) }
@@ -40,14 +39,14 @@ fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modi
     var message by remember { mutableStateOf<String?>(null) }
     val dayFlow = remember { com.volleyballlab.player.ui.component.calendarDayFlow() }
     val today by dayFlow.collectAsStateWithLifecycle(LocalDate.now())
-    val items = TrainingAgenda.today(schedule, assignments, today)
+    val items = TrainingAgenda.today(schedule, today)
     fun change(block: suspend () -> Unit) { scope.launch { runCatching { block() }.onFailure { message = "The plan could not be saved. Please retry." } } }
     StudentCard(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("Today's plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Your practices and coach assignments.", style = MaterialTheme.typography.bodySmall,
+                    Text("The practices you scheduled.", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 FilledTonalIconButton(onClick = { adding = true }) {
@@ -68,23 +67,20 @@ fun TrainingAgendaCard(onStart: (Skill) -> Unit, onAssignments: () -> Unit, modi
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(if (item.coachAssigned) item.title else stringResource(item.skill.displayName),
+                            Text(stringResource(item.skill.displayName),
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("${item.time.orEmpty()} · ${item.targetReps} reps${if (item.overdue) " · Overdue" else ""}${if (item.completed) " · Completed" else ""}",
+                            Text("${item.time.orEmpty()} · ${item.targetReps} reps${if (item.completed) " · Completed" else ""}",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (item.completed) Icon(Icons.Rounded.CheckCircle, "Completed", tint = MaterialTheme.colorScheme.primary)
-                        if (!item.coachAssigned) IconButton({ editing = schedule.first { it.id == item.id } }) {
+                        IconButton({ editing = schedule.first { it.id == item.id } }) {
                             Icon(Icons.Rounded.Edit, "Edit training", Modifier.size(20.dp))
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (item.coachAssigned) FilledTonalButton(onAssignments) { Text("View assignment") }
-                        else {
-                            if (!item.completed) FilledTonalButton({ onStart(item.skill) }) { Text("Train now") }
-                            TextButton({ change { workspace.completeSchedule(item.id, !item.completed) } }) {
-                                Text(if (item.completed) "Undo" else "Mark done")
-                            }
+                        if (!item.completed) FilledTonalButton({ onStart(item.skill) }) { Text("Train now") }
+                        TextButton({ change { workspace.completeSchedule(item.id, !item.completed) } }) {
+                            Text(if (item.completed) "Undo" else "Mark done")
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
