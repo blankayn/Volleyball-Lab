@@ -103,7 +103,7 @@ internal fun ChoiceCard(
     val role = if (multiple) Role.Checkbox else Role.RadioButton
     Surface(modifier.fillMaxWidth().clip(shape).let {
         if (multiple) it.toggleable(selected, enabled = enabled, role = role, onValueChange = { onClick() }) else it.selectable(selected, enabled = enabled, role = role, onClick = onClick)
-    }, shape = shape, color = fill, border = BorderStroke(if (selected) 2.dp else 1.dp, line)) {
+    }, shape = shape, color = fill, contentColor = MaterialTheme.colorScheme.onSurface, border = BorderStroke(if (selected) 2.dp else 1.dp, line)) {
         Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             leading?.invoke()
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
