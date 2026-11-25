@@ -18,21 +18,29 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** The pages in order. The five skill pages come between [Time] and [Weak]. */
-enum class AssessmentPage { About, Goals, Time, Skill, Weak, Result }
+enum class AssessmentPage { About, Goals, Time, Card, Finish, Result }
+
+/** One screen. A [Card][AssessmentPage.Card] asks about one characteristic of one skill. */
+data class AssessmentStep(val kind: AssessmentPage, val statement: SkillStatement? = null)
 
 data class AssessmentUiState(
+    /** The order skills are offered in. */
     val order: List<Skill> = Skill.All,
     val page: Int = 0,
     val experience: ExperienceLevel? = null,
     val position: CourtPosition? = null,
+    /** The skills the athlete wants to work on, in the order they chose them. */
     val preferred: List<Skill> = emptyList(),
+    /** Skills added at the end. */
+    val extra: List<Skill> = emptyList(),
+    /** The skill opened again from the end; its last card leads straight back there. */
+    val editing: Skill? = null,
     val goal: MainGoal? = null,
     val goalNote: String = "",
     val days: Int = 3,
     val minutes: Int = 30,
     val statements: Map<String, CanDo> = emptyMap(),
-    val weakPoints: List<WeakPoint> = emptyList(),
+    val details: Map<String, List<String>> = emptyMap(),
     val weakNote: String = "",
     val plan: AthletePlan? = null,
     val submittedAtEpochMs: Long = 0L,
@@ -41,39 +49,55 @@ data class AssessmentUiState(
     val busy: Boolean = true,
     val error: String? = null,
 ) {
-    val pages: Int get() = FIRST_SKILL + order.size + 2
-    val kind: AssessmentPage get() = when {
-        page == 0 -> AssessmentPage.About
-        page == 1 -> AssessmentPage.Goals
-        page == 2 -> AssessmentPage.Time
-        page < FIRST_SKILL + order.size -> AssessmentPage.Skill
-        page == FIRST_SKILL + order.size -> AssessmentPage.Weak
-        else -> AssessmentPage.Result
-    }
-    val skill: Skill? get() = if (kind == AssessmentPage.Skill) order[page - FIRST_SKILL] else null
+    /** Only these are asked about. */
+    val assessed: List<Skill> get() = preferred + (extra - preferred.toSet())
+    /** Skills that can still be added. */
+    val others: List<Skill> get() = order - assessed.toSet()
+    internal val finishPage: Int get() = INTRO.size + assessed.size * SkillCheck.PER_SKILL
+    /** Where Next goes. */
+    val after: Int get() = if (kind == AssessmentPage.Card && editing == skill && card == SkillCheck.PER_SKILL - 1) finishPage else page + 1
+    /** Where Back goes. */
+    val before: Int get() = if (kind == AssessmentPage.Card && editing == skill && card == 0) finishPage else (page - 1).coerceAtLeast(0)
+    val steps: List<AssessmentStep> get() = INTRO + assessed.flatMap { skill -> SkillCheck.forSkill(skill).map { AssessmentStep(AssessmentPage.Card, it) } } + OUTRO
+    private val step: AssessmentStep get() = steps.let { it[page.coerceIn(0, it.lastIndex)] }
+    val kind: AssessmentPage get() = step.kind
+    val statement: SkillStatement? get() = step.statement
+    val skill: Skill? get() = statement?.skill
+    /** Where this card is in its skill, from 0. */
+    val card: Int get() = statement?.let { SkillCheck.forSkill(it.skill).indexOf(it) } ?: 0
     /** The plan for these answers. An earlier one is not shown as their result. */
     val result: AthletePlan? get() = plan?.takeIf { submittedAtEpochMs > 0 && it.createdAtEpochMs >= submittedAtEpochMs }
-    val progress: Float get() = (page + 1f) / pages
+    /** Of the questions, so the last one is full. The skills are not known before they are chosen, so one is counted. */
+    val progress: Float get() = (page + 1f) / (INTRO.size + maxOf(assessed.size, 1) * SkillCheck.PER_SKILL + 1)
     val canAdvance: Boolean get() = !busy && when (kind) {
         AssessmentPage.About -> experience != null
-        AssessmentPage.Goals -> goal != null
-        AssessmentPage.Skill -> SkillCheck.forSkill(requireNotNull(skill)).all { it.id in statements }
+        AssessmentPage.Goals -> goal != null && preferred.isNotEmpty()
+        AssessmentPage.Card -> statement?.id in statements
+        AssessmentPage.Finish -> answers != null
         else -> true
     }
     val answers: AssessmentAnswers? get() {
+        val asked = assessed.flatMap(SkillCheck::forSkill)
+        if (asked.any { it.id !in statements }) return null
+        val given = asked.associate { it.id to statements.getValue(it.id) }
+        val said = asked.filter { SkillCheck.asksDetails(given[it.id]) }.associate { it.id to details[it.id].orEmpty() }.filterValues { it.isNotEmpty() }
         return AssessmentAnswers(experience ?: return null, position, preferred, goal ?: return null, goalNote.trim(), days, minutes,
-            weakPoints, weakNote.trim(), SkillCheck.known(statements)).takeIf { it.isComplete }
+            statements = given, details = said, weakNote = weakNote.trim()).takeIf { it.isComplete }
     }
 
-    companion object { const val FIRST_SKILL = 3 }
+    companion object {
+        private val INTRO = listOf(AssessmentPage.About, AssessmentPage.Goals, AssessmentPage.Time).map { AssessmentStep(it) }
+        private val OUTRO = listOf(AssessmentPage.Finish, AssessmentPage.Result).map { AssessmentStep(it) }
+    }
 }
 
 /**
  * Asks, saves, and has the AI write this athlete's assessment.
  *
- * The questions are the same for everyone; nothing in the result is. Answers are saved
- * before the AI is asked, so an athlete who is offline or over the limit loses nothing and
- * the plan is written later ([AthletePlanner.refreshIfDue]).
+ * Only the skills the athlete chose are asked about, and what follows an answer depends on
+ * it. The same is asked about a skill whoever chooses it. Answers are saved before the AI
+ * is asked, so an athlete who is offline or over the limit loses nothing and the plan is
+ * written later ([AthletePlanner.refreshIfDue]).
  */
 class AssessmentViewModel(
     private val assessments: AssessmentRepository,
@@ -99,7 +123,7 @@ class AssessmentViewModel(
                     experience = saved?.experience ?: earlier.experience, position = saved?.position ?: profile.position,
                     preferred = saved?.preferred ?: earlier.focus, goal = saved?.goal, goalNote = (saved?.goalNote ?: profile.goalText).take(AssessmentAnswers.MAX_NOTE),
                     days = (saved?.days ?: profile.weeklySessionGoal).coerceIn(1, 7), minutes = saved?.minutes?.takeIf { m -> m in AssessmentAnswers.MINUTES } ?: 30,
-                    statements = SkillCheck.known(saved?.statements ?: earlier.answers), weakPoints = saved?.weakPoints.orEmpty(), weakNote = saved?.weakNote.orEmpty(),
+                    statements = SkillCheck.known(earlier.answers + saved?.statements.orEmpty()), details = saved?.details.orEmpty(), weakNote = saved?.weakNote.orEmpty(),
                     drills = Skill.All.flatMap { skill -> drills.drillsFor(skill) }.associateBy { drill -> drill.id }, busy = false) }
             } catch (failure: CancellationException) { throw failure }
             catch (_: Exception) { _state.update { it.copy(busy = false, error = "Could not load your saved answers. You can still answer again.") } }
@@ -114,23 +138,54 @@ class AssessmentViewModel(
 
     fun onExperience(value: ExperienceLevel) = change { it.copy(experience = value) }
     fun onPosition(value: CourtPosition?) = change { it.copy(position = value) }
-    fun onPreferred(skill: Skill) = change { it.copy(preferred = it.preferred.toggled(skill)) }
+    fun onPreferred(skill: Skill) = change { it.copy(preferred = it.preferred.toggled(skill), extra = it.extra - skill) }
     fun onGoal(value: MainGoal) = change { it.copy(goal = value) }
     fun onGoalNote(text: String) = change { it.copy(goalNote = text.take(AssessmentAnswers.MAX_NOTE)) }
     fun onDays(value: Int) = change { it.copy(days = value.coerceIn(1, 7)) }
     fun onMinutes(value: Int) = change { if (value in AssessmentAnswers.MINUTES) it.copy(minutes = value) else it }
-    fun onAnswer(statementId: String, answer: CanDo) = change { it.copy(statements = it.statements + (statementId to answer)) }
-    fun onWeakPoint(value: WeakPoint) = change { it.copy(weakPoints = it.weakPoints.toggled(value)) }
+    fun onAnswer(statementId: String, answer: CanDo) = change { it.copy(statements = it.statements + (statementId to answer),
+        details = if (SkillCheck.asksDetails(answer)) it.details else it.details - statementId) }
+    fun onDetail(statementId: String, detailId: String) = change { state ->
+        if (!SkillCheck.asksDetails(state.statements[statementId])) state
+        else state.copy(details = state.details + (statementId to state.details[statementId].orEmpty().toggled(detailId)))
+    }
+
+    /** Answers the rest of this skill at once, for someone who has never tried it. */
+    fun onNeverTried() = change { state ->
+        val skill = state.skill ?: return@change state
+        val ids = SkillCheck.forSkill(skill).map { it.id }
+        state.copy(statements = state.statements + ids.associateWith { CanDo.NotTried }, details = state.details - ids.toSet(),
+            page = if (state.editing == skill) state.finishPage else state.page + SkillCheck.PER_SKILL - state.card, editing = null)
+    }
+
+    /** Adds another skill at the end and opens its first card. */
+    fun onAddSkill(skill: Skill) = change { state ->
+        if (state.kind != AssessmentPage.Finish || skill !in state.others) state
+        else state.copy(extra = state.extra + skill)
+    }
+
+    /** Takes an added skill out again. The skills chosen first stay. */
+    fun onRemoveSkill(skill: Skill) = change { state ->
+        if (state.kind != AssessmentPage.Finish || skill !in state.extra) state
+        else state.copy(extra = state.extra - skill).let { it.copy(page = it.finishPage) }
+    }
+
+    /** Opens a skill's cards again from the end. */
+    fun onEditSkill(skill: Skill) = change { state ->
+        if (state.kind != AssessmentPage.Finish || skill !in state.assessed) state
+        else state.copy(page = state.steps.indexOfFirst { it.statement?.skill == skill }, editing = skill)
+    }
     fun onWeakNote(text: String) = change { it.copy(weakNote = text.take(AssessmentAnswers.MAX_NOTE)) }
-    fun onBack() = change { it.copy(page = (it.page - 1).coerceAtLeast(0)) }
+    private fun AssessmentUiState.at(page: Int) = copy(page = page, editing = editing.takeIf { page != finishPage })
+    fun onBack() = change { it.at(it.before) }
 
     fun onNext(onFinished: () -> Unit) {
         val state = _state.value
         if (!state.canAdvance) return
         when (state.kind) {
             AssessmentPage.Result -> onFinished()
-            AssessmentPage.Weak -> submit(state)
-            else -> change { it.copy(page = it.page + 1) }
+            AssessmentPage.Finish -> submit(state)
+            else -> change { it.at(it.after) }
         }
     }
 

@@ -39,8 +39,16 @@ data class AssessmentAnswers(
     val weakNote: String = "",
     val statements: Map<String, CanDo> = emptyMap(),
     val savedAtEpochMs: Long = 0L,
+    /** What happens, for the statements that are not there yet, by statement id. */
+    val details: Map<String, List<String>> = emptyMap(),
 ) {
-    val isComplete: Boolean get() = days in 1..7 && minutes in MINUTES && SkillCheck.statements.all { it.id in statements }
+    /** The skills this assessment asked about. The others are unknown. */
+    val assessed: List<Skill> get() = Skill.All.filter { SkillCheck.isAnswered(it, statements) }
+    val isComplete: Boolean get() = days in 1..7 && minutes in MINUTES && preferred.isNotEmpty() && assessed.containsAll(preferred)
+
+    fun detailsOf(statement: SkillStatement): List<StatementDetail> =
+        if (!SkillCheck.asksDetails(statements[statement.id])) emptyList()
+        else details[statement.id].orEmpty().mapNotNull { id -> statement.details.firstOrNull { it.id == id } }
 
     companion object {
         val MINUTES = listOf(15, 30, 45, 60, 90)
@@ -105,7 +113,8 @@ data class AthleteState(val answers: AssessmentAnswers? = null, val plan: Athlet
 
 /** A fact the AI may refer to. [lean] is 1 for the skill, -1 against it, 0 neither. */
 data class AssessmentFact(val id: String, val skill: Skill?, val lean: Int, val cueId: CueId? = null, val statement: SkillStatement? = null,
-    val answer: CanDo? = null, val measured: MeasuredSkill? = null, val trend: CueTrend? = null, val weakPoint: WeakPoint? = null)
+    val answer: CanDo? = null, val measured: MeasuredSkill? = null, val trend: CueTrend? = null, val weakPoint: WeakPoint? = null,
+    val details: List<StatementDetail> = emptyList())
 
 /** The same facts, ids and leanings as the worker, so its answer can be checked again here. */
 object AssessmentFacts {
@@ -114,7 +123,7 @@ object AssessmentFacts {
             val answer = answers.statements[statement.id] ?: return@forEach
             // Not having tried something is neither for nor against.
             add(AssessmentFact("say:${statement.id}", statement.skill, when (answer) { CanDo.Yes -> 1; CanDo.NotYet -> -1; else -> 0 },
-                statement = statement, answer = answer))
+                statement = statement, answer = answer, details = answers.detailsOf(statement)))
         }
         measured.forEach { item ->
             val score = item.score ?: return@forEach
@@ -145,8 +154,8 @@ object PlanRules {
         else -> DrillLevel.Advanced
     }
 
-    /** Drills the player can open at their level for each skill, or the closest level there is, easier first. */
-    fun drillsFor(answers: AssessmentAnswers, measured: List<MeasuredSkill>, open: List<Drill>): List<Drill> = Skill.All.flatMap { skill ->
+    /** Drills the player can open at their level for each assessed skill, or the closest level there is, easier first. */
+    fun drillsFor(answers: AssessmentAnswers, measured: List<MeasuredSkill>, open: List<Drill>): List<Drill> = answers.assessed.ifEmpty { Skill.All }.flatMap { skill ->
         val here = open.filter { it.skill == skill }
         val level = levelFor(answers.experience, measured.firstOrNull { it.skill == skill }?.score)
         val closest = here.minWithOrNull(compareBy<Drill>({ kotlin.math.abs(it.level.ordinal - level.ordinal) }, { it.level.ordinal }))?.level

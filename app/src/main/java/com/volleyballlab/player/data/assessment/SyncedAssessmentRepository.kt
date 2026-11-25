@@ -57,7 +57,8 @@ class SyncedAssessmentRepository(
         requireAccount(uid)
         val existing = merge(local.assessmentFor(uid).first(), profile.current().trainingSetup?.assessment)
         val merged = existing.copy(experience = answers.experience, completedAtEpochMs = answers.savedAtEpochMs,
-            answers = SkillCheck.known(answers.statements), focus = answers.preferred.distinct().ifEmpty { existing.focus })
+            // Earlier answers about skills not asked about this time are kept.
+            answers = existing.answers + SkillCheck.known(answers.statements), focus = answers.preferred.distinct().ifEmpty { existing.focus })
         requireAccount(uid)
         profile.update { athlete ->
             requireAccount(uid)

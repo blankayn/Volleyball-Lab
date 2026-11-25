@@ -47,7 +47,9 @@ internal object AssessmentWire {
             "goalNote" to note(request.answers.goalNote), "days" to request.answers.days, "minutes" to request.answers.minutes,
             "weakPoints" to request.answers.weakPoints.map { it.name }, "weakNote" to note(request.answers.weakNote),
         ),
-        "statements" to SkillCheck.statements.associate { it.id to (request.answers.statements[it.id] ?: CanDo.NotTried).name },
+        // Only the skills this athlete chose to be assessed on.
+        "statements" to request.answers.assessed.flatMap(SkillCheck::forSkill).associate { it.id to request.answers.statements.getValue(it.id).name },
+        "details" to request.answers.assessed.flatMap(SkillCheck::forSkill).associate { it.id to request.answers.detailsOf(it).map { detail -> detail.id } }.filterValues { it.isNotEmpty() },
         "measured" to request.measured.map { mapOf("skill" to it.skill.name, "score" to it.score, "sessions" to if (it.score == null) 0 else it.sessions.coerceIn(1, 999)) },
         "checks" to request.checks.filter { it.trend != CueTrend.Learning }.map { mapOf("cueId" to it.cueId.name, "trend" to it.trend.name) },
         "drills" to request.drills.map { it.id },

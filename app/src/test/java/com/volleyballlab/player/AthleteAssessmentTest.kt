@@ -74,12 +74,37 @@ class AthleteAssessmentTest {
         assertEquals(1, decode(mapOf("practices" to many), request(given = answers.copy(days = 1))).practices.size)
     }
 
-    @Test fun whatIsSentNamesNobodyAndEveryStatementIsAnswered() {
+    @Test fun whatIsSentNamesNobodyAndOnlyTheChosenSkills() {
         val fields = AssessmentWire.fields(request())
-        assertEquals(setOf("version", "profile", "statements", "measured", "checks", "drills", "finished", "marks", "previousFocus"), fields.keys)
+        assertEquals(setOf("version", "profile", "statements", "details", "measured", "checks", "drills", "finished", "marks", "previousFocus"), fields.keys)
         assertEquals(20, (fields["statements"] as Map<*, *>).size)
         assertEquals(listOf("receive-wall-platform", "set-wall-reps"), fields["drills"])
         assertFalse(fields.toString().contains("uid", ignoreCase = true))
+        val one = answers.copy(statements = answers.statements.filterKeys { it.startsWith("receiving") } + ("setting_ready" to CanDo.Yes),
+            details = mapOf("receiving_control" to listOf("receiving_control_2", "made_up"), "setting_ready" to listOf("setting_ready_1")))
+        val sent = AssessmentWire.fields(request(given = one))
+        assertEquals("a skill half answered is not sent", setOf("receiving_ready", "receiving_movement", "receiving_control", "receiving_moving"), (sent["statements"] as Map<*, *>).keys)
+        assertEquals(mapOf("receiving_control" to listOf("receiving_control_2")), sent["details"])
+    }
+
+    @Test fun onlyChosenSkillsAreAssessedAndPlannedAndOthersAreUnknown() {
+        val setting = answers.copy(statements = answers.statements.filterKeys { it.startsWith("setting") })
+        assertEquals(listOf(Skill.Setting), setting.assessed)
+        assertTrue(setting.isComplete)
+        assertFalse("a chosen skill must be answered", setting.copy(preferred = listOf(Skill.Setting, Skill.Serving)).isComplete)
+        assertFalse(setting.copy(preferred = emptyList()).isComplete)
+        val facts = AssessmentFacts.of(setting, none, emptyList())
+        assertEquals(setOf("say:setting_ready", "say:setting_movement", "say:setting_control", "say:setting_moving", "weak:KneeBend"), facts.keys)
+        assertEquals(listOf("set-wall-reps"), PlanRules.drillsFor(setting, none, listOf(receive, set)).map { it.id })
+        assertTrue("nothing can be said about a skill that was not asked about", runCatching { decode(from = request(given = setting)) }.isFailure)
+    }
+
+    @Test fun whatThePlayerSaysHappensIsShownWithTheFact() {
+        val said = answers.copy(details = mapOf("receiving_control" to listOf("receiving_control_2"), "serving_ready" to listOf("serving_ready_1")))
+        val facts = AssessmentFacts.of(said, none, emptyList())
+        assertEquals(listOf("It falls short"), facts.getValue("say:receiving_control").details.map { it.text })
+        assertTrue("it was answered Yes", facts.getValue("say:serving_ready").details.isEmpty())
+        assertEquals(AthleteState(said, null), AthleteAssessmentSchema.read(AthleteAssessmentSchema.fields(said, null)))
     }
 
     @Test fun difficultyFollowsExperienceThenWhatWasMeasured() {

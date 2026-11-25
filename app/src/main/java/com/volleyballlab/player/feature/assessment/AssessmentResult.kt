@@ -87,7 +87,8 @@ private fun Points(title: String, points: List<AssessmentPoint>, facts: Map<Stri
 
 @Composable
 private fun factText(fact: AssessmentFact): String = when {
-    fact.statement != null -> "“${fact.statement.text}” ${fact.answer?.label.orEmpty()}"
+    fact.statement != null -> "“${fact.statement.text}” ${fact.answer?.label.orEmpty()}" +
+        if (fact.details.isEmpty()) "" else ": ${fact.details.joinToString { it.text }}"
     fact.measured != null -> stringResource(R.string.assessment_fact_score, stringResource(fact.measured.skill.displayName), fact.measured.score ?: 0)
     fact.cueId != null -> stringResource(R.string.assessment_fact_check, FormCueCatalog.byId(fact.cueId)?.let { stringResource(it.label) }.orEmpty())
     else -> fact.weakPoint?.label.orEmpty()

@@ -10,6 +10,18 @@ class SkillCheckTest {
     private fun session(skill: Skill, score: Float, at: Long) = SessionResult("$skill$at", skill, "d", at, 1_000,
         List(5) { RepResult(it, 0, 500, 1_000, FormCueCatalog.poseCues(skill).map { cue -> CueScore(cue.id, 1f, score) }) })
 
+    @Test
+    fun everyStatementHasItsOwnThreeDetailsAndAName() {
+        SkillCheck.statements.forEach { statement ->
+            assertTrue(statement.id, statement.trait.isNotBlank())
+            assertEquals(List(3) { "${statement.id}_${it + 1}" }, statement.details.map { it.id })
+            assertEquals(3, statement.details.map { it.text }.distinct().size)
+            assertTrue(statement.id, statement.details.all { it.text.length <= 32 && !Regex("\\d").containsMatchIn(it.text) })
+        }
+        Skill.All.forEach { skill -> assertEquals(4, SkillCheck.forSkill(skill).map { it.trait }.distinct().size) }
+        assertEquals(listOf(true, true, false, false), listOf(CanDo.Sometimes, CanDo.NotYet, CanDo.Yes, CanDo.NotTried).map(SkillCheck::asksDetails))
+    }
+
     @Test fun everySkillIsAskedTheSameNumberOfStatementsAboutTheSameThings() {
         Skill.All.forEach { skill ->
             assertEquals(SkillCheck.PER_SKILL, SkillCheck.forSkill(skill).size)

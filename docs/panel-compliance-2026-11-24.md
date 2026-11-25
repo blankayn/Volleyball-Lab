@@ -2,8 +2,8 @@
 
 | Panel comment | What changed | Where to see it |
 |---|---|---|
-| Revise assessment method; not a pre-defined style; no bias | Structured questions, the same for everyone; the result is written by AI from that athlete's own answers and measured results, and every line shows what it came from. Position never hides a skill. `docs/ai-assessment.md` | Sign-up, and Profile → Settings → Training & skills → Retake the assessment |
-| Revise functionality (checking / taking multiple skills) | All five skills are assessed, and the player can choose more than one to work on | Last page of the skill check |
+| Revise assessment method; not a pre-defined style; no bias | Cards about the characteristics of the skills the athlete chooses; what is asked next follows each answer. The result is written by AI from that athlete's own answers and measured results, and every line shows what it came from. The same is asked about a skill whoever chooses it, and position never hides one. `docs/ai-assessment.md` | Sign-up, and Profile → Settings → Training & skills → Retake the assessment |
+| Revise functionality (checking / taking multiple skills) | The player chooses one or more skills to be assessed on and can add any of the others at the end | Assessment: Skills you want to work on, and the last page |
 | Suggest AI next skills | The AI's weekly plan: focus skills, drills with sets and reps, reasons and goals, rewritten from real performance | Home → This week's plan |
 | (Team's addition) Adaptive coaching | The AI coach learns from each player's right and wrong reps and changes live coaching and results. `docs/adaptive-coaching.md` | Live session opening; session report → AI coach: what to do next |
 | Assignment from coach on the home dashboard | Open assignments, with due date and a button to continue | Home, above the suggestions |

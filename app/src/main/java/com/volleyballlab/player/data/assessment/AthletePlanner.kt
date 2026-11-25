@@ -1,5 +1,6 @@
 package com.volleyballlab.player.data.assessment
 
+import android.util.Log
 import com.volleyballlab.player.data.ai.AnalystResult
 import com.volleyballlab.player.data.ai.AssessmentRequest
 import com.volleyballlab.player.data.ai.AthleteAnalyst
@@ -110,7 +111,9 @@ class AthletePlanner(
         } catch (cancelled: CancellationException) {
             result = PlannerStatus.Idle
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            // The place only: messages may quote what the athlete wrote.
+            Log.w("AthletePlanner", "No plan: ${failure.javaClass.simpleName} at ${failure.stackTrace.firstOrNull { "volleyballlab" in it.className }}")
             return false
         } finally {
             _status.value = result

@@ -32,6 +32,12 @@ test("answers can wait for a plan, and a saved plan is never rewritten", async (
   await assertFails(updateDoc(doc(db("player"), "athleteAssessments/player/plans/p1"), { changes: ["edited"] }));
   await assertSucceeds(deleteDoc(doc(db("player"), "athleteAssessments/player")));
 });
+test("the skills chosen and what happens in them can be saved, and older answers without it still can", async () => {
+  await assertSucceeds(setDoc(doc(db("player"), "athleteAssessments/player"), record({ answers: { ...answers, details: { serving_ready: ["serving_ready_1"] } } })));
+  await assertSucceeds(setDoc(doc(db("player"), "athleteAssessments/player"), record()));
+  for (const details of ["x", Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`s${i}`, ["a"]]))])
+    await assertFails(setDoc(doc(db("player"), "athleteAssessments/player"), record({ answers: { ...answers, details } })));
+});
 test("unknown fields, wrong types and oversized values are refused", async () => {
   for (const bad of [{ version: 2 }, { name: "Ana" }, { answers: "x" }, { answers: { ...answers, email: "x" } }, { answers: { ...answers, goalNote: "x".repeat(161) } },
     { answers: { ...answers, days: 9 } }, { answers: { ...answers, statements: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`s${i}`, "Yes"])) } },

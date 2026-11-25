@@ -73,17 +73,18 @@ class AdaptiveSetupDeviceTest {
     @Test fun narrowLargeTextAssessmentReachesItsResult() {
         show()
         pick("New to volleyball"); compose.onNodeWithText("Next").performClick()
-        pick("Be more consistent"); compose.onNodeWithText("Next").performClick()
+        pick("Setting"); pick("Be more consistent"); compose.onNodeWithText("Next").performClick()
         pick("5"); compose.onNodeWithText("Next").performClick()
-        repeat(Skill.All.size) {
-            repeat(SkillCheck.PER_SKILL) { index -> compose.onAllNodesWithText("Sometimes")[index].performScrollTo().performClick() }
+        SkillCheck.forSkill(Skill.Setting).forEach { statement ->
+            compose.onNodeWithText(statement.text).assertExists()
+            pick("Sometimes"); pick(statement.details.first().text)
             compose.onNodeWithText("Next").assertIsDisplayed().performClick()
         }
-        pick("Timing")
+        compose.onNodeWithText("Add another skill").performScrollTo().assertIsDisplayed()
         assertNull(saved)
         compose.onNodeWithText("Get my assessment").assertIsDisplayed().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("A plan made from your answers.").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Setting Stance").performScrollTo().assertIsDisplayed()
-        compose.runOnIdle { assertEquals(5, saved?.days) }
+        compose.runOnIdle { assertEquals(5, saved?.days); assertEquals(listOf(Skill.Setting), saved?.assessed); assertEquals(4, saved?.details?.size) }
     }
 }

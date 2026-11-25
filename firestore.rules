@@ -333,13 +333,14 @@ service cloud.firestore {
     // Kept apart from the profile, which is close to the limit of one request.
     function validAnswers(a) {
       return a is map && a.keys().hasOnly(['experience', 'position', 'preferred', 'goal', 'goalNote', 'days', 'minutes',
-          'weakPoints', 'weakNote', 'statements', 'savedAtEpochMs'])
+          'weakPoints', 'weakNote', 'statements', 'savedAtEpochMs', 'details'])
         && a.experience in ['New', 'Developing', 'Experienced']
         && a.goal in ['LearnBasics', 'BeConsistent', 'MakeTheTeam', 'CompeteBetter', 'StayActive']
         && a.preferred is list && a.preferred.size() <= 5 && a.weakPoints is list && a.weakPoints.size() <= 8
         && boundedString(a.goalNote, 160) && boundedString(a.weakNote, 160)
         && a.days is int && a.days >= 1 && a.days <= 7 && a.minutes in [15, 30, 45, 60, 90]
-        && a.statements is map && a.statements.size() <= 20 && validDate(a.savedAtEpochMs);
+        && a.statements is map && a.statements.size() <= 20 && validDate(a.savedAtEpochMs)
+        && a.get('details', {}) is map && a.get('details', {}).size() <= 20;
     }
     function validPlan(p) {
       return p is map && p.keys().hasOnly(['id', 'createdAtEpochMs', 'analysis', 'measured', 'checks', 'changes'])
